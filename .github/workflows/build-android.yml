@@ -1,0 +1,80 @@
+name: Build Android APK
+
+# IMPORTANT: This workflow requires the `android/` directory to be present.
+# Run `npx cap add android` locally and commit the result before this workflow
+# can succeed. Until then, the workflow will fail at the "Sync Capacitor" step.
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check android directory exists
+      id: check-android
+      run: |
+        if [ -d "android" ]; then
+          echo "present=true" >> $GITHUB_OUTPUT
+        else
+          echo "present=false" >> $GITHUB_OUTPUT
+          echo "::warning::android/ directory not found. Run 'npx cap add android' locally and commit the result."
+        fi
+
+    - name: Setup Node.js
+      if: steps.check-android.outputs.present == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Setup Java 21
+      if: steps.check-android.outputs.present == 'true'
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+        cache: 'gradle'
+
+    - name: Install dependencies
+      if: steps.check-android.outputs.present == 'true'
+      run: npm install
+
+    - name: Build web app
+      if: steps.check-android.outputs.present == 'true'
+      run: npm run build
+      env:
+        VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+        VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+
+    - name: Sync Capacitor Android
+      if: steps.check-android.outputs.present == 'true'
+      run: npx cap sync android
+
+    - name: Make Gradle wrapper executable
+      if: steps.check-android.outputs.present == 'true'
+      run: chmod +x android/gradlew
+
+    - name: Accept Android SDK licenses
+      if: steps.check-android.outputs.present == 'true'
+      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+    - name: Build Android debug APK
+      if: steps.check-android.outputs.present == 'true'
+      working-directory: android
+      run: ./gradlew assembleDebug --build-cache
+
+    - name: Upload APK artifact
+      if: steps.check-android.outputs.present == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: [APP_SLUG]-debug-${{ github.sha }}
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
