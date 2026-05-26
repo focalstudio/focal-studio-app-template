@@ -2,7 +2,7 @@
 
 > [APP_TAGLINE]
 
-A Focal Studio app. Built with React + TypeScript + Vite + Capacitor.
+A Focal Studio app. Built with React Native + Expo SDK 56.
 
 ---
 
@@ -10,10 +10,10 @@ A Focal Studio app. Built with React + TypeScript + Vite + Capacitor.
 
 ```bash
 npm install
-npm run dev
+npx expo start
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Press `i` to open iOS Simulator, `a` for Android.
 
 ---
 
@@ -21,13 +21,15 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 | Script | What it does |
 |--------|-------------|
-| `npm run dev` | Start the Vite dev server |
-| `npm run build` | Type-check and bundle for production |
-| `npm run preview` | Serve the production build locally |
+| `npx expo start` | Start Metro bundler with dev menu |
+| `npm run ios` | Start iOS Simulator directly |
+| `npm run android` | Start Android emulator directly |
 | `npm run lint` | Run ESLint |
-| `npm test` | Run Vitest unit tests |
-| `npm run gen:icons` | Generate Android launcher icons from `public/icon.png` |
-| `npm run normalize-image` | Pad an image to 1024×1024 transparent PNG |
+| `npm run type-check` | Run TypeScript type-check |
+| `npm test` | Run Jest tests |
+| `npm run preview:ios` | EAS preview build (iOS) |
+| `npm run build:ios` | EAS production build (iOS) |
+| `npm run bump-version` | Bump version in package.json + app.json |
 
 ---
 
@@ -35,34 +37,44 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 | Layer | Technology |
 |-------|-----------|
-| UI Framework | React 19 |
+| SDK | Expo SDK 56 |
+| Runtime | React Native (New Architecture) |
 | Language | TypeScript 5.9 |
-| Build | Vite 7 |
-| Mobile bridge | Capacitor 8 |
-| Testing | Vitest |
-| Analytics | PostHog (EU-hosted, optional) |
-| Crash reporting | Sentry (optional) |
+| Navigation | Expo Router 5 (file-based) |
+| State | Zustand 5 |
+| Storage | AsyncStorage |
+| Build | EAS Build |
+| Testing | Jest + React Native Testing Library |
+| Analytics | PostHog RN SDK (EU-hosted, optional) |
 
 ---
 
 ## Project structure
 
 ```
+app/                   # Expo Router screens
+  _layout.tsx          # Root layout (providers, theme, hydration)
+  index.tsx            # Entry — redirects to onboarding, auth, or tabs
+  onboarding.tsx       # Multi-step onboarding flow
+  paywall.tsx          # Subscription / paywall screen
+  (auth)/              # Auth screens (login, signup, forgot-password)
+  (tabs)/              # Main tab bar (home, settings)
+
 src/
-  App.tsx              # App shell — tabs, theme, dev mode toggle
-  main.tsx             # Entry point — Sentry + analytics init
-  App.css              # CSS design tokens (brand colors, radii, shadows)
-  index.css            # Global reset
-  constants.ts         # App identity (APP_NAME, APP_ID, APP_COLOR)
-  types.ts             # Shared TypeScript types
-  analytics.ts         # PostHog event helpers
-  storage.ts           # localStorage helpers + export/import
-  haptics.ts           # Capacitor haptic feedback
-  notificationService.ts  # Local notification scheduling
-  ratingService.ts     # In-app review prompt
-  helpers.ts           # Pure utility functions
-  theme.ts             # Design token constants (TS-side)
-  __tests__/           # Vitest unit tests
+  components/          # Reusable UI (ui/ primitives, layout/ wrappers)
+  hooks/               # useTheme
+  services/            # analytics, haptics, notifications, ratingService
+  store/               # Zustand stores (app, auth, onboarding, paywall)
+  theme/               # Design tokens (colors, spacing, typography)
+  types/               # Shared TypeScript types
+  utils/               # storage helpers, pure utilities
+  constants.ts         # App identity placeholders
+
+.github/workflows/
+  ci.yml               # Lint + type-check + test on every push
+  eas-preview.yml      # EAS preview build on push to dev
+  release.yml          # Auto-tag + GitHub Release on merge to main
+  release-review.yml   # Quality gate on release/* branches
 ```
 
 ---
@@ -77,29 +89,20 @@ cp .env.example .env.local
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `VITE_POSTHOG_KEY` | No | PostHog analytics (disabled if empty) |
-| `VITE_SENTRY_DSN` | No | Sentry crash reporting (disabled if empty) |
+| `EXPO_PUBLIC_POSTHOG_KEY` | No | PostHog analytics (disabled if empty) |
+| `EXPO_PUBLIC_POSTHOG_HOST` | No | PostHog host (defaults to EU) |
 
 ---
 
-## Android development
+## Setup
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full Android setup guide.
-
-Quick start (after `npx cap add android` has been run):
-
-```bash
-npm run build
-npx cap sync
-# Open android/ in Android Studio and run, or:
-cd android && ./gradlew assembleDebug
-```
+See [SETUP.md](SETUP.md) for the full new-app setup guide (~60 minutes).
 
 ---
 
 ## Privacy policy
 
-[https://focalstudio.github.io/privacy-policy.html](https://focalstudio.github.io/privacy-policy.html)
+[https://focalstudio.github.io/privacy](https://focalstudio.github.io/privacy)
 
 ---
 

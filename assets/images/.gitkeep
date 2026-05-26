@@ -1,0 +1,2 @@
+Place icon.png (1024×1024), splash.png (1242×2436), and adaptive-icon.png (1024×1024) here.
+Run: eas build:configure to generate these from your base icon.

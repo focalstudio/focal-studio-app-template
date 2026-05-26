@@ -1,0 +1,96 @@
+name: Release Review Gate
+
+on:
+  push:
+    branches:
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+    head:
+      - "release/**"
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  gate:
+    name: Release Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Check version is bumped
+        id: version_check
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          APP_VERSION=$(node -p "require('./app.json').expo.version")
+          if [ "$PKG_VERSION" != "$APP_VERSION" ]; then
+            echo "❌ Version mismatch: package.json=$PKG_VERSION, app.json=$APP_VERSION"
+            exit 1
+          fi
+          echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version $PKG_VERSION is consistent."
+
+      - name: Check CHANGELOG has release entry
+        run: |
+          VERSION="${{ steps.version_check.outputs.version }}"
+          if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md does not have an entry for version $VERSION."
+            echo "Move '## [Unreleased]' to '## [$VERSION] — $(date +%Y-%m-%d)' before releasing."
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md has entry for $VERSION."
+
+      - name: Post summary comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.version_check.outputs.version }}';
+            const body = [
+              '## Release Review Gate ✅',
+              '',
+              `**Version:** v${version}`,
+              '',
+              '| Check | Status |',
+              '|---|---|',
+              '| Type-check | ✅ Passed |',
+              '| Lint | ✅ Passed |',
+              '| Tests | ✅ Passed |',
+              '| Version consistency | ✅ Passed |',
+              '| CHANGELOG entry | ✅ Passed |',
+              '',
+              'This release is ready to merge to `main`.',
+              '',
+              '**Before merging**, confirm:',
+              '- [ ] Tested on iOS device or TestFlight build',
+              '- [ ] Dev mode is **off** (tap title 5× — no dev badge appears)',
+              '- [ ] App Store Connect build uploaded',
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
