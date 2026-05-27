@@ -6,7 +6,7 @@ All skills are vendored into [`.claude/skills/`](skills/) and ship with the temp
 
 | Agent | Skills it loads |
 |---|---|
-| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` |
+| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` *(conditional — only for non-trivial UI changes)* |
 | `backend-integrator` | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`, `claude-api` (Anthropic SDK only) |
 | `release-manager` | `commit`, `commit-push-pr`, `review`, `verify` |
 | `aso-marketing` | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
@@ -37,7 +37,7 @@ All skills are vendored into [`.claude/skills/`](skills/) and ship with the temp
 
 ## Built-in skills referenced
 
-Claude Code's built-in skills (no install needed, available in every session): `commit`, `commit-push-pr`, `review`, `security-review`, `verify`, `design-review`, `simplify`, `claude-api`.
+Claude Code's built-in skills (no install needed, available in every session): `commit`, `commit-push-pr`, `review`, `security-review`, `verify`, `design-review`, `simplify`, `claude-api`, `web-asset-generator`.
 
 ## Using skills directly
 

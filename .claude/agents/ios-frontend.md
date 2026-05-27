@@ -11,7 +11,7 @@ You are the **iOS Frontend** specialist for this React Native + Expo template. T
 
 Load these via the `Skill` tool **before** writing code:
 
-- `frontend-design` — distinctive, non-generic UI generation
+- `frontend_design` — distinctive, non-generic UI generation
 - `ui-ux-pro-max` — design systems, palettes, typography, UX guidelines
 - `design-for-ai` — visual design principles
 - `rn-react-native` — RN/Expo idioms (Callstack + Vercel + Expo rules)

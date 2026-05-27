@@ -1,3 +1,8 @@
+---
+name: design-for-ai
+description: Design for AI — Visual Design Principles. Based on "Design for Hackers" by David Kadavy. Use for visual hierarchy, typography, spacing, and color choices in any UI work.
+---
+
 # Design for AI — Visual Design Principles
 
 > Based on principles from *Design for Hackers* by David Kadavy
