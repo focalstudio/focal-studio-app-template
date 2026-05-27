@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "[APP_NAME]",
+    "slug": "[APP_SLUG]",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "[APP_SLUG]",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "[APP_COLOR]"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "[APP_ID]",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to take photos within the app.",
+        "NSPhotoLibraryUsageDescription": "Used to select photos from your library.",
+        "NSUserNotificationUsageDescription": "Used to send you reminders and re-engagement notifications."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "[APP_COLOR]"
+      },
+      "package": "[APP_ID]"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-system-ui",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "[APP_COLOR]",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "[APP_NAME]"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

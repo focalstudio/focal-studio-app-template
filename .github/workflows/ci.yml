@@ -1,33 +1,36 @@
-name: App CI
+name: CI
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: ["**"]
   pull_request:
-    branches: [ main, dev ]
+    branches: ["**"]
 
 jobs:
-  build-and-test:
+  check:
+    name: Lint, Type-check & Test
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
-    - name: Run build
-      run: npm run build
-      env:
-        VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
-        VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+      - name: Expo doctor
+        run: npx expo-doctor@latest
 
-    - name: Run tests
-      run: npm test
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test

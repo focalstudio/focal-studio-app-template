@@ -1,0 +1,33 @@
+name: EAS Preview Build
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  preview:
+    name: EAS Preview (iOS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS preview
+        run: eas build --platform ios --profile preview --non-interactive

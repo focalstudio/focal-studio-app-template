@@ -1,103 +1,154 @@
-# [APP_NAME] Design Standards
+# Design Standards — [APP_NAME]
 
-Design tokens live in the `:root` block at the top of `src/App.css`. Always use these tokens — never hardcode colours, radii, or shadows. The canonical values are also exported from `src/theme.ts` for TypeScript use.
-
-Update `[APP_COLOR]` and `[APP_COLOR_DARK]` tokens after template setup to match your brand.
+All visual values come from `src/theme/`. Never hardcode colours, spacing, or typography in components.
 
 ---
 
-## Colour tokens
+## Colours
+
+Import from `src/theme/colors.ts`. Access via the `useTheme()` hook:
+
+```tsx
+const { colors } = useTheme();
+// colors.background, colors.text, colors.accent, etc.
+```
 
 | Token | Light | Dark | Use |
-|---|---|---|---|
-| `--bg-page` | `#fafafa` | `#000000` | Page background |
-| `--bg-card` | `#ffffff` | `#111111` | Card / row backgrounds |
-| `--bg-hover` | `rgba(0,0,0,.04)` | `rgba(255,255,255,.06)` | Hover state overlay |
-| `--text-primary` | `#111111` | `#f5f5f5` | Body text |
-| `--text-secondary` | `#5a5a5a` | `#888888` | Supporting text |
-| `--text-muted` | `#9a9a9a` | `#555555` | Labels, captions |
-| `--brand-500` | `[APP_COLOR]` | `[APP_COLOR_DARK]` | Primary action / accent |
-| `--brand-600` | darker shade | `[APP_COLOR]` | Hover on primary |
-| `--brand-50` | `rgba(0,0,0,.06)` | `rgba(255,255,255,.08)` | Brand tint backgrounds |
-| `--border-light` | `rgba(0,0,0,.07)` | `rgba(255,255,255,.08)` | Card / row borders |
-| `--border-medium` | `rgba(0,0,0,.13)` | `rgba(255,255,255,.15)` | Emphasis borders |
-
-Semantic colours (red, blue, orange) follow the same `--{color}-500` / `--{color}-50` pattern.
-
----
-
-## Shape tokens
-
-| Token | Value | Use |
-|---|---|---|
-| `--radius-sm` | `8px` | Badges, small pills |
-| `--radius-md` | `12px` | Inner elements, icon containers |
-| `--radius-lg` | `16px` | **Cards and rows** (standard surface) |
-| `--radius-xl` | `20px` | Modals, bottom sheets |
-
----
-
-## Shadow tokens
-
-| Token | Use |
-|---|---|
-| `--shadow-card` | Default card / row elevation |
-| `--shadow-card-hover` | Hovered card |
-| `--shadow-elevated` | Modals, overlays |
+|-------|-------|------|-----|
+| `background` | #FFFFFF | #000000 | Screen background |
+| `surface` | #F2F2F7 | #1C1C1E | Cards, inputs, secondary containers |
+| `surfaceElevated` | #FFFFFF | #2C2C2E | Elevated cards, popovers |
+| `text` | #000000 | #FFFFFF | Primary text |
+| `textSecondary` | #6C6C70 | #AEAEB2 | Labels, subtitles |
+| `textTertiary` | #AEAEB2 | #6C6C70 | Placeholder text, disabled |
+| `border` | rgba(0,0,0,0.12) | rgba(255,255,255,0.12) | Dividers, card borders |
+| `accent` | [APP_COLOR] | [APP_COLOR] | Buttons, links, active states |
+| `danger` | #FF3B30 | #FF453A | Errors, destructive actions |
+| `success` | #34C759 | #32D74B | Confirmations |
+| `warning` | #FF9500 | #FF9F0A | Warnings |
 
 ---
 
 ## Spacing
 
-| Context | Value |
-|---|---|
-| Tab pane padding | `16px` sides, `24px` bottom (`padding: 16px 16px 24px`) |
-| App header padding | `10px 16px 8px` |
-| Gap between sections | `20px` (`margin-bottom`) |
-| Gap between rows | `6px` (`margin-bottom`) |
-
----
-
-## Component standards
-
-### Card (`.card`)
-```css
-background: var(--bg-card);
-border: 1px solid var(--border-light);
-border-radius: var(--radius-lg);
-box-shadow: var(--shadow-card);
-padding: 16px;
-margin-bottom: 12px;
-```
-
-### Settings row (`.settings-row`)
-```css
-display: flex;
-align-items: center;
-gap: 12px;
-padding: 13px 16px;
-border-bottom: 1px solid var(--border-light);
-```
-
-### Buttons (`.btn`)
-- **Primary** (`.btn-primary`): brand fill, white text — main CTA
-- **Secondary** (`.btn-secondary`): card background, outlined — secondary action
-- **Danger** (`.btn-danger`): red fill — destructive action
-- **Ghost** (`.btn-ghost`): transparent, muted text — low-emphasis action
-- **Small** (`.btn-sm`): add to any of the above for compact contexts
-
----
-
-## Layout
-
-- Max app width: `640px` (`.app-shell`)
-- All tab content: full width within `.tab-pane`
-
----
-
-## Transitions
+Import from `src/theme/spacing.ts` as `Spacing`.
 
 | Token | Value | Use |
-|---|---|---|
-| `--transition-fast` | `0.15s ease` | Hover states, colour changes |
-| `--transition-normal` | `0.2s ease` | Shadow, opacity changes |
+|-------|-------|-----|
+| `xs` | 4px | Tight gaps (e.g., icon-to-label) |
+| `sm` | 8px | Inner element spacing |
+| `md` | 12px | Default padding in compact areas |
+| `lg` | 16px | Standard screen padding, card padding |
+| `xl` | 20px | Between grouped sections |
+| `xxl` | 24px | Between major sections |
+| `xxxl` | 32px | Large vertical gaps |
+| `section` | 40px | Top of screen padding |
+
+---
+
+## Border radius
+
+Import as `Radius` from `src/theme/spacing.ts`.
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `sm` | 8px | Small chips, inputs |
+| `md` | 12px | Buttons, toggles |
+| `lg` | 16px | Cards |
+| `xl` | 20px | Large modals, paywall cards |
+| `full` | 9999px | Pills, badges, dot indicators |
+
+---
+
+## Typography
+
+Import from `src/theme/typography.ts` as `FontSize`, `FontWeight`.
+
+| Size token | Value | Use |
+|-----------|-------|-----|
+| `xs` | 11px | Badges, legal text |
+| `sm` | 13px | Labels, secondary text |
+| `md` | 15px | Body text |
+| `lg` | 17px | Section titles, large body |
+| `xl` | 20px | Screen titles |
+| `xxl` | 24px | Page headings |
+| `xxxl` | 28px | Large headings |
+| `display` | 34px | Hero text (onboarding, paywall) |
+
+| Weight token | Value |
+|-------------|-------|
+| `regular` | 400 |
+| `medium` | 500 |
+| `semibold` | 600 |
+| `bold` | 700 |
+| `heavy` | 800 |
+
+---
+
+## Shadows
+
+Import as `Shadow` from `src/theme/spacing.ts`.
+
+| Token | Use |
+|-------|-----|
+| `Shadow.card` | Standard cards |
+| `Shadow.elevated` | Modals, dropdowns, paywall sheets |
+
+---
+
+## Components
+
+### Screen
+Wraps every top-level screen with `SafeAreaView`. Always use as the root element.
+
+```tsx
+<Screen edges={["top", "bottom"]}>
+  {/* screen content */}
+</Screen>
+```
+
+### Card
+```tsx
+<Card elevated={false}>{/* content */}</Card>
+```
+
+### Button
+```tsx
+<Button label="Primary" variant="primary" size="md" />
+<Button label="Secondary" variant="secondary" />
+<Button label="Ghost" variant="ghost" />
+<Button label="Delete" variant="destructive" />
+```
+
+### TextInput
+```tsx
+<TextInput label="Email" placeholder="you@example.com" error="Invalid email" keyboardType="email-address" />
+```
+
+### Toggle
+```tsx
+<Toggle label="Analytics" description="Help improve the app." value={enabled} onValueChange={setEnabled} />
+```
+
+### Badge
+```tsx
+<Badge label="Most Popular" variant="accent" />
+```
+
+---
+
+## Layout rules
+
+- **Safe area insets**: always use `<Screen>` as the root element of every screen.
+- **Scroll views**: `showsVerticalScrollIndicator={false}` on all scroll views.
+- **Keyboard avoidance**: `KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}` on all form screens.
+- **Flexbox first**: use `gap`, `flex`, `justifyContent`, `alignItems` before reaching for `position: absolute`.
+
+---
+
+## Do not
+
+- Hardcode any colour, size, or spacing value outside `src/theme/`
+- Use `position: "absolute"` for layout — prefer flexbox
+- Mix `margin` and `gap` on the same container
+- Add keyboard entry inside modals or bottom sheets (causes layout shifts on iOS)

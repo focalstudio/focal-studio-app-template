@@ -2,146 +2,88 @@
 
 ---
 
-## Web development
+## iOS development (primary)
+
+**Prerequisites:** Xcode 15+ (macOS only) + Watchman (`brew install watchman`).
 
 ```bash
 git clone https://github.com/[GITHUB_REPO].git
 cd [APP_SLUG]
 npm install
-npm run dev
+npx expo start --ios
 ```
 
-Dev server: [http://localhost:5173](http://localhost:5173)
+The iOS Simulator opens automatically. Press `i` if it doesn't.
+
+### Run on a physical iPhone
+
+```bash
+npx expo start
+# Scan the QR code with the Expo Go app (iOS), or:
+eas build --platform ios --profile development
+# Install the dev client build on your device, then scan the QR code.
+```
 
 ---
 
 ## Android development
 
-**Prerequisites:** Java 21 + Android SDK — install [Android Studio](https://developer.android.com/studio) to get both.
+**Prerequisites:** Java 21 + Android SDK — install [Android Studio](https://developer.android.com/studio).
 
 ```bash
 npm install
-npm run build
-npx cap sync   # Android syncs successfully; iOS will warn if @capacitor/ios is absent — ignore it
+npx expo start --android
 ```
 
-**Option A — Android Studio (recommended)**
-
-Open the `android/` folder in Android Studio and run the app.
-
-**Option B — Command line**
+To run on a physical device or build an APK:
 
 ```bash
-chmod +x android/gradlew
-cd android && ./gradlew assembleDebug
-```
-
-Output: `android/app/build/outputs/apk/debug/app-debug.apk`
-
-> **Important:** Every time you change web source files, re-run `npm run build` then `npx cap sync` (as separate commands) before rebuilding. Do not chain with `&&` — `cap sync` exits non-zero when iOS is not set up, which stops the chain even though Android synced successfully.
-
-**Deploy to a physical device**
-
-```bash
-# List connected devices
-adb devices
-
-# Install (single device connected)
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-
-# Install (multiple devices — target by ID)
-adb -s <DEVICE_ID> install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Full build + install (project root)**
-
-```bash
-npm run build
-npx cap sync
-cd android && ./gradlew assembleDebug && cd ..
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Stale UI after reinstall (WebView cache)**
-
-If the app shows old UI after reinstall, the WebView cache is stale. Fix:
-
-```bash
-adb -s <DEVICE_ID> shell am force-stop [APP_ID]
-adb -s <DEVICE_ID> shell "run-as [APP_ID] rm -rf \
-  /data/data/[APP_ID]/cache/ \
-  /data/data/[APP_ID]/app_webview/"
+eas build --platform android --profile preview
 ```
 
 ---
 
-## iOS development
-
-**Prerequisites:** Xcode (macOS only) + iOS SDK.
+## EAS Build (iOS + Android)
 
 ```bash
-npx cap add ios   # (only needed once, after template setup)
-npm run build
-npx cap sync ios
+eas login                                    # authenticate
+eas build:configure                          # set up eas.json if needed
+
+# Preview build (internal testing)
+eas build --platform ios --profile preview
+
+# Production build (App Store submission)
+eas build --platform ios --profile production
 ```
 
-Open the iOS project in Xcode:
-
-```bash
-npx cap open ios
-```
-
----
-
-## Developer mode
-
-Tap the app header title **5 times rapidly** to toggle dev mode on/off.
-
-When active:
-- A red **DEV** badge appears in the top-right corner
-- Tap the badge to open the dev tools panel (Sentry test, version info)
-
-Dev mode persists across restarts (stored in `localStorage`, scoped to `APP_VERSION`). It resets automatically on every version bump — safe for store submissions.
-
----
-
-## Image normalization
-
-To pad any PNG to 1024×1024 (transparent background, centered):
-
-```bash
-node scripts/normalize-image.js <path/to/source.png> [dest-path] [output-filename]
-```
-
-Examples:
-
-```bash
-# Write to public/ with inferred filename
-node scripts/normalize-image.js ~/Downloads/icon.png
-
-# Write to specific location
-node scripts/normalize-image.js ~/Downloads/icon.png public/icon.png
-```
-
-Requires `sharp` — run `npm install` once if not already done.
+Monitor builds at [expo.dev](https://expo.dev).
 
 ---
 
 ## Running tests
 
 ```bash
-npm test
+npm test           # Jest + React Native Testing Library
+npm run type-check # TypeScript
+npm run lint       # ESLint
 ```
 
-Tests live in `src/__tests__/`. Add or update tests when changing `helpers.ts`, `storage.ts`, or any core logic.
+Tests live in `src/__tests__/`. Add tests when changing `src/utils/` or `src/services/` core logic.
 
 ---
 
 ## Code style
 
-- **TypeScript** — strict mode enabled; avoid `any`
-- **ESLint** — run `npm run lint` before pushing; fix all reported issues
+- **TypeScript** — strict mode; avoid `any`
+- **ESLint** — run `npm run lint` before pushing; fix all issues
 - **No dead code** — remove unused imports and variables
+- **No hardcoded values** — use `src/theme/` tokens and `src/constants.ts`
+
+---
+
+## Developer mode
+
+Tap the app title **5 times rapidly** to toggle dev mode on/off. Dev mode state is scoped to `APP_VERSION` — it resets automatically on every version bump, making store submissions safe.
 
 ---
 
@@ -149,11 +91,11 @@ Tests live in `src/__tests__/`. Add or update tests when changing `helpers.ts`, 
 
 | Type | Pattern | Example |
 |------|---------|---------|
-| New feature | `feat/<description>` | `feat/onboarding-screen` |
-| Bug fix | `fix/<description>` | `fix/notification-timing` |
-| Chore / tooling | `chore/<description>` | `chore/update-deps` |
-| Refactor | `refactor/<description>` | `refactor/storage-layer` |
-| Docs | `docs/<description>` | `docs/contributing` |
+| New feature | `feat/<description>` | `feat/daily-checkin-screen` |
+| Bug fix | `fix/<description>` | `fix/notification-scheduling` |
+| Chore / tooling | `chore/<description>` | `chore/update-expo-sdk` |
+| Refactor | `refactor/<description>` | `refactor/paywall-store` |
+| Docs | `docs/<description>` | `docs/setup-guide` |
 
 ---
 
@@ -172,5 +114,5 @@ Tests live in `src/__tests__/`. Add or update tests when changing `helpers.ts`, 
 Open a GitHub issue at `https://github.com/[GITHUB_REPO]/issues` and include:
 - Steps to reproduce
 - Expected vs. actual behaviour
-- Platform (Web / Android / iOS) and OS version
-- Screenshots or console logs
+- Platform (iOS / Android) and OS version
+- Screenshots or error logs
