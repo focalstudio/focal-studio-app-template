@@ -9,8 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.1.0] — 2026-05-27
+
 ### Added
 - Initial project scaffold from focal-studio-app-template
+- Migrated from React + Capacitor to React Native + Expo SDK 56 (New Architecture)
+- Expo Router file-based navigation (`app/` directory)
+- Zustand stores: app, auth, onboarding, paywall
+- Design token system (`src/theme/`)
+- UI component library: Button, Card, TextInput, Toggle, Badge, Screen, Divider
+- Services: analytics (PostHog), haptics, notifications, rating
+- AsyncStorage helpers (`src/utils/storage.ts`)
+- EAS Build + EAS Submit configuration (`eas.json`)
+- GitHub Actions: CI, release automation, EAS preview builds
+- Store listing starters for iOS App Store and Google Play
 
 ---
 
