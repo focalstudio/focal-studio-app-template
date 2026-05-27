@@ -44,8 +44,13 @@ export default function PaywallScreen() {
   const { setSubscription } = usePaywallStore();
 
   function handleSubscribe(tier: SubscriptionTier) {
-    // TODO: call RevenueCat purchasePackage here before calling setSubscription
-    setSubscription(tier);
+    // Wire RevenueCat before enabling this: see src/store/usePaywallStore.ts
+    throw new Error(
+      `[${APP_NAME}] Paywall not wired — integrate RevenueCat purchasePackage before shipping. Attempted tier: ${tier}`
+    );
+    // After wiring RevenueCat, replace the throw above with:
+    // const purchase = await Purchases.purchasePackage(pkg);
+    // setSubscription(purchase.customerInfo.activeSubscriptions[0] as SubscriptionTier);
     Analytics.subscriptionStarted(tier);
     router.back();
   }

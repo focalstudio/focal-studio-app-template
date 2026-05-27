@@ -17,12 +17,19 @@ export function setAnalyticsEnabled(value: boolean): void {
   else client?.optIn();
 }
 
-export function track(event: string, props?: Record<string, unknown>): void {
+// Union of all valid event names — add app-specific events here.
+type AnalyticsEvent =
+  | "screen_viewed"
+  | "onboarding_completed"
+  | "paywall_viewed"
+  | "subscription_started"
+  | "app_error";
+
+export function track(event: AnalyticsEvent, props?: Record<string, unknown>): void {
   if (!enabled || !client) return;
   client.capture(event, props as any); // PostHog's JsonType doesn't accept unknown
 }
 
-// Predefined events — add app-specific events below.
 export const Analytics = {
   screenViewed: (screen: string) => track("screen_viewed", { screen }),
   onboardingCompleted: () => track("onboarding_completed"),

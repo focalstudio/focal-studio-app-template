@@ -23,19 +23,19 @@ const SLIDES = [
   {
     id: "1",
     title: `Welcome to ${APP_NAME}`,
-    subtitle: "Replace this with a compelling description of what your app does.",
+    subtitle: "[Slide 1: Describe what your app does and why it matters.]",
     emoji: "👋",
   },
   {
     id: "2",
     title: "Your Key Feature",
-    subtitle: "Describe the main benefit or feature that makes your app unique.",
+    subtitle: "[Slide 2: Highlight the main benefit that makes your app unique.]",
     emoji: "✨",
   },
   {
     id: "3",
     title: "Start Today",
-    subtitle: "Replace this slide with your call to action or a key outcome.",
+    subtitle: "[Slide 3: Your call to action or a key outcome users can expect.]",
     emoji: "🚀",
   },
 ];

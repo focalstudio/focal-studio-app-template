@@ -12,7 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { setAnalyticsEnabled, Analytics } from "@/services/analytics";
 import { maybeRequestRating } from "@/services/ratingService";
 import { FontSize, FontWeight, Spacing } from "@/theme";
-import { APP_NAME, APP_VERSION } from "@/constants";
+import { APP_NAME, APP_VERSION, PRIVACY_POLICY_URL } from "@/constants";
 import type { Theme } from "@/types";
 
 const THEMES: { label: string; value: Theme }[] = [
@@ -21,7 +21,6 @@ const THEMES: { label: string; value: Theme }[] = [
   { label: "System", value: "device" },
 ];
 
-const PRIVACY_POLICY_URL = "https://focalstudio.github.io/privacy";
 
 function Row({ label, onPress }: { label: string; onPress: () => void }) {
   const { colors } = useTheme();

@@ -83,7 +83,7 @@ _How should the app speak to users? (e.g. friendly + direct, clinical + precise,
 
 ## Obsidian vault
 
-`/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/`
+`~/Obsidian/Projects/[APP_NAME]/`
 
 - [[APP_NAME Dashboard]] — launch status, today's tasks, milestone dates
 - [[APP_NAME Roadmap]] — phased narrative roadmap with branch names

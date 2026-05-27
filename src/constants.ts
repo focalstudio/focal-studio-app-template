@@ -12,3 +12,6 @@ export const APP_VERSION = "0.3.0";
 
 // Version-scoped key — changes on every version bump, resetting dev mode automatically.
 export const DEV_MODE_KEY = `[APP_SLUG]_dev_mode_0.3.0`;
+
+// Replace with your app's privacy policy URL after running init.sh.
+export const PRIVACY_POLICY_URL = "[PRIVACY_POLICY_URL]";

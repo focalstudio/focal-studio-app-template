@@ -12,6 +12,27 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ### Fixed
 - `eas-preview.yml`: `npm ci` → `npm ci --legacy-peer-deps` to resolve `jest-expo` / `@react-native/jest-preset` peer-dep conflict
 - `release.yml`: opt in to Node.js 24 runtime via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` to silence GitHub's Node 20 deprecation warning ahead of the 2026-06-02 forced cutover
+- Auth placeholder now throws an explicit error instead of silently succeeding — prevents accidental shipping of unwired auth
+- Paywall `handleSubscribe` now throws before calling `setSubscription` — prevents fake subscriptions reaching production
+- All Zustand stores (`useAppStore`, `useAuthStore`, `usePaywallStore`) validate hydrated AsyncStorage values with type guards before applying to state
+- `notifications.ts` `parseTime()` returns a safe fallback (`09:00`) and logs a warning for malformed time strings instead of passing `NaN` to the Expo API
+- `isMountedRef` guard added to login async flow to prevent state updates after component unmount
+- Obsidian vault path in `scripts/init.sh` now reads `$OBSIDIAN_VAULT_PATH` env var, falling back to `~/Obsidian/Projects` (removes user-specific hardcoded path)
+- `PRIVACY_POLICY_URL` moved from a hardcoded string in `settings.tsx` to a `[PRIVACY_POLICY_URL]` placeholder in `src/constants.ts`
+
+### Added
+- `.eslintrc.json` committed — ESLint rules now consistent across all environments
+- `AnalyticsEvent` union type on `track()` in `analytics.ts` — typos in event names are caught at compile time
+- `reset()` action on `useOnboardingStore` — enables re-triggering onboarding in tests and dev mode
+- `src/store/__tests__/useAppStore.test.ts` — smoke test for store defaults and mutations
+- CI (`ci.yml`): `--passWithNoTests=false` flag ensures the test suite is never silently empty
+- Notification scheduling errors from `setNotificationPrefs` now surface via `Analytics.appError()` instead of being silently swallowed
+
+### Changed
+- README rewritten to document v0.3.0: multi-agent system, branch strategy, CI/CD workflows, release workflow, and further-reading table
+- Onboarding placeholder slide subtitles use bracket-delimited text (e.g. `[Slide 1: …]`) to make template copy visually obvious during review
+- `.env.example` updated with comments and example key format
+- `SETUP.md` and `IDEA.md` Obsidian vault path examples updated from user-specific path to `~/Obsidian/Projects/[APP_NAME]/`
 
 ---
 

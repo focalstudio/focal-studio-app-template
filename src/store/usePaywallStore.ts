@@ -25,8 +25,12 @@ export const usePaywallStore = create<PaywallState>((set) => ({
   },
 
   hydrate: async () => {
-    const data = await loadJson<{ tier: SubscriptionTier }>(PAYWALL_KEY, { tier: "free" });
-    set({ tier: data.tier, isPro: data.tier !== "free", isLoading: false });
+    const validTiers: SubscriptionTier[] = ["free", "monthly", "annual", "lifetime"];
+    const data = await loadJson<{ tier: unknown }>(PAYWALL_KEY, { tier: "free" });
+    const tier: SubscriptionTier = (validTiers as unknown[]).includes(data.tier)
+      ? (data.tier as SubscriptionTier)
+      : "free";
+    set({ tier, isPro: tier !== "free", isLoading: false });
   },
 }));
 

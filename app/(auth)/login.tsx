@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
@@ -21,6 +21,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   async function handleLogin() {
     setError("");
@@ -30,14 +37,21 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      // TODO: replace with real auth call
-      // e.g. const user = await signInWithEmailAndPassword(auth, email, password);
+      // Replace this block with your auth provider's sign-in call, e.g.:
+      // const user = await signInWithEmailAndPassword(auth, email, password);
+      // setUser({ id: user.uid, email: user.email! });
+      throw new Error(
+        `[${APP_NAME}] Auth not wired — replace this block with your real auth provider before shipping.`
+      );
+      if (!isMountedRef.current) return;
       setUser({ id: "placeholder", email });
       router.replace("/(tabs)");
-    } catch {
-      setError("Invalid email or password.");
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      const isSetupError = err instanceof Error && err.message.includes("Auth not wired");
+      setError(isSetupError ? (err as Error).message : "Invalid email or password.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }
 

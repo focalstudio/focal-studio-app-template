@@ -3,6 +3,7 @@ import type { Theme, NotificationPrefs } from "../types";
 import { STORAGE_PREFIX, DEV_MODE_KEY } from "../constants";
 import { loadJson, saveJson, loadString, saveString } from "../utils/storage";
 import { rescheduleNotifications } from "../services/notifications";
+import { Analytics } from "../services/analytics";
 
 const THEME_KEY = `${STORAGE_PREFIX}theme`;
 const NOTIF_KEY = `${STORAGE_PREFIX}notification_prefs`;
@@ -43,9 +44,9 @@ export const useAppStore = create<AppState>((set) => ({
   setNotificationPrefs: (prefs) => {
     set({ notificationPrefs: prefs });
     saveJson(NOTIF_KEY, prefs);
-    // Fire-and-forget: reschedule notifications to reflect updated prefs.
-    // Errors are swallowed inside rescheduleNotifications.
-    rescheduleNotifications(prefs);
+    rescheduleNotifications(prefs).catch((e) => {
+      Analytics.appError(e instanceof Error ? e.message : String(e), "rescheduleNotifications");
+    });
   },
 
   setAnalyticsEnabled: (analyticsEnabled) => {
@@ -59,8 +60,28 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   hydrate: async () => {
-    const theme = (await loadString(THEME_KEY, "device")) as Theme;
-    const notificationPrefs = await loadJson(NOTIF_KEY, DEFAULT_NOTIF_PREFS);
+    const validThemes: Theme[] = ["light", "dark", "device"];
+    const rawTheme = await loadString(THEME_KEY, "device");
+    const theme: Theme = (validThemes as string[]).includes(rawTheme)
+      ? (rawTheme as Theme)
+      : "device";
+
+    const rawPrefs = await loadJson<Partial<NotificationPrefs>>(NOTIF_KEY, DEFAULT_NOTIF_PREFS);
+    const notificationPrefs: NotificationPrefs = {
+      dailyReminderEnabled: typeof rawPrefs.dailyReminderEnabled === "boolean"
+        ? rawPrefs.dailyReminderEnabled
+        : DEFAULT_NOTIF_PREFS.dailyReminderEnabled,
+      dailyReminderTime: typeof rawPrefs.dailyReminderTime === "string"
+        ? rawPrefs.dailyReminderTime
+        : DEFAULT_NOTIF_PREFS.dailyReminderTime,
+      reengagementEnabled: typeof rawPrefs.reengagementEnabled === "boolean"
+        ? rawPrefs.reengagementEnabled
+        : DEFAULT_NOTIF_PREFS.reengagementEnabled,
+      reengagementTime: typeof rawPrefs.reengagementTime === "string"
+        ? rawPrefs.reengagementTime
+        : DEFAULT_NOTIF_PREFS.reengagementTime,
+    };
+
     const analyticsStr = await loadString(`${STORAGE_PREFIX}analytics`, "true");
     const devModeStr = await loadString(DEV_MODE_KEY_STORE, "false");
 

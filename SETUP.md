@@ -173,8 +173,9 @@ Leave empty to disable analytics entirely.
 
 Create the vault folder:
 ```
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/
+~/Obsidian/Projects/[APP_NAME]/
 ```
+> Set `OBSIDIAN_VAULT_PATH` before running `init.sh` if your vault lives elsewhere.
 
 Copy the templates from `obsidian-templates/` into the vault folder. Ask Claude to generate a Dashboard, Roadmap, and Kanban doc using the patterns in `CLAUDE.md`.
 

@@ -38,6 +38,10 @@ async function createAndroidChannel(): Promise<void> {
 
 function parseTime(timeStr: string): { hour: number; minute: number } {
   const [h, m] = timeStr.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+    console.warn(`[Notifications] Invalid time "${timeStr}", defaulting to 09:00`);
+    return { hour: 9, minute: 0 };
+  }
   return { hour: h, minute: m };
 }
 

@@ -30,7 +30,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   hydrate: async () => {
-    const user = await loadJson<User | null>(AUTH_KEY, null);
+    const raw = await loadJson<unknown>(AUTH_KEY, null);
+    const isValidUser = (v: unknown): v is User =>
+      typeof v === "object" && v !== null && "id" in v && "email" in v &&
+      typeof (v as User).id === "string" && typeof (v as User).email === "string";
+    const user = isValidUser(raw) ? raw : null;
     set({ user, isAuthenticated: user !== null, isLoading: false });
   },
 }));

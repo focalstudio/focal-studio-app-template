@@ -148,7 +148,8 @@ if [[ -d "$OBSIDIAN_SRC" ]]; then
 fi
 
 # ── Copy templates to Obsidian vault (silently skips if vault doesn't exist) ──
-VAULT_BASE="/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects"
+# Set OBSIDIAN_VAULT_PATH env var to override the default location.
+VAULT_BASE="${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/Projects}"
 VAULT_DIR="$VAULT_BASE/$APP_NAME"
 if [[ -d "$VAULT_BASE" ]]; then
   echo "  Copying templates to Obsidian vault: $VAULT_DIR"
