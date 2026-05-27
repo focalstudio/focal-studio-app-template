@@ -388,6 +388,15 @@ When a user request arrives:
 
 Skip subagent delegation when the task is a single trivial edit (one-line fix, typo, rename) or a pure information question. Spawning a subagent for those just adds a roundtrip.
 
+### Long-report handoff
+
+When a subagent's report would exceed ~80 lines (full `qa-reviewer` audit, deep backend integration write-up, design analysis), the subagent writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only:
+
+1. The file path.
+2. A 3-bullet executive summary (blockers / decisions / what changed).
+
+The orchestrator reads from disk on demand. This keeps the orchestrator context lean during mixed/parallel runs and avoids context degradation when summaries get re-summarized across roundtrips. `.claude/scratch/` is gitignored.
+
 ---
 
 ## What not to do

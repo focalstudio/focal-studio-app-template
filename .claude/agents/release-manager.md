@@ -48,3 +48,5 @@ Return:
 - the version bumped to
 - both PR URLs
 - a short checklist of what the user must do manually (EAS build, App Store Connect submission)
+
+**If the pre-emptive review (step 6) surfaces a long list of findings (~80+ lines), write the full audit to `.claude/scratch/release-manager-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary in the release report.**

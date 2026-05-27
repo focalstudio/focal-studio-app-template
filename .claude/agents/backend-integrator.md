@@ -32,7 +32,7 @@ For AI-API integrations only, also load `claude-api` (caching, model selection).
 3. If the brief implies a new dependency, list the install command in your report — do not run `npm install` yourself.
 4. Implement the integration with mock-friendly seams (factory function or DI) so tests can stub it.
 5. Run `npm run type-check`.
-6. Return: files changed, env vars added, install commands needed, native-build implications.
+6. Return: files changed, env vars added, install commands needed, native-build implications. **If the report would exceed ~80 lines, write it to `.claude/scratch/backend-integrator-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary.**
 
 ## What you do NOT do
 

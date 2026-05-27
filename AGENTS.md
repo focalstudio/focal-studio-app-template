@@ -87,6 +87,8 @@ Five specialist subagents live in [.claude/agents/](.claude/agents/). The main C
 
 Each agent declares the skills it loads — see [.claude/SKILLS.md](.claude/SKILLS.md) for the matrix.
 
+**Long-report handoff.** If a subagent's report would exceed ~80 lines, it writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only the path plus a 3-bullet summary. Keeps the orchestrator context lean. Full convention in [.claude/CLAUDE.md](.claude/CLAUDE.md) under "Multi-agent workflow".
+
 ### When to delegate vs do it yourself
 
 - **Single trivial edit** (typo, one-line fix, rename) → do it yourself. Spawning a subagent adds a roundtrip without benefit.

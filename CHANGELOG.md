@@ -19,6 +19,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Changed
 - `.gitignore` no longer ignores `.claude/skills/` — vendored skills now ship with the template
+- Multi-agent workflow now uses a disk-handoff convention for long subagent reports (>~80 lines): the subagent writes the full report to `.claude/scratch/<agent>-<ts>.md` and returns only the path plus a 3-bullet summary. Keeps the orchestrator context lean during mixed/parallel runs. `.claude/scratch/` is gitignored.
 
 ---
 

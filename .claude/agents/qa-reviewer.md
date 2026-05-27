@@ -56,7 +56,7 @@ For every changed file in the diff:
    - 🔴 **Blocker** — bug, security issue, or broken contract. Fix before merging.
    - 🟠 **Should fix** — likely bug, code smell with real risk.
    - 🟡 **Nit** — style, naming, dead code. Optional.
-6. Return a markdown report grouped by file, with severity per finding.
+6. Return a markdown report grouped by file, with severity per finding. **If the report would exceed ~80 lines (very common for full-branch reviews), write it to `.claude/scratch/qa-reviewer-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary (blocker count / should-fix count / overall verdict).**
 
 ## What you do NOT do
 

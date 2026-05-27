@@ -37,7 +37,7 @@ For self-review before returning, also load `design-review` if you made non-triv
 3. If anything in the brief contradicts a hard rule, return early with a clarification request — do not silently override.
 4. Implement the minimum change.
 5. Run `npm run type-check` to confirm no TS errors.
-6. Return a structured report: files changed, key decisions, anything the orchestrator should know before committing.
+6. Return a structured report: files changed, key decisions, anything the orchestrator should know before committing. **If the report would exceed ~80 lines, write it to `.claude/scratch/ios-frontend-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary.**
 
 ## What you do NOT do
 
