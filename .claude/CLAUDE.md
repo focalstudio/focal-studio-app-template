@@ -362,6 +362,35 @@ Keep metadata version-controlled:
 
 ---
 
+## Multi-agent workflow
+
+This template ships with specialist subagents in [.claude/agents/](agents/) and user-level agents in `~/.claude/agents/`. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
+
+### Repo-level agents (ship with the template)
+- **`ios-frontend`** — React Native + Expo UI work. Loads `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, and the `rn-*` skill bundle.
+- **`backend-integrator`** — Third-party service integration (Supabase, RevenueCat, PostHog, expo-notifications). Loads `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`.
+- **`release-manager`** — Runs the full release workflow above. Loads `commit`, `commit-push-pr`, `review`, `verify`.
+
+### User-level agents (live in `~/.claude/agents/`, cross-project)
+- **`aso-marketing`** — Store-listing copy with hard char-limit enforcement. Loads `aso-rules`, `ralph-copywriter`, `web-asset-generator`.
+- **`qa-reviewer`** — Read-only pre-PR review. Loads `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor`.
+
+### Orchestration playbook
+
+When a user request arrives:
+
+1. **Classify** into `frontend`, `backend`, `release`, `marketing`, `review`, or `mixed`.
+2. **For single-domain requests:** spawn the matching subagent with a *fully self-contained brief* — exact file paths, expected behavior, what to return. The orchestrator plans, the subagent executes. **Never** delegate planning ("figure out what to do") — that wastes the subagent's context re-deriving what the orchestrator already knows.
+3. **For mixed requests:** decompose into independent subtasks and spawn subagents in parallel (single message, multiple `Agent` tool calls) when there are no cross-dependencies.
+4. **Subagents return reports.** The orchestrator handles commits, `CHANGELOG.md` updates, and PR creation. Subagents must not open PRs themselves — this avoids race conditions when multiple agents touch the same branch.
+5. **Skills inside subagents.** Each subagent's `.md` declares the skills it must load. The subagent invokes them via the `Skill` tool at the start of its run; the orchestrator doesn't need to specify which skills to use.
+
+### When NOT to delegate
+
+Skip subagent delegation when the task is a single trivial edit (one-line fix, typo, rename) or a pure information question. Spawning a subagent for those just adds a roundtrip.
+
+---
+
 ## What not to do
 - Do not make secretive changes.
 - Do not skip branch creation unless explicitly allowed.
