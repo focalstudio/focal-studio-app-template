@@ -364,16 +364,15 @@ Keep metadata version-controlled:
 
 ## Multi-agent workflow
 
-This template ships with specialist subagents in [.claude/agents/](agents/) and user-level agents in `~/.claude/agents/`. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
+All five specialist subagents live in [.claude/agents/](agents/) and ship with the template — no per-machine install. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
 
-### Repo-level agents (ship with the template)
-- **`ios-frontend`** — React Native + Expo UI work. Loads `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, and the `rn-*` skill bundle.
-- **`backend-integrator`** — Third-party service integration (Supabase, RevenueCat, PostHog, expo-notifications). Loads `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`.
-- **`release-manager`** — Runs the full release workflow above. Loads `commit`, `commit-push-pr`, `review`, `verify`.
-
-### User-level agents (live in `~/.claude/agents/`, cross-project)
-- **`aso-marketing`** — Store-listing copy with hard char-limit enforcement. Loads `aso-rules`, `ralph-copywriter`, `web-asset-generator`.
-- **`qa-reviewer`** — Read-only pre-PR review. Loads `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor`.
+| Agent | Purpose | Skills loaded |
+|---|---|---|
+| `ios-frontend` | React Native + Expo UI work | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-*` bundle |
+| `backend-integrator` | Third-party service integration | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching` |
+| `release-manager` | Runs the full release workflow above | `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
+| `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
 
 ### Orchestration playbook
 

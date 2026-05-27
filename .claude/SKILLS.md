@@ -1,24 +1,22 @@
 # Claude Code Skills
 
-Skills are stored in [`.claude/skills/`](skills/) (committed with the template) plus a small set of user-level skills in `~/.claude/skills/` (install once per machine). Each subagent in [`.claude/agents/`](agents/) and `~/.claude/agents/` declares which skills it loads.
+All skills are vendored into [`.claude/skills/`](skills/) and ship with the template — every fork inherits them automatically, no per-machine install. Each subagent in [`.claude/agents/`](agents/) declares which skills it loads.
 
 ## Agent → skills matrix
 
-| Agent | Location | Skills it loads |
+| Agent | Skills it loads |
+|---|---|
+| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` |
+| `backend-integrator` | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`, `claude-api` (Anthropic SDK only) |
+| `release-manager` | `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
+| `qa-reviewer` | `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor` |
+
+## Vendored skills
+
+| Skill | Source | Primary user |
 |---|---|---|
-| `ios-frontend` | repo | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` |
-| `backend-integrator` | repo | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`, `claude-api` (Anthropic SDK only) |
-| `release-manager` | repo | `commit`, `commit-push-pr`, `review`, `verify` |
-| `aso-marketing` | user | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
-| `qa-reviewer` | user | `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor` |
-
-## Repo-vendored skills
-
-These ship inside the template — every fork inherits them automatically.
-
-| Skill | Source | Used by |
-|---|---|---|
-| `frontend_design` | [anthropics public skill](https://github.com/anthropics) | `ios-frontend` |
+| `frontend_design` | public skill | `ios-frontend` |
 | `ui-ux-pro-max` | public skill | `ios-frontend` |
 | `design-for-ai` | public skill | `ios-frontend` |
 | `rn-react-native` | [gigs-slc/react-native-skills](https://github.com/gigs-slc/react-native-skills) | `ios-frontend` |
@@ -31,39 +29,16 @@ These ship inside the template — every fork inherits them automatically.
 | `react-native-expert` | [jeffallan/claude-skills](https://github.com/jeffallan/claude-skills) | `backend-integrator` |
 | `typescript-pro` | jeffallan/claude-skills | `backend-integrator` |
 | `expo-services` | custom (this repo) | `backend-integrator` |
-
-## User-level skills (install once per machine)
-
-Install into `~/.claude/skills/`. The user-level agents (`aso-marketing`, `qa-reviewer`) depend on these.
-
-| Skill | Source | Used by |
-|---|---|---|
-| `ralph-copywriter` | [muratcankoylan/ralph-wiggum-marketer](https://github.com/muratcankoylan/ralph-wiggum-marketer) (`skills/copywriter/`) | `aso-marketing` |
-| `tob-differential-review` | [trailofbits/skills](https://github.com/trailofbits/skills) (`plugins/differential-review/`) | `qa-reviewer` |
-| `tob-insecure-defaults` | trailofbits/skills (`plugins/insecure-defaults/`) | `qa-reviewer` |
-| `tob-supply-chain-risk-auditor` | trailofbits/skills (`plugins/supply-chain-risk-auditor/`) | `qa-reviewer` |
-| `aso-rules` | custom (this repo's author) | `aso-marketing` |
-
-Install commands:
-
-```bash
-# Public skills
-git clone --depth 1 https://github.com/muratcankoylan/ralph-wiggum-marketer.git /tmp/rwm \
-  && cp -r /tmp/rwm/skills/copywriter ~/.claude/skills/ralph-copywriter
-
-git clone --depth 1 https://github.com/trailofbits/skills.git /tmp/tob \
-  && for s in differential-review insecure-defaults supply-chain-risk-auditor; do \
-       cp -r /tmp/tob/plugins/$s ~/.claude/skills/tob-$s; \
-     done
-
-# Custom skills (copy from this repo's docs or rebuild from the SKILL.md tracked in user-level agents docs)
-# `aso-rules` SKILL.md is included with the user-level `aso-marketing` agent setup.
-```
+| `ralph-copywriter` | [muratcankoylan/ralph-wiggum-marketer](https://github.com/muratcankoylan/ralph-wiggum-marketer) | `aso-marketing` |
+| `aso-rules` | custom (this repo) | `aso-marketing` |
+| `tob-differential-review` | [trailofbits/skills](https://github.com/trailofbits/skills) | `qa-reviewer` |
+| `tob-insecure-defaults` | trailofbits/skills | `qa-reviewer` |
+| `tob-supply-chain-risk-auditor` | trailofbits/skills | `qa-reviewer` |
 
 ## Built-in skills referenced
 
-Claude Code's built-in skills (no install needed): `commit`, `commit-push-pr`, `review`, `security-review`, `verify`, `design-review`, `simplify`, `claude-api`.
+Claude Code's built-in skills (no install needed, available in every session): `commit`, `commit-push-pr`, `review`, `security-review`, `verify`, `design-review`, `simplify`, `claude-api`.
 
 ## Using skills directly
 
-You can invoke any skill from chat with `/skill-name` — but when working inside an agent, the agent loads its declared skills automatically.
+Invoke any skill from chat with `/skill-name`. When working inside a subagent, the agent loads its declared skills automatically.
