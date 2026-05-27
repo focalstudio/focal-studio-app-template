@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import type { Theme, NotificationPrefs } from "../types";
-import { STORAGE_PREFIX } from "../constants";
+import { STORAGE_PREFIX, DEV_MODE_KEY } from "../constants";
 import { loadJson, saveJson, loadString, saveString } from "../utils/storage";
 
 const THEME_KEY = `${STORAGE_PREFIX}theme`;
 const NOTIF_KEY = `${STORAGE_PREFIX}notification_prefs`;
-const DEV_MODE_KEY_STORE = `${STORAGE_PREFIX}dev_mode_0.1.0`;
+// DEV_MODE_KEY is imported from constants — it includes the app version so dev
+// mode resets automatically on every version upgrade (as designed).
+const DEV_MODE_KEY_STORE = DEV_MODE_KEY;
 
 const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
   dailyReminderEnabled: false,
