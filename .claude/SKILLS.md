@@ -11,6 +11,7 @@ All skills are vendored into [`.claude/skills/`](skills/) and ship with the temp
 | `release-manager` | `commit`, `commit-push-pr`, `review`, `verify` |
 | `aso-marketing` | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
 | `qa-reviewer` | `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor` |
+| `devops-agent` | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
 
 ## Vendored skills
 

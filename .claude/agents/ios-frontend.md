@@ -30,17 +30,35 @@ For self-review before returning, also load `design-review` if you made non-triv
 5. **No keyboard inside modals.** iOS layout shifts. Use pickers/toggles instead.
 6. **Small diffs.** Don't refactor surrounding code unless the brief asks for it.
 
+## Dependency Gate protocol
+
+UI work rarely requires new packages, but if it does: **before writing any code**, scan `package.json` for every package the task requires that is NOT already installed.
+
+If any packages are missing, output a `PACKAGES_NEEDED` block and stop — do not proceed until you receive an `INSTALLATION_RECEIPT` or explicit approval:
+
+```
+PACKAGES_NEEDED:
+  - package: react-native-reanimated
+    reason: Required for the spring animation in the new card component
+
+STATUS: awaiting_approval
+```
+
+The orchestrator will route the request through `devops-agent` for risk assessment and installation. Resume coding only after receiving confirmation.
+
 ## Workflow
 
 1. Load skills.
 2. Read the files named in the brief.
-3. If anything in the brief contradicts a hard rule, return early with a clarification request — do not silently override.
-4. Implement the minimum change.
-5. Run `npm run type-check` to confirm no TS errors.
-6. Return a structured report: files changed, key decisions, anything the orchestrator should know before committing. **If the report would exceed ~80 lines, write it to `.claude/scratch/ios-frontend-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary.**
+3. **Run the Dependency Gate** — declare any missing packages before writing code (see above).
+4. If anything in the brief contradicts a hard rule, return early with a clarification request — do not silently override.
+5. Implement the minimum change.
+6. Run `npm run type-check` to confirm no TS errors.
+7. Return a structured report: files changed, key decisions, anything the orchestrator should know before committing. **If the report would exceed ~80 lines, write it to `.claude/scratch/ios-frontend-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary.**
 
 ## What you do NOT do
 
 - Open PRs or push branches.
 - Modify [package.json](../../package.json) or [app.json](../../app.json) native fields without explicit instruction.
 - Touch [.claude/](../) or release files.
+- Run `npm install` yourself — that is `devops-agent`'s role.

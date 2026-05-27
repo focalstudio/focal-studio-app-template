@@ -75,7 +75,7 @@ focal-studio-app-template/
 
 ## Agent registry
 
-Five specialist subagents live in [.claude/agents/](.claude/agents/). The main Claude Code session (Opus) is the orchestrator — it delegates, it does not do all the work itself.
+Six specialist subagents live in [.claude/agents/](.claude/agents/). The main Claude Code session (Opus) is the orchestrator — it delegates, it does not do all the work itself.
 
 | Subagent | Use for |
 |---|---|
@@ -84,6 +84,7 @@ Five specialist subagents live in [.claude/agents/](.claude/agents/). The main C
 | [`release-manager`](.claude/agents/release-manager.md) | Cut a release — runs the full release workflow from `.claude/CLAUDE.md` |
 | [`aso-marketing`](.claude/agents/aso-marketing.md) | App Store / Google Play listing copy with hard char-limit enforcement |
 | [`qa-reviewer`](.claude/agents/qa-reviewer.md) | Read-only pre-PR review — async bugs, cleanup gaps, security, supply chain |
+| [`devops-agent`](.claude/agents/devops-agent.md) | Package risk assessment + controlled installation. **Never auto-spawned** — see Dependency Gate below |
 
 Each agent declares the skills it loads — see [.claude/SKILLS.md](.claude/SKILLS.md) for the matrix.
 
@@ -97,6 +98,56 @@ Each agent declares the skills it loads — see [.claude/SKILLS.md](.claude/SKIL
 
 ---
 
+## Dependency Gate
+
+Every task that requires new npm packages goes through the **Dependency Gate** before any code is written. This ensures the user reviews all installation risks upfront — so the coding workflow runs completely uninterrupted after approval.
+
+### Flow
+
+```
+Orchestrator: identify packages the task needs (not in package.json)
+    │
+    ├─ Packages needed? ──YES──► spawn devops-agent (pre-flight mode)
+    │                                │
+    │                                ▼
+    │                        Risk report (🟢/🟡/🔴 per package)
+    │                                │
+    │                        User: Approve / Reject / Substitute
+    │                                │
+    │                        devops-agent installs approved packages
+    │                                │
+    └─ No packages / post-approval ──► spawn coding subagent(s)
+                                              │
+                           [Mid-run: unexpected package discovered]
+                                              │
+                           Subagent STOPS → returns PACKAGES_NEEDED block
+                           Orchestrator gates through devops-agent again
+                           User approves → subagent resumes
+```
+
+### PACKAGES_NEEDED — the stop signal
+
+When `backend-integrator` or `ios-frontend` discovers a missing package mid-run, they return:
+
+```
+PACKAGES_NEEDED:
+  - package: @supabase/supabase-js
+    reason: Supabase JS client for auth and database
+STATUS: awaiting_approval
+```
+
+The orchestrator reads this, forwards to `devops-agent`, and resumes the coding agent after the receipt arrives.
+
+### Why this design
+
+| Alternative | Problem |
+|---|---|
+| Subagent auto-installs mid-run | Bypasses risk review; breaks user's "inspect upfront" expectation |
+| Orchestrator asks user each time | Interrupts coding context; multiple back-and-forths |
+| Pre-flight gate (this design) | User sees all risks before work starts; rest of workflow is uninterrupted |
+
+---
+
 ## Top mistakes to avoid
 
 1. **Editing on `main` or `dev` directly.** Always branch first.
@@ -107,6 +158,7 @@ Each agent declares the skills it loads — see [.claude/SKILLS.md](.claude/SKIL
 6. **Merging the release PR with `--delete-branch`.** Auto-closes the dev backmerge PR. Use `gh pr merge NNN --merge` only.
 7. **Letting a subagent open PRs.** Subagents return reports; the orchestrator handles git/PR.
 8. **Skipping `CHANGELOG.md` for user-visible changes.** Always update under `## [Unreleased]`.
+9. **Installing npm packages without going through `devops-agent`.** Always run the Dependency Gate — even for "harmless" packages. The user decides, not the agent.
 
 ---
 
