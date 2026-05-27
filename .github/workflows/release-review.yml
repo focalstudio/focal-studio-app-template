@@ -7,8 +7,6 @@ on:
   pull_request:
     branches:
       - main
-    head:
-      - "release/**"
 
 permissions:
   pull-requests: write
@@ -18,6 +16,7 @@ jobs:
   gate:
     name: Release Quality Gate
     runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'release/') || github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4

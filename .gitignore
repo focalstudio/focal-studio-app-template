@@ -32,8 +32,10 @@ npm-debug.log*
 yarn-debug.log*
 
 # Claude Code local files (personal, not shared)
-.claude/skills/
+# Note: .claude/skills/ IS committed (vendored skill packs shared with the template).
+# Only personal local-only files are ignored.
 .claude/settings.local.json
+.claude/scratch/
 IMPROVEMENTS.txt
 
 # EAS / Expo secrets (never commit)

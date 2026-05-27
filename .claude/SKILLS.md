@@ -1,38 +1,45 @@
 # Claude Code Skills
 
-This file documents which Claude Code skills are useful for this project and how to install them.
+All skills are vendored into [`.claude/skills/`](skills/) and ship with the template — every fork inherits them automatically, no per-machine install. Each subagent in [`.claude/agents/`](agents/) declares which skills it loads.
 
-Skills are stored in `.claude/skills/` (gitignored — personal to your environment).
+## Agent → skills matrix
 
-## Recommended skills
+| Agent | Skills it loads |
+|---|---|
+| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` *(conditional — only for non-trivial UI changes)* |
+| `backend-integrator` | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`, `claude-api` (Anthropic SDK only) |
+| `release-manager` | `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
+| `qa-reviewer` | `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor` |
+| `devops-agent` | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
 
-| Skill | Purpose | How to install |
-|-------|---------|----------------|
-| `frontend_design` | Generate polished component UI | Copy from WildFocus `.claude/skills/` or regenerate with `/frontend_design` |
-| `ui-ux-pro-max` | Design system guidance, color palettes, UX guidelines | Available via Claude Code skill registry |
-| `commit-push-pr` | One-command commit → push → PR to dev | Available via Claude Code skill registry |
-| `commit` | Structured git commit with co-author | Available via Claude Code skill registry |
-| `init` | Generate a CLAUDE.md from scratch for a new project | Available via Claude Code skill registry |
-| `review` | Review a pull request | Available via Claude Code skill registry |
-| `security-review` | Security review of pending changes | Available via Claude Code skill registry |
+## Vendored skills
 
-## Skills from WildFocus (copy if relevant)
+| Skill | Source | Primary user |
+|---|---|---|
+| `frontend_design` | public skill | `ios-frontend` |
+| `ui-ux-pro-max` | public skill | `ios-frontend` |
+| `design-for-ai` | public skill | `ios-frontend` |
+| `rn-react-native` | [gigs-slc/react-native-skills](https://github.com/gigs-slc/react-native-skills) | `ios-frontend` |
+| `rn-react-best-practices` | gigs-slc/react-native-skills | `ios-frontend` |
+| `rn-building-ui` | gigs-slc/react-native-skills | `ios-frontend` |
+| `rn-composition-patterns` | gigs-slc/react-native-skills | `ios-frontend` |
+| `rn-data-fetching` | gigs-slc/react-native-skills | `backend-integrator` |
+| `rn-upgrading-expo` | gigs-slc/react-native-skills | situational |
+| `rn-dev-client` | gigs-slc/react-native-skills | situational |
+| `react-native-expert` | [jeffallan/claude-skills](https://github.com/jeffallan/claude-skills) | `backend-integrator` |
+| `typescript-pro` | jeffallan/claude-skills | `backend-integrator` |
+| `expo-services` | custom (this repo) | `backend-integrator` |
+| `ralph-copywriter` | [muratcankoylan/ralph-wiggum-marketer](https://github.com/muratcankoylan/ralph-wiggum-marketer) | `aso-marketing` |
+| `aso-rules` | custom (this repo) | `aso-marketing` |
+| `tob-differential-review` | [trailofbits/skills](https://github.com/trailofbits/skills) | `qa-reviewer` |
+| `tob-insecure-defaults` | trailofbits/skills | `qa-reviewer` |
+| `tob-supply-chain-risk-auditor` | trailofbits/skills | `qa-reviewer` |
 
-These skills were developed during WildFocus and may be reusable:
+## Built-in skills referenced
 
-- **`react-native-skills`** — Capacitor-specific patterns, mobile-safe React hooks
-- **`skill_creator`** — Creates new Claude Code skills
+Claude Code's built-in skills (no install needed, available in every session): `commit`, `commit-push-pr`, `review`, `security-review`, `verify`, `design-review`, `simplify`, `claude-api`, `web-asset-generator`.
 
-Copy them from `/Users/fperezmartinez/Desktop/WildFocus/.claude/skills/` if they exist.
+## Using skills directly
 
-## Using skills
-
-Invoke a skill in the Claude Code chat with `/skill-name`.
-
-To see all available skills: run `/help` in Claude Code.
-
-## Notes
-
-- Skills in `.claude/skills/` are gitignored (personal to your dev environment).
-- `settings.local.json` is also gitignored (copy from `settings.local.json.template` on setup).
-- To share a skill across projects, consider publishing it to the Focal Studio shared config.
+Invoke any skill from chat with `/skill-name`. When working inside a subagent, the agent loads its declared skills automatically.

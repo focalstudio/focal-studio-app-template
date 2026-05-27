@@ -362,6 +362,119 @@ Keep metadata version-controlled:
 
 ---
 
+## Permission model
+
+This repo ships a **three-layer permission system** so Claude can work autonomously without prompts for routine operations, while hard-blocking genuinely destructive commands.
+
+### Layer 1 — Project shared (`.claude/settings.json`, tracked)
+Committed to git → propagates automatically to every repo cloned from this template. Contains:
+- **Allowlist:** all safe dev operations (git workflow, npm project-scoped, expo, gh CLI, shell utilities, WebFetch to dev domains)
+- **Denylist (always blocked, no override):**
+  - `git push --force` / `git push -f` — no remote history rewrites
+  - `git push origin main` — no direct push to main; always via PR
+  - `rm -rf` / `rm -r` — no recursive deletes
+  - `sudo` — no privilege escalation
+
+### Layer 2 — Project personal (`.claude/settings.local.json`, gitignored)
+Your machine-specific overrides. Copy `.claude/settings.local.json.template` to `.claude/settings.local.json` to activate. Use this to add permissions that are personal (e.g., custom Homebrew paths) or that you explicitly trust `devops-agent` to use autonomously (e.g., `brew install`, `npm install -g`).
+
+### Layer 3 — Global (`~/.claude/settings.json`, user home)
+Applies to all projects. Lowest specificity — project settings take precedence.
+
+### What "neither allow nor deny" means
+If a command is not in the allowlist AND not in the denylist, Claude Code **prompts the user**. This is intentional for extended operations like `brew install`, `pip install`, and `npm install -g` — they prompt, which gives the user a second confirmation after the devops-agent's risk report.
+
+---
+
+## Dependency Gate
+
+Every task that requires new npm packages goes through the **Dependency Gate** before any code is written. This keeps the user in control of what enters the project and ensures the coding workflow runs uninterrupted after approval.
+
+### Orchestrator pre-flight checklist
+
+When the user's request implies new packages:
+
+1. Identify the packages needed (check `package.json` — only flag what's missing).
+2. Spawn `devops-agent` in pre-flight mode with the package list.
+3. `devops-agent` assesses risk and surfaces a report to the user.
+4. User approves / rejects / substitutes.
+5. `devops-agent` installs approved packages and returns an `INSTALLATION_RECEIPT`.
+6. Spawn the coding subagent(s) with the receipt attached: "Pre-approved packages: X, Y, Z (installed)."
+
+### Mid-run discovery
+
+If a coding subagent discovers an unexpected package need mid-run:
+
+1. The subagent **stops** and returns a `PACKAGES_NEEDED` block + `STATUS: awaiting_approval`.
+2. The orchestrator forwards to `devops-agent`.
+3. After the receipt, the orchestrator resumes the subagent with "Package X is now installed."
+
+### PACKAGES_NEEDED format
+
+```
+PACKAGES_NEEDED:
+  - package: @supabase/supabase-js
+    reason: Supabase JS client for auth and database access
+  - package: expo-camera
+    reason: Native camera access for QR scan feature
+
+STATUS: awaiting_approval
+```
+
+### devops-agent invocation modes
+
+| Mode | Trigger | Who calls it |
+|---|---|---|
+| Pre-flight | Orchestrator predicts packages before coding starts | Orchestrator |
+| Mid-run discovery | Subagent returns `PACKAGES_NEEDED` block | Orchestrator (relays from subagent) |
+| Explicit user request | "use the devops agent to install X" | Orchestrator (direct) |
+
+**`devops-agent` is never auto-spawned for non-package tasks.** It is a leaf agent — it does not spawn other agents.
+
+---
+
+## Multi-agent workflow
+
+All six specialist subagents live in [.claude/agents/](agents/) and ship with the template — no per-machine install. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
+
+| Agent | Purpose | Skills loaded |
+|---|---|---|
+| `ios-frontend` | React Native + Expo UI work | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-*` bundle |
+| `backend-integrator` | Third-party service integration | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching` |
+| `release-manager` | Runs the full release workflow above | `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
+| `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
+| `devops-agent` | Package risk assessment + controlled installation | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
+
+### Orchestration playbook
+
+When a user request arrives:
+
+1. **Classify** into `frontend`, `backend`, `release`, `marketing`, `review`, `devops`, or `mixed`.
+2. **Check for package needs** — if the task requires new packages, run the Dependency Gate (see above) before spawning coding agents.
+3. **For single-domain requests:** spawn the matching subagent with a *fully self-contained brief* — exact file paths, expected behavior, what to return. The orchestrator plans, the subagent executes. **Never** delegate planning ("figure out what to do") — that wastes the subagent's context re-deriving what the orchestrator already knows.
+4. **For mixed requests:** decompose into independent subtasks and spawn subagents in parallel (single message, multiple `Agent` tool calls) when there are no cross-dependencies.
+5. **Subagents return reports.** The orchestrator handles commits, `CHANGELOG.md` updates, and PR creation. Subagents must not open PRs themselves — this avoids race conditions when multiple agents touch the same branch.
+6. **Skills inside subagents.** Each subagent's `.md` declares the skills it must load. The subagent invokes them via the `Skill` tool at the start of its run; the orchestrator doesn't need to specify which skills to use.
+
+### When NOT to delegate
+
+Skip subagent delegation when the task is a single trivial edit (one-line fix, typo, rename) or a pure information question. Spawning a subagent for those just adds a roundtrip.
+
+### Long-report handoff
+
+When a subagent's report would exceed ~80 lines (full `qa-reviewer` audit, deep backend integration write-up, design analysis), the subagent writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only:
+
+1. The file path.
+2. A 3-bullet executive summary (blockers / decisions / what changed).
+
+The orchestrator reads from disk on demand. This keeps the orchestrator context lean during mixed/parallel runs and avoids context degradation when summaries get re-summarized across roundtrips. `.claude/scratch/` is gitignored.
+
+- **Filename timestamp:** generate with `date +%Y%m%d-%H%M`.
+- **Directory creation:** agents do not need to `mkdir` — `Write` creates parent dirs automatically.
+
+---
+
 ## What not to do
 - Do not make secretive changes.
 - Do not skip branch creation unless explicitly allowed.
