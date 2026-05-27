@@ -1,33 +1,27 @@
-# [APP_NAME] — Play Store Listing
+# Google Play Store Listing — [APP_NAME]
 
 > Fill in all `[placeholder]` values. Run `grep -r "\[APP_" .` to verify nothing remains before submitting.
+> Google Play title counts toward keyword indexing — use close to all 30 chars.
 
 ---
 
-## App name
-
+## Title (≤ 30 chars, keyword-indexed)
 ```
-[APP_NAME]
+[APP_NAME] - [Primary Keyword]
 ```
+**Chars:** XX / 30
 
-*(Max 50 characters — keep short and memorable)*
-
----
-
-## Short description
-
+## Short description (≤ 80 chars)
 ```
-[APP_TAGLINE] — [one more hook, e.g. "No account needed."]
+[Primary keyword hook] — [secondary benefit or differentiator]
 ```
+**Chars:** XX / 80
 
-*(Max 80 characters — this appears below the app name in search results)*
+> Include the primary keyword here — this appears below the app name in search results and is heavily weighted.
 
----
-
-## Long description
-
+## Full description (≤ 4000 chars)
 ```
-[APP_NAME] — [APP_TAGLINE]
+[APP_NAME] — [one-line value proposition]
 
 [Opening hook: 1–2 sentences describing the core problem this solves and who it's for.]
 
@@ -48,39 +42,29 @@ KEY FEATURES
 
 PRIVACY FIRST
 [APP_NAME] does not collect personal data. Optional anonymous analytics help improve the app.
-Full privacy policy: https://focalstudio.github.io/privacy-policy.html
+Full privacy policy: https://focalstudio.github.io/privacy
 
 PART OF FOCAL STUDIO
 A small collection of focused, no-nonsense apps. No ads. No subscriptions required.
 ```
 
-*(Max 4000 characters — aim for 800–1500 for readability)*
+> Repeat your primary keyword 3–5× naturally throughout the description.
 
----
-
-## What's new (release notes template)
-
+## What's new (per release)
 ```
 v[X.X.X]
-• [Change 1]
-• [Change 2]
+• [User-visible change 1]
+• [User-visible change 2]
 • Bug fixes and performance improvements
 ```
 
 ---
 
-## Keywords / ASO notes
-
-Primary keywords to target (update per release):
-
-- `[keyword 1]`
-- `[keyword 2]`
-- `[keyword 3]`
-
-Competitor apps to monitor for keyword gaps:
-
-- `[competitor 1]`
-- `[competitor 2]`
+## ASO notes
+- [ ] Title uses close to 30 chars
+- [ ] Short description includes primary keyword
+- [ ] Primary keyword appears 3–5× in full description
+- [ ] Keyword scores validated with AppASO / AppFollow
 
 ---
 
@@ -93,44 +77,17 @@ Competitor apps to monitor for keyword gaps:
 | Phone screenshot 1 | 1080×1920 (portrait) | ❌ |
 | Phone screenshot 2 | 1080×1920 | ❌ |
 | Phone screenshot 3 | 1080×1920 | ❌ |
-| 7-inch tablet screenshot | optional | ⬜ |
-| 10-inch tablet screenshot | optional | ⬜ |
-
-**Screenshot copy (overlay text on each):**
-
-1. `[Headline for screenshot 1]`
-2. `[Headline for screenshot 2]`
-3. `[Headline for screenshot 3]`
 
 ---
 
-## Content rating questionnaire answers
-
-*(Fill in after completing the Play Console questionnaire)*
-
+## Content rating
 - Violence: None
 - Sexual content: None
 - Language: None
-- Controlled substances: None
 - Target age group: `[All ages / Teens / Adults]`
-- COPPA compliant: Yes (does not collect data from children)
-
----
-
-## Pricing
-
-- [ ] Free
-- [ ] Free with in-app purchases
-- [ ] Paid
-
-IAP planned: `[None / [describe IAP]]`
-
----
+- COPPA compliant: Yes
 
 ## Privacy policy URL
-
 ```
-https://focalstudio.github.io/privacy-policy.html
+https://focalstudio.github.io/privacy
 ```
-
-*(Already live — no action needed if template is set up correctly)*

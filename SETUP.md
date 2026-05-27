@@ -1,8 +1,8 @@
 # New App Setup Guide
 
-**Estimated time: ~75 minutes**
+**Estimated time: ~60 minutes**
 
-This guide takes you from cloning the template to a buildable, testable app scaffold with CI/CD, analytics, notifications, Android signing, and an Obsidian project vault.
+This guide takes you from cloning the template to a running React Native app on iOS Simulator, with CI/CD, analytics, notifications, and an Obsidian project vault.
 
 ---
 
@@ -10,14 +10,16 @@ This guide takes you from cloning the template to a buildable, testable app scaf
 
 Before starting, install:
 - **Node.js 22+** (`node --version`)
-- **Java 21 + Android SDK** — install [Android Studio](https://developer.android.com/studio) to get both
-- **Xcode** (macOS, for iOS only)
+- **Expo CLI** (`npm install -g expo-cli`)
+- **EAS CLI** (`npm install -g eas-cli`)
+- **Xcode 15+** (macOS only — required for iOS Simulator)
+- **Watchman** (`brew install watchman`)
 - **Obsidian** with the **Kanban** community plugin (for project docs)
 - **Claude Code** CLI (`npm install -g @anthropic-ai/claude-code`)
 
 ---
 
-## Phase 1 — Clone and name (15 min)
+## Phase 1 — Clone and name (10 min)
 
 ### 1.1 Clone the template
 
@@ -26,245 +28,142 @@ git clone https://github.com/fpmartinez10/focal-studio-app-template.git <your-ap
 cd <your-app-slug>
 rm -rf .git
 git init
+git checkout -b main
 ```
 
 ### 1.2 Replace all placeholders
 
-Fill in your values, then run this one-liner from the repo root:
+Run this one-liner (replace values in `<>` with your actual app info):
 
 ```bash
-find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.md" -o -name "*.json" -o -name "*.html" -o -name "*.yml" -o -name "*.css" -o -name "*.js" \) \
-  ! -path "./.git/*" \
-  ! -path "./node_modules/*" \
-  -exec sed -i '' \
-    -e 's/\[APP_NAME\]/MyAppName/g' \
-    -e 's/\[APP_SLUG\]/my-app-slug/g' \
-    -e 's/\[APP_ID\]/com.fpmartinez10.myapp/g' \
-    -e 's/\[APP_COLOR\]/#007aff/g' \
-    -e 's/\[APP_COLOR_DARK\]/#409cff/g' \
-    -e 's/\[GITHUB_REPO\]/fpmartinez10\/my-app-slug/g' \
-    -e 's/\[APP_ICON_EMOJI\]/🚀/g' \
-    -e 's/\[APP_TAGLINE\]/Your one-sentence pitch here./g' \
-  {} +
+APP_NAME="My App"
+APP_SLUG="my-app"
+APP_ID="com.yourstudio.myapp"
+APP_COLOR="#007AFF"
+APP_COLOR_DARK="#0A84FF"
+
+grep -rl "\[APP_NAME\]" . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_NAME\]/$APP_NAME/g"
+grep -rl "\[APP_SLUG\]" . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_SLUG\]/$APP_SLUG/g"
+grep -rl "\[APP_ID\]"   . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_ID\]/$APP_ID/g"
+grep -rl "\[APP_COLOR\]" . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_COLOR\]/$APP_COLOR/g"
+grep -rl "\[APP_COLOR_DARK\]" . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_COLOR_DARK\]/$APP_COLOR_DARK/g"
 ```
 
-> Adjust the replacement values on the right side of each `-e` pair.
-
-### 1.3 Verify — no placeholders remain
+### 1.3 Verify no placeholders remain
 
 ```bash
-grep -r "\[APP_" . --include="*.ts" --include="*.tsx" --include="*.md" \
-  --include="*.json" --include="*.html" --include="*.yml" \
-  --include="*.css" --include="*.js"
+grep -r "\[APP_" . --include="*.ts" --include="*.tsx" --include="*.json" | grep -v node_modules
 ```
 
-Expected: **empty output**. If any matches appear, fix them manually.
-
-### 1.4 Update package.json version field
-
-Confirm `"version": "0.1.0"` in `package.json` matches what you intend to ship as first build.
+No output = clean.
 
 ---
 
-## Phase 2 — Local dev (10 min)
+## Phase 2 — Install and run (10 min)
 
 ```bash
 npm install
-npm run dev       # → http://localhost:5173
-npm test          # all tests should pass
-npm run lint      # zero warnings
+npx expo-doctor      # verify Expo config health
+npx expo start --ios # open iOS Simulator
 ```
 
-If lint reports errors, fix them before continuing.
+You should see:
+1. Metro bundler starts
+2. iOS Simulator opens
+3. Onboarding slides appear
+4. Complete onboarding → Login screen
+5. (Skip auth for now — wire later)
+
+Run tests:
+```bash
+npm test
+npm run type-check
+npm run lint
+```
+
+All should pass.
 
 ---
 
-## Phase 3 — Android setup (30 min)
+## Phase 3 — Configure EAS Build (15 min)
 
-### 3.1 Add Android platform
+### 3.1 Create an Expo account
 
-```bash
-npx cap add android
-```
+[expo.dev](https://expo.dev) → Sign up → verify email.
 
-### 3.2 Generate app icons
-
-Prepare a square PNG (1024×1024, no transparent background) and run:
+### 3.2 Log in and configure
 
 ```bash
-npm run gen:icons -- --icon public/icon.png
+eas login
+eas build:configure
 ```
 
-This fills `android/app/src/main/res/` with all required icon sizes.
+This generates/updates `eas.json`. Commit the result.
 
-### 3.3 Sync web assets to Android
+### 3.3 Set GitHub Actions secret
+
+In your GitHub repo → Settings → Secrets → New secret:
+- Name: `EXPO_TOKEN`
+- Value: your Expo access token (expo.dev → Account → Access tokens)
+
+### 3.4 Trigger a preview build
+
+Push to `dev` — `eas-preview.yml` runs automatically. Or trigger manually:
 
 ```bash
-npm run build
-npx cap sync android
+eas build --platform ios --profile preview
 ```
-
-### 3.4 Generate keystore (once per app)
-
-```bash
-keytool -genkeypair -v \
-  -keystore android/<your-app-slug>-release.jks \
-  -alias <your-app-slug> \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000
-```
-
-Save the passwords in your password manager immediately.
-
-### 3.5 Create keystore.properties
-
-Create `android/keystore.properties` (already in `.gitignore`):
-
-```properties
-storeFile=<your-app-slug>-release.jks
-storePassword=YOUR_KEYSTORE_PASSWORD
-keyAlias=<your-app-slug>
-keyPassword=YOUR_KEY_PASSWORD
-```
-
-See [KEYSTORE.md](KEYSTORE.md) for the `build.gradle` signing config snippet.
-
-### 3.6 Create GitHub repository secrets
-
-Go to **GitHub repo → Settings → Secrets and variables → Actions** and add:
-
-| Secret | Value |
-|---|---|
-| `VITE_POSTHOG_KEY` | PostHog project API key |
-| `VITE_SENTRY_DSN` | Sentry DSN |
-| `KEYSTORE_BASE64` | `base64 android/<slug>-release.jks` |
-| `KEY_ALIAS` | `<your-app-slug>` |
-| `KEY_PASSWORD` | Your key password |
-| `STORE_PASSWORD` | Your keystore password |
 
 ---
 
-## Phase 4 — Claude Code permissions (5 min)
+## Phase 4 — Set up analytics (5 min)
 
-```bash
-cp .claude/settings.local.json.template .claude/settings.local.json
-```
+1. Create a project at [posthog.com](https://eu.posthog.com) (EU region).
+2. Copy your project API key.
+3. Create `.env.local`:
+   ```bash
+   EXPO_PUBLIC_POSTHOG_KEY=phc_xxxxx
+   EXPO_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+   ```
+4. Add `EXPO_PUBLIC_POSTHOG_KEY` to GitHub Actions secrets.
 
-Review the allowlist in `settings.local.json` and adjust paths if needed (e.g. if `gh` is not at `/opt/homebrew/bin/gh`).
-
----
-
-## Phase 5 — GitHub setup (10 min)
-
-### 5.1 Push the repo
-
-```bash
-git add .
-git commit -m "Initial scaffold from focal-studio-app-template"
-git branch -M main
-git remote add origin https://github.com/<GITHUB_REPO>.git
-git push -u origin main
-```
-
-### 5.2 Create a dev branch
-
-```bash
-git checkout -b dev
-git push -u origin dev
-```
-
-### 5.3 Branch protection
-
-In GitHub **Settings → Branches**, add a rule for `main`:
-- Require PR before merging
-- Require status checks: `build` (from `ci.yml`)
-
-### 5.4 Create GitHub labels
-
-```bash
-gh label create "priority: critical" --color "B60205"
-gh label create "priority: high"     --color "E4E669"
-gh label create "priority: medium"   --color "0075CA"
-gh label create "priority: low"      --color "CFD3D7"
-gh label create "type: feat"         --color "0052CC"
-gh label create "type: fix"          --color "B60205"
-gh label create "type: chore"        --color "E4E669"
-gh label create "type: refactor"     --color "5319E7"
-gh label create "platform: android"  --color "A2EEEF"
-gh label create "platform: ios"      --color "A2EEEF"
-gh label create "platform: web"      --color "A2EEEF"
-```
-
-### 5.5 Enable template repository (optional)
-
-If this repo itself should be forkable as a template, go to **Settings → General** and check "Template repository".
+Leave empty to disable analytics entirely.
 
 ---
 
-## Phase 6 — Obsidian vault (10 min)
+## Phase 5 — Set up Obsidian vault (5 min)
 
-```bash
-cp -r obsidian-templates/ \
-  "/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/<YourAppName>/"
+Create the vault folder:
+```
+/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/
 ```
 
-Then in Obsidian:
-1. Rename the four files: replace `[APP_NAME]` with your actual app name.
-2. Open `<AppName> Kanban.md` — it should render as a board (requires Kanban plugin).
-3. Update the frontmatter `tags` in each file.
-4. Fill in the Dashboard's milestone target dates.
+Copy the templates from `obsidian-templates/` into the vault folder. Ask Claude to generate a Dashboard, Roadmap, and Kanban doc using the patterns in `CLAUDE.md`.
 
 ---
 
-## Phase 7 — Focal Studio website (10 min)
+## Phase 6 — Wire auth and paywall (ongoing)
 
-### 7.1 Add app card to index.html
+Auth:
+- Pick your backend: [Firebase](https://firebase.google.com), [Supabase](https://supabase.com), or custom API.
+- Install the SDK and replace the placeholder `handleLogin` / `handleSignup` calls in `app/(auth)/`.
+- See `src/store/useAuthStore.ts` for the integration comment.
 
-Open `/Users/fperezmartinez/Desktop/focalstudio.github.io/index.html` and find the `<!-- ADD NEW APP -->` comment. Add a card block:
-
-```html
-<div class="app-card">
-  <div class="app-icon">[APP_ICON_EMOJI]</div>
-  <div class="app-info">
-    <h3 class="app-name">[APP_NAME]</h3>
-    <p class="app-tagline">[APP_TAGLINE]</p>
-    <div class="app-links">
-      <a href="app-[APP_SLUG].html" class="btn btn-secondary btn-sm">Learn more</a>
-    </div>
-  </div>
-</div>
-```
-
-### 7.2 Add app card to apps.html
-
-Same card block in `/Users/fperezmartinez/Desktop/focalstudio.github.io/apps.html`.
-
-### 7.3 Create app page
-
-Copy an existing app page (e.g. `app-procrastipet.html`) to `app-[APP_SLUG].html` and update the content.
+Paywall:
+- Install [RevenueCat](https://www.revenuecat.com/docs/getting-started/installation/react-native): `npx expo install react-native-purchases`
+- Follow the RevenueCat Expo guide to configure your offerings.
+- Replace the placeholder in `app/paywall.tsx` and `src/store/usePaywallStore.ts`.
 
 ---
 
-## Verification checklist
+## Checklist
 
-Run these after completing all phases:
-
-| Check | Command | Expected |
-|---|---|---|
-| No placeholders | `grep -r "\[APP_" . --include="*.{ts,tsx,md,json,html,yml}"` | Empty output |
-| Build | `npm run build` | Zero errors, `dist/` created |
-| Type check | `npx tsc --noEmit` | Zero errors |
-| Lint | `npm run lint` | Zero warnings |
-| Tests | `npm test` | All pass |
-| Android sync | `npm run build && npx cap sync android` | No errors |
-
----
-
-## What's next
-
-Once the scaffold is passing all checks:
-
-1. Open [CONTRIBUTING.md](CONTRIBUTING.md) for the day-to-day dev workflow.
-2. Open your Obsidian Dashboard and start filling in Gate 1 items.
-3. Start building your core feature — branch off `dev` with `feat/<description>`.
+- [ ] Placeholders replaced (`grep -r "\[APP_" .` returns nothing)
+- [ ] `npm test` passes
+- [ ] `npm run type-check` passes
+- [ ] App runs in iOS Simulator
+- [ ] EAS configured (eas.json committed, EXPO_TOKEN secret set)
+- [ ] Analytics key set (or confirmed empty = disabled)
+- [ ] Git remote set (`git remote add origin <url>`)
+- [ ] First commit pushed
+- [ ] dev branch created and pushed

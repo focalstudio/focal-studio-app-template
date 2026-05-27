@@ -1,5 +1,4 @@
-import { describe, it, expect } from "vitest";
-import { pad, formatMMSS, pickRandom, keyUTCDate } from "../helpers";
+import { pad, formatMMSS, pickRandom, keyUTCDate } from "../utils/helpers";
 
 describe("pad", () => {
   it("pads single-digit numbers", () => {
@@ -36,11 +35,10 @@ describe("pickRandom", () => {
 
 describe("keyUTCDate", () => {
   it("returns a YYYY-MM-DD string", () => {
-    const result = keyUTCDate(0); // Unix epoch
-    expect(result).toBe("1970-01-01");
+    expect(keyUTCDate(0)).toBe("1970-01-01");
   });
   it("matches ISO date format", () => {
-    const ts = Date.UTC(2026, 3, 23); // April 23 2026
+    const ts = Date.UTC(2026, 3, 23);
     expect(keyUTCDate(ts)).toBe("2026-04-23");
   });
 });
