@@ -2,6 +2,7 @@ import React from "react";
 import { Switch, StyleSheet, View, Text } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { FontSize, FontWeight, Spacing } from "../../theme";
+import { hapticTap } from "../../services/haptics";
 
 type Props = {
   value: boolean;
@@ -28,7 +29,10 @@ export function Toggle({ value, onValueChange, label, description }: Props) {
       )}
       <Switch
         value={value}
-        onValueChange={onValueChange}
+        onValueChange={(v) => {
+          hapticTap();
+          onValueChange(v);
+        }}
         trackColor={{ false: colors.border, true: colors.accent }}
         thumbColor="#FFFFFF"
       />

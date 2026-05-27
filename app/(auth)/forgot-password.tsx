@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
-import { Screen } from "../../src/components/layout/Screen";
-import { Button } from "../../src/components/ui/Button";
-import { TextInput } from "../../src/components/ui/TextInput";
-import { useTheme } from "../../src/hooks/useTheme";
-import { FontSize, FontWeight, Spacing } from "../../src/theme";
+import { Screen } from "@/components/layout/Screen";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
+import { useTheme } from "@/hooks/useTheme";
+import { FontSize, FontWeight, Spacing } from "@/theme";
 
 export default function ForgotPasswordScreen() {
   const { colors } = useTheme();

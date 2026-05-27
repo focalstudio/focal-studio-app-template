@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
-import { Screen } from "../../src/components/layout/Screen";
-import { Button } from "../../src/components/ui/Button";
-import { TextInput } from "../../src/components/ui/TextInput";
-import { useTheme } from "../../src/hooks/useTheme";
-import { useAuthStore } from "../../src/store/useAuthStore";
-import { FontSize, FontWeight, Spacing } from "../../src/theme";
+import { Screen } from "@/components/layout/Screen";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
+import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/store/useAuthStore";
+import { FontSize, FontWeight, Spacing } from "@/theme";
 
 export default function SignupScreen() {
   const { colors } = useTheme();

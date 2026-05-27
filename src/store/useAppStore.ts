@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Theme, NotificationPrefs } from "../types";
 import { STORAGE_PREFIX, DEV_MODE_KEY } from "../constants";
 import { loadJson, saveJson, loadString, saveString } from "../utils/storage";
+import { rescheduleNotifications } from "../services/notifications";
 
 const THEME_KEY = `${STORAGE_PREFIX}theme`;
 const NOTIF_KEY = `${STORAGE_PREFIX}notification_prefs`;
@@ -42,6 +43,9 @@ export const useAppStore = create<AppState>((set) => ({
   setNotificationPrefs: (prefs) => {
     set({ notificationPrefs: prefs });
     saveJson(NOTIF_KEY, prefs);
+    // Fire-and-forget: reschedule notifications to reflect updated prefs.
+    // Errors are swallowed inside rescheduleNotifications.
+    rescheduleNotifications(prefs);
   },
 
   setAnalyticsEnabled: (analyticsEnabled) => {

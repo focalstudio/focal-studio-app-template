@@ -1,16 +1,16 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { router } from "expo-router";
-import { Screen } from "../src/components/layout/Screen";
-import { Button } from "../src/components/ui/Button";
-import { Card } from "../src/components/ui/Card";
-import { Badge } from "../src/components/ui/Badge";
-import { useTheme } from "../src/hooks/useTheme";
-import { usePaywallStore } from "../src/store/usePaywallStore";
-import { FontSize, FontWeight, Spacing, Radius } from "../src/theme";
-import { Analytics } from "../src/services/analytics";
-import { APP_NAME } from "../src/constants";
-import type { SubscriptionTier } from "../src/types";
+import { Screen } from "@/components/layout/Screen";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { useTheme } from "@/hooks/useTheme";
+import { usePaywallStore } from "@/store/usePaywallStore";
+import { FontSize, FontWeight, Spacing, Radius } from "@/theme";
+import { Analytics } from "@/services/analytics";
+import { APP_NAME } from "@/constants";
+import type { SubscriptionTier } from "@/types";
 
 /*
  * To wire in RevenueCat: see src/store/usePaywallStore.ts for integration notes.

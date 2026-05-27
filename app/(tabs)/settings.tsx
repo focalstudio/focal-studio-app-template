@@ -2,18 +2,18 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback } from "react";
-import { Screen } from "../../src/components/layout/Screen";
-import { Card } from "../../src/components/ui/Card";
-import { Toggle } from "../../src/components/ui/Toggle";
-import { Divider } from "../../src/components/layout/Divider";
-import { useTheme } from "../../src/hooks/useTheme";
-import { useAppStore } from "../../src/store/useAppStore";
-import { useAuthStore } from "../../src/store/useAuthStore";
-import { setAnalyticsEnabled, Analytics } from "../../src/services/analytics";
-import { maybeRequestRating } from "../../src/services/ratingService";
-import { FontSize, FontWeight, Spacing } from "../../src/theme";
-import { APP_NAME, APP_VERSION } from "../../src/constants";
-import type { Theme } from "../../src/types";
+import { Screen } from "@/components/layout/Screen";
+import { Card } from "@/components/ui/Card";
+import { Toggle } from "@/components/ui/Toggle";
+import { Divider } from "@/components/layout/Divider";
+import { useTheme } from "@/hooks/useTheme";
+import { useAppStore } from "@/store/useAppStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { setAnalyticsEnabled, Analytics } from "@/services/analytics";
+import { maybeRequestRating } from "@/services/ratingService";
+import { FontSize, FontWeight, Spacing } from "@/theme";
+import { APP_NAME, APP_VERSION } from "@/constants";
+import type { Theme } from "@/types";
 
 const THEMES: { label: string; value: Theme }[] = [
   { label: "Light", value: "light" },

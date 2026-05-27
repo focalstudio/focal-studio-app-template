@@ -1,131 +1,77 @@
-# Android Release Signing
+# Android Keystore — EAS Managed Credentials
 
-## Generating a keystore
+This template uses **EAS Build** for all Android builds. EAS manages the Android keystore for you — there is no `android/` folder committed to the repo and no manual `keytool` or `jarsigner` steps.
 
-Run this command once per app (not per release):
+---
+
+## How EAS handles your keystore
+
+When you run your first production Android build, EAS will:
+
+1. Generate a new keystore automatically.
+2. Store it securely in Expo's credentials service (encrypted at rest).
+3. Sign every subsequent build with the same keystore automatically.
+
+You never handle the keystore file directly unless you explicitly opt out of managed credentials.
+
+---
+
+## Running a production build
 
 ```bash
-keytool -genkeypair -v \
-  -keystore android/[APP_SLUG]-release.jks \
-  -alias [APP_SLUG] \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000
+eas build --platform android --profile production
 ```
 
-You'll be prompted for:
-- Keystore password (save this securely — you can never recover it)
-- Key password (can be the same as keystore password)
-- Distinguished Name fields (CN, OU, O, etc.) — these are cosmetic only
+EAS will prompt you to confirm credentials on the first run. After that it is fully automatic.
 
-After generation, verify it:
+---
+
+## Inspecting or exporting your keystore
+
+To view or download your managed keystore:
 
 ```bash
-keytool -list -v \
-  -keystore android/[APP_SLUG]-release.jks \
-  -storepass "YOUR_KEYSTORE_PASSWORD"
+eas credentials
 ```
 
-Note the SHA-1 and SHA-256 fingerprints — you'll need them for the Play Console upload key.
+Select **Android → production** to see the key alias, SHA-1/SHA-256 fingerprints, and download options. You will need these fingerprints when registering your app with Google services (e.g. Firebase, Google Sign-In, Maps SDK).
 
 ---
 
-## keystore.properties (never commit)
+## Bringing your own keystore
 
-Create `android/keystore.properties` with:
-
-```properties
-storeFile=[APP_SLUG]-release.jks
-storePassword=YOUR_KEYSTORE_PASSWORD
-keyAlias=[APP_SLUG]
-keyPassword=YOUR_KEY_PASSWORD
-```
-
-This file is excluded by `.gitignore`. **Back it up to a password manager immediately.**
-
----
-
-## Git safety
-
-`android/.gitignore` must exclude:
-
-```
-*.jks
-*.keystore
-keystore.properties
-```
-
-The root `.gitignore` already covers these. Double-check before any push to a public repo.
-
----
-
-## build.gradle signing config
-
-In `android/app/build.gradle`, load credentials from `keystore.properties`:
-
-```groovy
-def keystorePropertiesFile = rootProject.file("keystore.properties")
-def keystoreProperties = new Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-}
-
-android {
-    signingConfigs {
-        release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-            }
-        }
-    }
-    buildTypes {
-        release {
-            signingConfig signingConfigs.release
-        }
-    }
-}
-```
-
----
-
-## Building a signed release AAB
+If you already have a keystore (e.g. migrating an existing app), you can upload it:
 
 ```bash
-cd android
-./gradlew bundleRelease
+eas credentials
+# Choose: Android → production → Set up a new keystore → I want to upload my own
 ```
 
-Output: `android/app/build/outputs/bundle/release/app-release.aab`
+EAS will store your keystore in its credentials service and use it for all future builds.
 
 ---
 
-## Version management
+## Local builds (advanced)
 
-Increment `versionCode` by 1 and update `versionName` before every Google Play upload.
-
-These live in `android/app/build.gradle`:
-
-```groovy
-versionCode 1
-versionName "0.1.0"
-```
-
-Also update `APP_VERSION` in `src/App.tsx` and `version` in `package.json` to keep them in sync.
+If you run `eas build --local`, EAS will download the managed keystore to your machine for the duration of the build. You need the Java SDK (`keytool`) installed locally.
 
 ---
 
-## GitHub Actions secrets
+## Recovering credentials
 
-For CI-based release builds, store credentials as GitHub repository secrets:
+If you need to move your app to a different Expo account or export credentials for backup:
 
-| Secret | Value |
-|--------|-------|
-| `VITE_POSTHOG_KEY` | PostHog project API key |
-| `VITE_SENTRY_DSN` | Sentry DSN |
-| `KEYSTORE_BASE64` | `base64 android/[APP_SLUG]-release.jks` |
-| `KEY_ALIAS` | `[APP_SLUG]` |
-| `KEY_PASSWORD` | Your key password |
-| `STORE_PASSWORD` | Your keystore password |
+```bash
+eas credentials --platform android
+# Choose: Download credentials
+```
+
+Store the downloaded `.jks` file and its password in a secure secrets manager (1Password, AWS Secrets Manager, etc.). **Never commit keystores or passwords to git.**
+
+---
+
+## Further reading
+
+- [EAS Credentials docs](https://docs.expo.dev/app-signing/managed-credentials/)
+- [Android app signing guide](https://docs.expo.dev/app-signing/local-credentials/)
+- [Google Play signing requirements](https://support.google.com/googleplay/android-developer/answer/9842756)

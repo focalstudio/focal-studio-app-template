@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
-import { useTheme } from "../../src/hooks/useTheme";
-import { FontSize } from "../../src/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { FontSize } from "@/theme";
 
 export default function TabLayout() {
   const { colors } = useTheme();

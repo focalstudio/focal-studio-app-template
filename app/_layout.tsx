@@ -2,11 +2,11 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import { useAppStore } from "../src/store/useAppStore";
-import { useAuthStore } from "../src/store/useAuthStore";
-import { useOnboardingStore } from "../src/store/useOnboardingStore";
-import { usePaywallStore } from "../src/store/usePaywallStore";
-import { initAnalytics } from "../src/services/analytics";
+import { useAppStore } from "@/store/useAppStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { usePaywallStore } from "@/store/usePaywallStore";
+import { initAnalytics } from "@/services/analytics";
 
 SplashScreen.preventAutoHideAsync();
 

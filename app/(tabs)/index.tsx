@@ -1,11 +1,11 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { Screen } from "../../src/components/layout/Screen";
-import { Card } from "../../src/components/ui/Card";
-import { useTheme } from "../../src/hooks/useTheme";
-import { FontSize, FontWeight, Spacing } from "../../src/theme";
-import { APP_NAME } from "../../src/constants";
-import { Analytics } from "../../src/services/analytics";
+import { Screen } from "@/components/layout/Screen";
+import { Card } from "@/components/ui/Card";
+import { useTheme } from "@/hooks/useTheme";
+import { FontSize, FontWeight, Spacing } from "@/theme";
+import { APP_NAME } from "@/constants";
+import { Analytics } from "@/services/analytics";
 import { useFocusEffect } from "expo-router";
 import { useCallback } from "react";
 

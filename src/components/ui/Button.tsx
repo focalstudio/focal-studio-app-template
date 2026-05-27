@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { FontSize, FontWeight, Spacing, Radius } from "../../theme";
+import { hapticTap } from "../../services/haptics";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive";
 type Size = "sm" | "md" | "lg";
@@ -59,6 +60,10 @@ export function Button({
       ] as StyleProp<ViewStyle>}
       disabled={disabled || loading}
       {...props}
+      onPress={(e) => {
+        hapticTap();
+        props.onPress?.(e);
+      }}
     >
       {loading ? (
         <ActivityIndicator color={fg} />

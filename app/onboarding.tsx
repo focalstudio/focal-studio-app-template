@@ -9,13 +9,13 @@ import {
   type ViewToken,
 } from "react-native";
 import { router } from "expo-router";
-import { Screen } from "../src/components/layout/Screen";
-import { Button } from "../src/components/ui/Button";
-import { useTheme } from "../src/hooks/useTheme";
-import { useOnboardingStore } from "../src/store/useOnboardingStore";
-import { FontSize, FontWeight, Spacing, Radius } from "../src/theme";
-import { Analytics } from "../src/services/analytics";
-import { APP_NAME } from "../src/constants";
+import { Screen } from "@/components/layout/Screen";
+import { Button } from "@/components/ui/Button";
+import { useTheme } from "@/hooks/useTheme";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { FontSize, FontWeight, Spacing, Radius } from "@/theme";
+import { Analytics } from "@/services/analytics";
+import { APP_NAME } from "@/constants";
 
 const { width } = Dimensions.get("window");
 

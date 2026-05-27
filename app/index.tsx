@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
-import { useOnboardingStore } from "../src/store/useOnboardingStore";
-import { useAuthStore } from "../src/store/useAuthStore";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { View, ActivityIndicator } from "react-native";
 
 export default function Root() {
