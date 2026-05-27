@@ -47,7 +47,8 @@ focal-studio-app-template/
 │   └── constants.ts       ← DEV_MODE_KEY lives here; bump on every release
 │
 ├── scripts/
-│   └── bump-version.sh    ← updates package.json + app.json in one shot
+│   ├── bump-version.sh    ← updates package.json + app.json in one shot
+│   └── init.sh            ← one-shot placeholder replacement; run via app-bootstrapper, not manually
 │
 ├── store-listing/         ← App Store / Play Store metadata (created on first ASO refresh)
 │
@@ -64,6 +65,7 @@ focal-studio-app-template/
 
 | Want to… | Edit |
 |---|---|
+| **Bootstrap a new app** | **invoke `app-bootstrapper` agent — do not run `scripts/init.sh` by hand** |
 | Add a screen | `app/<name>.tsx` (and `app/(tabs)/_layout.tsx` if it's a tab) |
 | Add or extend a store | `src/store/use<Name>Store.ts` |
 | Wire a third-party SDK | `src/services/<name>.ts` + a store in `src/store/` |
@@ -79,6 +81,7 @@ Six specialist subagents live in [.claude/agents/](.claude/agents/). The main Cl
 
 | Subagent | Use for |
 |---|---|
+| [`app-bootstrapper`](.claude/agents/app-bootstrapper.md) | **Start here for a new app.** Q&A → IDEA.md → placeholder replacement → GitHub repo + issues → onboarding slides + store listing draft. Trigger: "bootstrap a new app" or describe your idea. |
 | [`ios-frontend`](.claude/agents/ios-frontend.md) | React Native + Expo UI work: screens, components, theming, navigation, animation |
 | [`backend-integrator`](.claude/agents/backend-integrator.md) | Wiring Supabase, RevenueCat, PostHog, expo-notifications, AsyncStorage |
 | [`release-manager`](.claude/agents/release-manager.md) | Cut a release — runs the full release workflow from `.claude/CLAUDE.md` |
@@ -150,7 +153,7 @@ The orchestrator reads this, forwards to `devops-agent`, and resumes the coding 
 
 ## Top mistakes to avoid
 
-1. **Editing on `main` or `dev` directly.** Always branch first.
+1. **Editing on `main` or `dev` directly.** Always branch first. (Exception: `app-bootstrapper` initialising a brand-new repo.)
 2. **Hardcoding colors, spacing, or font sizes.** Use `useTheme()` and tokens in `src/theme/`.
 3. **Calling `AsyncStorage.getItem/setItem` directly.** Use `src/utils/storage.ts` — there was a null-handling bug (commit `825e87b`) the helpers paper over.
 4. **Adding a native module config plugin without flagging it.** It invalidates the EAS build cache. Surface this in your report.
@@ -159,6 +162,7 @@ The orchestrator reads this, forwards to `devops-agent`, and resumes the coding 
 7. **Letting a subagent open PRs.** Subagents return reports; the orchestrator handles git/PR.
 8. **Skipping `CHANGELOG.md` for user-visible changes.** Always update under `## [Unreleased]`.
 9. **Installing npm packages without going through `devops-agent`.** Always run the Dependency Gate — even for "harmless" packages. The user decides, not the agent.
+10. **Running `scripts/init.sh` manually without confirmed parameters.** Always let `app-bootstrapper` gather and confirm the full parameter set first. A wrong run requires manual sed fixes across ~30 files.
 
 ---
 

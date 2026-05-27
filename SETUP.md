@@ -1,5 +1,43 @@
 # New App Setup Guide
 
+---
+
+## Option A — Automated bootstrap (Claude Code) ✨ Recommended
+
+**Estimated time: ~10 minutes**
+
+Claude conducts a Q&A, replaces all placeholders, creates the GitHub repo, seeds GitHub issues, updates onboarding slides, and generates an initial store listing draft — all in one workflow.
+
+### Prerequisites
+
+- **Claude Code** CLI installed and running (`npm install -g @anthropic-ai/claude-code`)
+- **`gh` CLI** installed and authenticated (`brew install gh && gh auth login`)
+- The template cloned locally and `cd`'d into it
+
+### Steps
+
+1. **Clone and detach from the template remote:**
+   ```bash
+   git clone https://github.com/fpmartinez10/focal-studio-app-template.git <your-app-slug>
+   cd <your-app-slug>
+   rm -rf .git
+   ```
+
+2. **Open Claude Code and trigger the bootstrap:**
+   ```
+   Bootstrap a new app: [describe your app idea in one or two sentences]
+   ```
+
+3. **Answer the 7 questions** Claude asks (app name, bundle ID, GitHub repo, colors, feature list, target user).
+
+4. **Confirm the parameter summary** Claude shows you — type "yes" to proceed.
+
+5. **Follow the manual next steps** in Claude's final report (npm install, EAS setup, PostHog key).
+
+---
+
+## Option B — Manual setup
+
 **Estimated time: ~60 minutes**
 
 This guide takes you from cloning the template to a running React Native app on iOS Simulator, with CI/CD, analytics, notifications, and an Obsidian project vault.

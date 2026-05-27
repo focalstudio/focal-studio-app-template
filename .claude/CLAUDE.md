@@ -445,12 +445,25 @@ All six specialist subagents live in [.claude/agents/](agents/) and ship with th
 | `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
 | `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
 | `devops-agent` | Package risk assessment + controlled installation | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
+| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing | `ralph-copywriter`, `aso-rules` |
+
+### Bootstrap trigger
+
+When the user says any of the following, classify as `bootstrap` and **spawn `app-bootstrapper` immediately** — no pre-planning needed, the agent owns the full workflow:
+
+- "bootstrap a new app"
+- "start a new app from the template"
+- "I have an idea for an app: …"
+- "initialise / initialize a new project"
+- "set up [app name]" (from a fresh clone)
+
+Pass the verbatim user message as the brief. The agent handles all Q&A and execution.
 
 ### Orchestration playbook
 
 When a user request arrives:
 
-1. **Classify** into `frontend`, `backend`, `release`, `marketing`, `review`, `devops`, or `mixed`.
+1. **Classify** into `bootstrap`, `frontend`, `backend`, `release`, `marketing`, `review`, `devops`, or `mixed`.
 2. **Check for package needs** — if the task requires new packages, run the Dependency Gate (see above) before spawning coding agents.
 3. **For single-domain requests:** spawn the matching subagent with a *fully self-contained brief* — exact file paths, expected behavior, what to return. The orchestrator plans, the subagent executes. **Never** delegate planning ("figure out what to do") — that wastes the subagent's context re-deriving what the orchestrator already knows.
 4. **For mixed requests:** decompose into independent subtasks and spawn subagents in parallel (single message, multiple `Agent` tool calls) when there are no cross-dependencies.
