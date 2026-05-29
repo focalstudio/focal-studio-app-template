@@ -173,6 +173,15 @@ Full checklist including App Store upload: [.claude/CLAUDE.md](.claude/CLAUDE.md
 
 ---
 
+## Claude Code optional features (Pro/Max only)
+
+> These features require a Claude Pro or Max subscription. They are **not enabled in this repo** — both carry extra quota cost. Documented here for awareness.
+
+- **`security-guidance` plugin** — auto-reviews code Claude writes for vulnerabilities as you work. Includes a free per-edit pattern scan (no model calls) plus optional model-backed reviews (Opus 4.7). To try it: `/plugin install security-guidance@claude-plugins-official`, then set `ENABLE_CODE_SECURITY_REVIEW=0` to keep only the free layer. [Docs](https://code.claude.com/docs/en/security-guidance)
+- **Agent View** (`claude agents`) — terminal dashboard to dispatch and monitor many parallel Claude Code background sessions at once. Each session consumes quota independently, so running several in parallel multiplies usage. [Docs](https://code.claude.com/docs/en/agent-view)
+
+---
+
 ## Privacy policy
 
 [PRIVACY_POLICY_URL]
