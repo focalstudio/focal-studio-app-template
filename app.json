@@ -7,12 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "[APP_SLUG]",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "[APP_COLOR]"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "[APP_ID]",
@@ -38,6 +32,14 @@
     "plugins": [
       "expo-router",
       "expo-system-ui",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "[APP_COLOR]"
+        }
+      ],
       [
         "expo-notifications",
         {
