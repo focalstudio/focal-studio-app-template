@@ -13,6 +13,15 @@ This file gives project-specific instructions for working on **[APP_NAME]** in V
 - **Build / distribution:** EAS Build + EAS Submit
 - **CI:** GitHub Actions (`.github/workflows/`)
 
+## Dependency versions
+
+**`VERSIONS.md` at the repo root is the authoritative version reference.** It lists every pinned dependency, the core stack versions, and an upgrade checklist.
+
+- **Before installing a new package:** read `VERSIONS.md` to understand the current SDK generation and avoid version conflicts.
+- **After any dependency update:** update `VERSIONS.md` to reflect the new versions, then update `CHANGELOG.md`.
+- **Always use `--legacy-peer-deps`** for `npm install` and `npm ci` — a known `jest-expo` peer conflict requires it (already set in all CI workflows).
+- **Use `npx expo install --fix` not `npm update`** when upgrading Expo-ecosystem packages.
+
 ## Project goals
 - Build [APP_NAME] incrementally and safely.
 - Keep the codebase easy to understand and easy to ship.
