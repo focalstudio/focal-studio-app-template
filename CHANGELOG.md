@@ -11,6 +11,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.5.0] — 2026-05-29
+
+### Fixed
+- `package.json`: pinned `react` to exact version `19.2.3` (removed `^` prefix) to prevent accidental minor upgrades breaking Expo SDK 56 compatibility
+- `app.json`: removed hardcoded EAS `projectId` from template — new apps no longer inherit a foreign project ID; `eas build` will prompt to link the correct project on first run
+- `scripts/init.sh`: added `npm install` step to regenerate `package-lock.json` during bootstrap, ensuring the lockfile reflects the bootstrapped app's package names instead of stale template values
+
+---
+
 ## [0.4.0] — 2026-05-29
 
 ### CI

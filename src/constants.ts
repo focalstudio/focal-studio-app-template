@@ -8,10 +8,10 @@ export const APP_COLOR_DARK = "[APP_COLOR_DARK]";
 // Storage key prefix — namespaces all AsyncStorage keys.
 export const STORAGE_PREFIX = "[APP_SLUG]_";
 
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.5.0";
 
 // Version-scoped key — changes on every version bump, resetting dev mode automatically.
-export const DEV_MODE_KEY = `[APP_SLUG]_dev_mode_0.4.0`;
+export const DEV_MODE_KEY = `[APP_SLUG]_dev_mode_0.5.0`;
 
 // Replace with your app's privacy policy URL after running init.sh.
 export const PRIVACY_POLICY_URL = "[PRIVACY_POLICY_URL]";
