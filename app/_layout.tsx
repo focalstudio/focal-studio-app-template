@@ -15,13 +15,11 @@ export default function RootLayout() {
   const hydrateAuth = useAuthStore((s) => s.hydrate);
   const hydrateOnboarding = useOnboardingStore((s) => s.hydrate);
   const hydratePaywall = usePaywallStore((s) => s.hydrate);
-  const { scheme } = useAppStore((s) => ({ scheme: s.theme }));
-
   useEffect(() => {
     initAnalytics();
     Promise.all([hydrateApp(), hydrateAuth(), hydrateOnboarding(), hydratePaywall()])
       .finally(() => SplashScreen.hideAsync());
-  }, []);
+  }, [hydrateApp, hydrateAuth, hydrateOnboarding, hydratePaywall]);
 
   return (
     <>

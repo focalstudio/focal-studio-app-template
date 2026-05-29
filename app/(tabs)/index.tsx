@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { Screen } from "@/components/layout/Screen";
 import { Card } from "@/components/ui/Card";
@@ -7,7 +7,6 @@ import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME } from "@/constants";
 import { Analytics } from "@/services/analytics";
 import { useFocusEffect } from "expo-router";
-import { useCallback } from "react";
 
 export default function HomeScreen() {
   const { colors } = useTheme();

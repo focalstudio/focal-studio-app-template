@@ -5,7 +5,6 @@ import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
-import { useAuthStore } from "@/store/useAuthStore";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME } from "@/constants";
 
@@ -16,7 +15,7 @@ import { APP_NAME } from "@/constants";
 
 export default function LoginScreen() {
   const { colors } = useTheme();
-  const { setUser } = useAuthStore();
+  // const { setUser } = useAuthStore(); // Uncomment when wiring real auth
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,9 +42,9 @@ export default function LoginScreen() {
       throw new Error(
         `[${APP_NAME}] Auth not wired — replace this block with your real auth provider before shipping.`
       );
-      if (!isMountedRef.current) return;
-      setUser({ id: "placeholder", email });
-      router.replace("/(tabs)");
+      // if (!isMountedRef.current) return;
+      // setUser({ id: "placeholder", email });
+      // router.replace("/(tabs)");
     } catch (err) {
       if (!isMountedRef.current) return;
       const isSetupError = err instanceof Error && err.message.includes("Auth not wired");

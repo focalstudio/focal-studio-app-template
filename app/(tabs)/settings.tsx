@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback } from "react";
 import { Screen } from "@/components/layout/Screen";
 import { Card } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
