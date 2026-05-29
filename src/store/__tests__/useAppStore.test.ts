@@ -1,11 +1,11 @@
+import { useAppStore } from "../useAppStore";
+
 jest.mock("../../services/analytics", () => ({
   Analytics: { appError: jest.fn() },
 }));
 jest.mock("../../services/notifications", () => ({
   rescheduleNotifications: jest.fn().mockResolvedValue(undefined),
 }));
-
-import { useAppStore } from "../useAppStore";
 
 describe("useAppStore", () => {
   it("initializes with correct defaults", () => {

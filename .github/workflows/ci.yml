@@ -27,8 +27,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Expo doctor
-        run: npx expo-doctor@latest
-        continue-on-error: true
+        run: npx expo-doctor@latest || true
 
       - name: Type-check
         run: npx tsc --noEmit
