@@ -135,6 +135,12 @@ replace "\[APP_TAGLINE\]" "$APP_TAGLINE"
 echo "  Replacing [GITHUB_REPO]..."
 replace "\[GITHUB_REPO\]" "$GITHUB_REPO"
 
+# ── Regenerate lockfile so it carries the real app name/version ───────────────
+# package-lock.json is excluded from sed replacements above (wrong tool for JSON
+# with checksums). npm install rewrites it cleanly with the post-replace values.
+echo "  Regenerating package-lock.json..."
+npm install --legacy-peer-deps --silent
+
 # ── Rename Obsidian template files (filename contains literal [APP_NAME]) ─────
 OBSIDIAN_SRC="./obsidian-templates"
 if [[ -d "$OBSIDIAN_SRC" ]]; then
