@@ -8,6 +8,7 @@ This file gives project-specific instructions for working on **[APP_NAME]** in V
 - **Navigation:** Expo Router (file-based, `app/` directory)
 - **State management:** Zustand (`src/store/`)
 - **Styling:** React Native `StyleSheet` + design-token constants (`src/theme/`)
+- **Icons:** `lucide-react-native` (backed by `react-native-svg`)
 - **Services:** `expo-haptics`, `expo-notifications`, `expo-store-review`, PostHog RN SDK
 - **Storage:** `@react-native-async-storage/async-storage` (helpers in `src/utils/storage.ts`)
 - **Build / distribution:** EAS Build + EAS Submit
@@ -163,6 +164,7 @@ Dev mode (5-tap title toggle) is off by default and protected by a version-scope
 - Invoke the `frontend_design` and `ui-ux-pro-max` skills whenever making UI/UX or frontend changes.
 - Use design tokens from `src/theme/` — never hardcode colours, spacing, or typography values.
 - Match iOS platform conventions (system font sizes, safe area insets, tab bar heights).
+- Use `lucide-react-native` for all icons. Always pass `color` from `useTheme()` — never hardcode icon colors or sizes.
 
 ## Output format
 For most tasks, respond in this structure:
