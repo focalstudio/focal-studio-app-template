@@ -129,6 +129,28 @@ After `release/x.x.x` is merged to `main` and CI is green:
 - Mark any Android-specific behaviour explicitly in comments.
 - Preserve build stability — never change `app.json` native fields without checking EAS build impact.
 - If a feature affects store readiness or requires a native module rebuild, call that out.
+- **Replace placeholder assets before first build**: swap `assets/images/splash.png`, `assets/images/icon.png`, and `assets/images/adaptive-icon.png` with your app's real artwork, and update the `expo-splash-screen` plugin's `image` field in `app.json` to point to the correct file. The template ships generic placeholder images that will appear in the App Store and on the launch screen if not replaced.
+
+## Xcode Cloud CI
+
+This template ships `ios/ci_scripts/ci_post_clone.sh` — an Xcode Cloud lifecycle hook that fully prepares the Expo managed-workflow project before every cloud build.
+
+### What the hook does
+1. Navigates to the repo root via `$CI_PRIMARY_REPOSITORY_PATH`
+2. Installs Node.js (Homebrew is available on all Xcode Cloud runners)
+3. Runs `npm ci --legacy-peer-deps` (required for the jest-expo peer conflict)
+4. Runs `npx expo prebuild --platform ios --clean` to regenerate the native `ios/` tree (`ios/` is gitignored — only `ios/ci_scripts/` is committed via a `.gitignore` exception)
+5. Patches the generated Podfile with `inhibit_all_warnings!` to keep the build log readable
+6. Runs `pod install`
+
+### Enabling Xcode Cloud
+1. Open Xcode → Product → Xcode Cloud → Create Workflow (or use App Store Connect).
+2. Set the primary repository to this repo.
+3. Xcode Cloud discovers `ios/ci_scripts/ci_post_clone.sh` automatically — no extra configuration needed.
+
+### EAS Build vs Xcode Cloud
+- **EAS Build** (default): `eas build --platform ios`. No Xcode Cloud setup needed.
+- **Xcode Cloud**: use when you need native Xcode instruments, direct TestFlight integration, or App Store Connect automation. The hook handles `expo prebuild` for you.
 
 ## Mobile app guidance
 Assume [APP_NAME] is intended to ship and iterate like a real product.
