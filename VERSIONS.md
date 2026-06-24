@@ -44,6 +44,7 @@ Changes to any of these define a new SDK generation and require running `npx exp
 | `@react-native-async-storage/async-storage` | `^2.2.0` |
 | `posthog-react-native` | `^3.3.5` |
 | `react-native-svg` | `15.15.4` |
+| `lucide-react-native` | `^1.17.0` |
 | `expo-constants` | `~56.0.16` |
 | `zustand` | `^5.0.3` |
 

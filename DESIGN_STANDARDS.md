@@ -85,6 +85,28 @@ Import from `src/theme/typography.ts` as `FontSize`, `FontWeight`.
 
 ---
 
+## Icons
+
+Use `lucide-react-native` (peer dep: `react-native-svg`, both installed).
+
+```tsx
+import { Home, Settings, ChevronRight } from "lucide-react-native";
+
+const { colors } = useTheme();
+<Home size={24} color={colors.text} />
+```
+
+| Context | Size | Color token |
+|---------|------|-------------|
+| Tab bar | 24 | `colors.text` / `colors.accent` |
+| List row | 20 | `colors.textSecondary` |
+| Button / inline | 16 | matches surrounding text color |
+| Hero / empty state | 40–48 | `colors.accent` or `colors.textTertiary` |
+
+Never hardcode icon sizes or colors — always use the table above and pull color from `useTheme()`.
+
+---
+
 ## Shadows
 
 Import as `Shadow` from `src/theme/spacing.ts`.

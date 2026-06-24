@@ -135,6 +135,35 @@ replace "\[APP_TAGLINE\]" "$APP_TAGLINE"
 echo "  Replacing [GITHUB_REPO]..."
 replace "\[GITHUB_REPO\]" "$GITHUB_REPO"
 
+# ── Version reset (new apps always start at 0.1.0, not the template version) ──
+echo "  Resetting version to 0.1.0..."
+if [[ "$(uname)" == "Darwin" ]]; then
+  sed -i '' 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' package.json
+  sed -i '' 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' app.json
+  sed -i '' 's/APP_VERSION = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/APP_VERSION = "0.1.0"/' src/constants.ts
+  sed -i '' 's/dev_mode_[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/dev_mode_0.1.0/' src/constants.ts
+else
+  sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' package.json
+  sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' app.json
+  sed -i 's/APP_VERSION = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/APP_VERSION = "0.1.0"/' src/constants.ts
+  sed -i 's/dev_mode_[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/dev_mode_0.1.0/' src/constants.ts
+fi
+cat > CHANGELOG.md << EOF
+# Changelog
+
+All notable changes to $APP_NAME are documented here.
+
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+Versioning: [Semantic Versioning](https://semver.org/)
+
+---
+
+## [Unreleased]
+
+---
+EOF
+echo "  ✅  Version reset to 0.1.0"
+
 # ── Regenerate lockfile so it carries the real app name/version ───────────────
 # package-lock.json is excluded from sed replacements above (wrong tool for JSON
 # with checksums). npm install rewrites it cleanly with the post-replace values.

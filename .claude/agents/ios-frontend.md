@@ -29,6 +29,7 @@ For self-review before returning, also load `design-review` if you made non-triv
 4. **iOS-first.** Test on iOS Simulator. Mark Android-only behavior explicitly in comments. Respect safe-area insets and iOS tab bar heights.
 5. **No keyboard inside modals.** iOS layout shifts. Use pickers/toggles instead.
 6. **Small diffs.** Don't refactor surrounding code unless the brief asks for it.
+7. **Icons via lucide-react-native.** Import from `lucide-react-native`. Always pass `color` from `useTheme()` and use sizes from the icon sizing table in `DESIGN_STANDARDS.md`. Do not use `@expo/vector-icons` or any other icon library.
 
 ## Dependency Gate protocol
 
