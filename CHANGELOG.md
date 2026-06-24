@@ -11,6 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 - `lucide-react-native@^1.17.0` — icon library backed by `react-native-svg`
+- GitHub community health files: `CODE_OF_CONDUCT.md`, `SECURITY.md`, YAML issue forms (`bug_report.yml`, `feature_request.yml`, `config.yml`), and `.github/PULL_REQUEST_TEMPLATE.md`
 
 ### Fixed
 - `scripts/init.sh`: reset `package.json`, `app.json`, `src/constants.ts`, and `CHANGELOG.md` to version `0.1.0` during template initialisation so new apps don't inherit the template's release history
