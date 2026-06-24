@@ -9,6 +9,9 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- `LICENSE` — proprietary "all rights reserved" license; satisfies GitHub's Community Standards License item and codifies the README's copyright stance
+
 ---
 
 ## [0.6.0] — 2026-06-24
