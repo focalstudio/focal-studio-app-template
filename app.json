@@ -2,7 +2,7 @@
   "expo": {
     "name": "[APP_NAME]",
     "slug": "[APP_SLUG]",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "[APP_SLUG]",
@@ -36,7 +36,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "[APP_COLOR]"
         }
