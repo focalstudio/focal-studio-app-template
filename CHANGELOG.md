@@ -11,6 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 - `.claude/skills/parallel-release/` — authoritative runbook skill for simultaneous iOS (Xcode Cloud) + Android (EAS) releases: recurring release flow, the one-time Android bootstrap a newly created app must complete before CI can succeed (keystore, Play Console app + gates, service account, local proof), automation map, gotchas, and verification. Wired into the `release-manager` agent and indexed in `.claude/SKILLS.md`.
+- `app-bootstrapper` agent now seeds the one-time Android release bootstrap (Play Console app, service account, keystore, local `eas build`/`eas submit` proof) into the setup-tracking issue it creates for every new app, plus a Phase 7 next-step pointer — so future apps don't discover the manual Android setup only at first release.
 - `LICENSE` — proprietary "all rights reserved" license; satisfies GitHub's Community Standards License item and codifies the README's copyright stance
 
 ### Fixed
