@@ -62,7 +62,7 @@ See [AGENTS.md](AGENTS.md) for the full orchestration playbook and [.claude/CLAU
 | `ci.yml` | Every push / PR | Lint, type-check, test |
 | `eas-preview.yml` | Push to `dev` | EAS preview build (iOS + Android) |
 | `release.yml` | Merge to `main` | Auto-tag + GitHub Release |
-| `android-release.yml` | `v*` tag push (from `release.yml`) | EAS Android production build + Play internal-track submit |
+| `android-release.yml` | `v[0-9]+.[0-9]+.[0-9]+` tag push (from `release.yml`) | EAS Android production build + Play internal-track submit |
 | `release-review.yml` | Push to `release/*` | Quality gate |
 
 ---
@@ -157,7 +157,13 @@ Add `EXPO_TOKEN` to your GitHub repo secrets to enable EAS preview builds in CI.
 5. On merge: `release.yml` auto-creates tag and GitHub Release
 6. Open backmerge PR: `release/x.x.x` → `dev`
 
-Full checklist including App Store upload: [.claude/CLAUDE.md](.claude/CLAUDE.md).
+On merge to `main`, `release.yml` tags `vX.Y.Z`, which auto-triggers `android-release.yml` (EAS
+Android build + submit to the Play internal track). iOS ships in parallel via Xcode Cloud.
+
+Full simultaneous iOS + Android procedure — recurring flow, the one-time Android bootstrap
+(keystore, Play Console app, service account), and verification — is the **`parallel-release`**
+skill (`/parallel-release`), also referenced from [.claude/CLAUDE.md](.claude/CLAUDE.md). First-time
+Android setup: [KEYSTORE.md](KEYSTORE.md).
 
 ---
 
