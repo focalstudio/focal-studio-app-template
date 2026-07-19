@@ -87,8 +87,10 @@ jobs:
               '',
               '**Before merging**, confirm:',
               '- [ ] Tested on iOS device or TestFlight build',
+              '- [ ] Tested on Android device or Play internal-track build',
               '- [ ] Dev mode is **off** (tap title 5× — no dev badge appears)',
               '- [ ] App Store Connect build uploaded',
+              '- [ ] Play Console internal-track build uploaded',
             ].join('\n');
             github.rest.issues.createComment({
               issue_number: context.issue.number,

@@ -73,7 +73,8 @@ When the user says to cut a release:
 9. **Immediately after step 7** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
    > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
 10. Follow the **Apple App Store checklist** for the iOS upload.
-11. Verify dev mode is off on device before store submission.
+11. Follow the **Google Play checklist** for the Android upload — `android-release.yml` fires automatically off the `vx.x.x` tag created in step 8, but Play Console review steps are still manual.
+12. Verify dev mode is off on device before store submission.
 
 ## Automated release workflow
 `.github/workflows/release.yml` triggers on every push to `main`. It:
@@ -82,6 +83,8 @@ When the user says to cut a release:
 3. Extracts the matching `## [VERSION]` section from `CHANGELOG.md` as release notes.
 4. Creates and pushes an annotated git tag `vVERSION`.
 5. Creates a GitHub Release with the extracted release notes.
+
+`.github/workflows/android-release.yml` triggers on push of any `v*` tag (i.e. immediately after the above) or manual `workflow_dispatch`. It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
 
 ## Apple App Store checklist
 After `release/x.x.x` is merged to `main` and CI is green:
@@ -92,6 +95,17 @@ After `release/x.x.x` is merged to `main` and CI is green:
 4. When the build completes, download the `.ipa` and upload via Xcode Organizer or `eas submit`.
 5. In App Store Connect: select the new build, add release notes (match CHANGELOG), submit for review.
 6. Verify dev mode is off: tap the app title 5× — confirm no dev badge appears.
+
+## Google Play checklist
+`android-release.yml` builds and submits automatically once the tag lands (see above) — this checklist is what's left to do by hand:
+
+1. Confirm the CI run succeeded: check the **Android Release** workflow in GitHub Actions.
+2. In Play Console → your app → **Internal testing**: confirm the new build appears as a draft release (`releaseStatus: "draft"` in `eas.json` — this is deliberate so nothing auto-promotes before review).
+3. Add release notes (match CHANGELOG) and review the release.
+4. Roll out to Internal testing, verify on a real device, then promote through Closed/Open/Production tracks per your own rollout policy — this template does not automate promotion beyond the internal track.
+5. Verify dev mode is off on the installed build.
+
+First-ever Android release for a newly bootstrapped app additionally needs the one-time setup in [KEYSTORE.md](../KEYSTORE.md) (keystore generation, Play Console app entry, service account) run **before** any tag push, since CI cannot generate a keystore non-interactively.
 
 ## Git safety rules
 - Never commit directly to `main` or `dev`.

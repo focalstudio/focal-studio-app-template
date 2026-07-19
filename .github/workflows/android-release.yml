@@ -1,21 +1,19 @@
-name: EAS Preview Build
+name: Android Release
 
 on:
   push:
-    branches:
-      - dev
+    tags:
+      # Matches only the semver tags release.yml creates (vX.Y.Z), not arbitrary "v*" tags.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  preview:
-    name: EAS Preview (${{ matrix.platform }})
+  build-and-submit:
+    name: EAS Build & Submit (Android)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ios, android]
 
     steps:
       - uses: actions/checkout@v4
@@ -41,12 +39,16 @@ jobs:
         run: |
           if grep -q '\[APP_SLUG\]' app.json; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Template placeholders still present — skipping EAS build."
+            echo "Template placeholders still present — skipping Android release."
             echo "Run scripts/init.sh to bootstrap a real app before EAS builds will work."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build ${{ matrix.platform }} preview
+      - name: Build Android production
         if: steps.bootstrap_check.outputs.skip == 'false'
-        run: eas build --platform ${{ matrix.platform }} --profile preview --non-interactive
+        run: eas build --platform android --profile production --non-interactive
+
+      - name: Submit to Play internal track
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: eas submit --platform android --profile production --non-interactive --latest

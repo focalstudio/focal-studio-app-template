@@ -60,8 +60,9 @@ See [AGENTS.md](AGENTS.md) for the full orchestration playbook and [.claude/CLAU
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `ci.yml` | Every push / PR | Lint, type-check, test |
-| `eas-preview.yml` | Push to `dev` | EAS preview build (iOS) |
+| `eas-preview.yml` | Push to `dev` | EAS preview build (iOS + Android) |
 | `release.yml` | Merge to `main` | Auto-tag + GitHub Release |
+| `android-release.yml` | `v*` tag push (from `release.yml`) | EAS Android production build + Play internal-track submit |
 | `release-review.yml` | Push to `release/*` | Quality gate |
 
 ---
