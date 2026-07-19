@@ -11,6 +11,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 - `LICENSE` — proprietary "all rights reserved" license; satisfies GitHub's Community Standards License item and codifies the README's copyright stance
+- Unit tests covering `hydrate()` validation and setters for all four Zustand stores (`useAuthStore`, `usePaywallStore`, `useOnboardingStore`, `useAppStore`), plus a `version-consistency` test asserting `src/constants.ts` `APP_VERSION`/`DEV_MODE_KEY` stay in sync with `package.json`
+
+### Fixed
+- `scripts/bump-version.sh`: now updates `APP_VERSION` in `src/constants.ts` (it previously only updated the version-scoped `DEV_MODE_KEY`, leaving `APP_VERSION` stale after every release)
 
 ---
 
