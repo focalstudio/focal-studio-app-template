@@ -17,9 +17,9 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 - `scripts/bump-version.sh`: now updates `APP_VERSION` in `src/constants.ts` (it previously only updated the version-scoped `DEV_MODE_KEY`, leaving `APP_VERSION` stale after every release)
-
-### Fixed
 - `KEYSTORE.md` / `.claude/CLAUDE.md` / `README.md`: corrected the `android-release.yml` tag trigger from `v*` to the actual `v[0-9]+.[0-9]+.[0-9]+` glob; corrected the Google Play "API access" location (account-level `play.google.com/console/api-access`, not the app nav); documented the first-submit service-account permission gotcha (Admin fallback + propagation wait) and the CI self-bootstrap constraint (`android-release.yml`'s first real run is the first release tag, since `workflow_dispatch` needs the workflow on `main`)
+- **Tag→Android trigger never actually fired.** `release.yml` pushed the `vX.Y.Z` tag using the default `GITHUB_TOKEN`, and GitHub's recursion guard never fires other workflows from GITHUB_TOKEN-created events — so `android-release.yml`'s `push: tags:` trigger was dead code and the Android leg silently never ran after a release. `android-release.yml` is now a reusable workflow (`workflow_call` + `workflow_dispatch`, tag trigger removed); `release.yml` calls it directly as a dependent job (`needs: tag-and-release`, gated on a new tag actually being created) in the same run. Docs (`.claude/skills/parallel-release/SKILL.md`, `KEYSTORE.md`, `.claude/CLAUDE.md`, `README.md`) updated to match.
+- **`bump-version.sh` silently no-opped on `DEV_MODE_KEY`.** The script used GNU-only `\+` sed syntax, which matches nothing under BSD/macOS `sed`, so `DEV_MODE_KEY` in `src/constants.ts` never actually updated on a version bump on macOS — dev mode stayed unlocked across releases. `src/constants.ts` now derives both `APP_VERSION` and `DEV_MODE_KEY` from `package.json` at build time instead of via sed; `scripts/bump-version.sh` no longer touches `constants.ts` and hard-verifies its remaining `package.json`/`app.json` substitutions actually applied (`exit 1` on mismatch, since `sed` exits 0 even when it matches nothing).
 
 ---
 

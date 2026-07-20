@@ -26,12 +26,28 @@ sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
 # Update app.json
 sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" app.json
 
-# Update APP_VERSION and DEV_MODE_KEY in src/constants.ts
-sed -i '' "s/APP_VERSION = \".*\"/APP_VERSION = \"$VERSION\"/" src/constants.ts
-sed -i '' "s/dev_mode_[0-9]\+\.[0-9]\+\.[0-9]\+/dev_mode_$VERSION/" src/constants.ts
+# NOTE: src/constants.ts is deliberately NOT edited here. APP_VERSION and
+# DEV_MODE_KEY are derived from package.json at build time, so they track this
+# bump automatically. The previous sed-based approach used GNU-only `\+` syntax
+# under BSD sed, matched nothing on macOS, and silently shipped a stale
+# DEV_MODE_KEY — hence the hard verification below.
 
-echo "Done. Verify:"
-echo "  package.json: $(node -p "require('./package.json').version")"
-echo "  app.json:     $(node -p "require('./app.json').expo.version")"
+# Verify the substitutions actually applied. sed exits 0 even when it matches
+# nothing, so `set -e` alone cannot catch a broken pattern.
+PKG_VERSION=$(node -p "require('./package.json').version")
+APP_JSON_VERSION=$(node -p "require('./app.json').expo.version")
+
+if [ "$PKG_VERSION" != "$VERSION" ] || [ "$APP_JSON_VERSION" != "$VERSION" ]; then
+  echo "Error: version bump did not apply cleanly."
+  echo "  expected:     $VERSION"
+  echo "  package.json: $PKG_VERSION"
+  echo "  app.json:     $APP_JSON_VERSION"
+  exit 1
+fi
+
+echo "Done. Verified:"
+echo "  package.json: $PKG_VERSION"
+echo "  app.json:     $APP_JSON_VERSION"
+echo "  src/constants.ts: APP_VERSION + DEV_MODE_KEY derived from package.json (not edited)"
 echo ""
 echo "Next: move ## [Unreleased] in CHANGELOG.md to ## [$VERSION] — $(date +%Y-%m-%d)"

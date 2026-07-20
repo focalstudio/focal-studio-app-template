@@ -11,7 +11,7 @@ branch and its `vX.Y.Z` tag drive at once:
 | Platform | Build system | How it fires | Config it reads |
 |---|---|---|---|
 | **iOS** | **Xcode Cloud** (managed workflow) | Xcode Cloud workflow on push; also `eas build --platform ios` on demand | `app.json` / `app.config.js` + `ios/ci_scripts/ci_post_clone.sh` only — **not** `eas.json` or `.github/workflows/` |
-| **Android** | **EAS Build + Submit** | `android-release.yml` on `vX.Y.Z` tag push (or manual `workflow_dispatch`) | `eas.json`, `app.json` `android.*`, `.github/workflows/android-release.yml` |
+| **Android** | **EAS Build + Submit** | `android-release.yml`, called by `release.yml` as a reusable workflow in the same run right after it creates the `vX.Y.Z` tag (or manual `workflow_dispatch` to rerun) | `eas.json`, `app.json` `android.*`, `.github/workflows/android-release.yml` |
 
 Because the two systems read disjoint config, an Android/EAS change **cannot** affect an
 iOS Xcode Cloud archive, and vice-versa. Keep it that way.
@@ -113,20 +113,24 @@ Delegate the git mechanics to the **`release-manager`** agent (or follow
    auto-closes the backmerge PR).
 3. On merge to `main`, **`release.yml`** reads the version, creates tag **`vX.Y.Z`**, and
    publishes a GitHub Release from the CHANGELOG section.
-4. That tag push triggers **`android-release.yml`** automatically → EAS builds the AAB (versionCode
-   auto-incremented) and submits it to the Play internal track as a draft.
+4. In that same `release.yml` run, right after the tag is created, an `android-release` job calls
+   **`android-release.yml`** as a reusable workflow (`uses: ./.github/workflows/android-release.yml`,
+   `secrets: inherit`) → EAS builds the AAB (versionCode auto-incremented) and submits it to the Play
+   internal track as a draft.
 5. **iOS** in parallel: the Xcode Cloud workflow archives from `main`; follow the **Apple App Store
    checklist** in `.claude/CLAUDE.md` (build → App Store Connect → release notes → submit).
 6. **Android** finish: follow the **Google Play checklist** — confirm the CI run, add release notes,
    review the draft, roll out through Internal → Closed/Open/Production per your rollout policy.
 
-### First-release-only wrinkle (can't pre-smoke-test the release workflow)
-`android-release.yml` fires on a `vX.Y.Z` tag or manual `workflow_dispatch`. GitHub only exposes
-`workflow_dispatch` for workflows already present on the default branch (`main`), and the tags
-that trigger it are created by `release.yml` **only** when a release merges to `main`. So the
-workflow's **first real exercise is the first release tag** — there is no way to dispatch-smoke-test
-it earlier. Watch that first run live; a failure will be YAML plumbing (`EXPO_TOKEN` auth or
-`--non-interactive`), since the underlying `eas` commands were already proven in Part A.
+### No cross-workflow event to worry about
+`android-release.yml` is a **reusable workflow** (`workflow_call`), not something waiting on a tag
+push. `release.yml` invokes it directly (`uses: ./.github/workflows/android-release.yml`) as a job
+in the same run, right after the `tag-and-release` job creates `vX.Y.Z` — so there's no dependency on
+GitHub's tag-push event firing (it deliberately doesn't: tags pushed with the default `GITHUB_TOKEN`
+never trigger other workflows, which is why the old tag-trigger design silently never ran). Nothing
+to pre-smoke-test across workflow boundaries; the whole Android leg is self-contained inside the
+Release run. `workflow_dispatch` remains as the manual rerun path (e.g. re-submitting after fixing
+something in Play Console).
 
 ---
 
@@ -156,5 +160,7 @@ it earlier. Watch that first run live; a failure will be YAML plumbing (`EXPO_TO
       has **no** `serviceAccountKeyPath` (the key lives in EAS credentials).
 - [ ] `app.json` `android.blockedPermissions` blocks only what the app truly doesn't use — do **not**
       blanket-block storage permissions (breaks `expo-image-picker` gallery on Android ≤12L).
-- [ ] `android-release.yml` tag trigger is the narrow `v[0-9]+.[0-9]+.[0-9]+` glob, not `v*`.
+- [ ] `android-release.yml` is `workflow_call` + `workflow_dispatch` only (no `push: tags:` trigger —
+      that event never fires for GITHUB_TOKEN-pushed tags) and `release.yml`'s `android-release` job
+      is gated on `needs.tag-and-release.outputs.tag_created == 'true'`.
 - [ ] Part A completed for this app (keystore + service account in EAS credentials, one draft proven).

@@ -37,14 +37,15 @@ eas build  --platform android --profile production
 eas submit --platform android --profile production --latest
 ```
 
-Only after step 4 succeeds should `android-release.yml` be allowed to run against a real tag.
+Only after step 4 succeeds should `android-release.yml` be allowed to run against a real release.
 
-> **CI self-bootstraps on the first release.** `android-release.yml` fires on a `vX.Y.Z` tag or
-> manual `workflow_dispatch`, but `workflow_dispatch` is only exposed for workflows already on the
-> default branch (`main`), and the triggering tags are created by `release.yml` only on a merge to
-> `main`. So the workflow's first real exercise is the **first release tag** — there is no way to
-> dispatch-smoke-test it earlier; watch that first run live instead. For the full dual-platform
-> release procedure, use the **`parallel-release`** skill (`/parallel-release`).
+> **How CI runs the Android leg.** `android-release.yml` is a reusable workflow (`workflow_call` +
+> `workflow_dispatch`, no tag trigger). `release.yml` calls it directly as a job in the same run,
+> right after `tag-and-release` creates the `vX.Y.Z` tag — so it needs no PAT and doesn't depend on
+> a tag-push event firing (tags pushed with the default `GITHUB_TOKEN` never trigger other
+> workflows, which is why an earlier tag-trigger design silently never ran). `workflow_dispatch` is
+> the manual rerun path, e.g. re-submitting after fixing something in Play Console. For the full
+> dual-platform release procedure, use the **`parallel-release`** skill (`/parallel-release`).
 
 ---
 
@@ -65,7 +66,7 @@ Only after step 4 succeeds should `android-release.yml` be allowed to run agains
 eas build --platform android --profile production
 ```
 
-After the one-time setup above, this and `eas submit` also work non-interactively in CI (`android-release.yml`, triggered on `v[0-9]+.[0-9]+.[0-9]+` tags).
+After the one-time setup above, this and `eas submit` also work non-interactively in CI, via `android-release.yml`, which `release.yml` calls as a reusable workflow right after tagging a release (or trigger it manually with `workflow_dispatch`).
 
 ---
 
