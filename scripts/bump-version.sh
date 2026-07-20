@@ -26,7 +26,8 @@ sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
 # Update app.json
 sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" app.json
 
-# Update DEV_MODE_KEY in src/constants.ts
+# Update APP_VERSION and DEV_MODE_KEY in src/constants.ts
+sed -i '' "s/APP_VERSION = \".*\"/APP_VERSION = \"$VERSION\"/" src/constants.ts
 sed -i '' "s/dev_mode_[0-9]\+\.[0-9]\+\.[0-9]\+/dev_mode_$VERSION/" src/constants.ts
 
 echo "Done. Verify:"
