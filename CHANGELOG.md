@@ -10,11 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- `.claude/skills/parallel-release/` — authoritative runbook skill for simultaneous iOS (Xcode Cloud) + Android (EAS) releases: recurring release flow, the one-time Android bootstrap a newly created app must complete before CI can succeed (keystore, Play Console app + gates, service account, local proof), automation map, gotchas, and verification. Wired into the `release-manager` agent and indexed in `.claude/SKILLS.md`.
+- `app-bootstrapper` agent now seeds the one-time Android release bootstrap (Play Console app, service account, keystore, local `eas build`/`eas submit` proof) into the setup-tracking issue it creates for every new app, plus a Phase 7 next-step pointer — so future apps don't discover the manual Android setup only at first release.
 - `LICENSE` — proprietary "all rights reserved" license; satisfies GitHub's Community Standards License item and codifies the README's copyright stance
 - Unit tests covering `hydrate()` validation and setters for all four Zustand stores (`useAuthStore`, `usePaywallStore`, `useOnboardingStore`, `useAppStore`), plus a `version-consistency` test asserting `src/constants.ts` `APP_VERSION`/`DEV_MODE_KEY` stay in sync with `package.json`
 
 ### Fixed
 - `scripts/bump-version.sh`: now updates `APP_VERSION` in `src/constants.ts` (it previously only updated the version-scoped `DEV_MODE_KEY`, leaving `APP_VERSION` stale after every release)
+
+### Fixed
+- `KEYSTORE.md` / `.claude/CLAUDE.md` / `README.md`: corrected the `android-release.yml` tag trigger from `v*` to the actual `v[0-9]+.[0-9]+.[0-9]+` glob; corrected the Google Play "API access" location (account-level `play.google.com/console/api-access`, not the app nav); documented the first-submit service-account permission gotcha (Admin fallback + propagation wait) and the CI self-bootstrap constraint (`android-release.yml`'s first real run is the first release tag, since `workflow_dispatch` needs the workflow on `main`)
 
 ---
 

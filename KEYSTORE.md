@@ -39,6 +39,13 @@ eas submit --platform android --profile production --latest
 
 Only after step 4 succeeds should `android-release.yml` be allowed to run against a real tag.
 
+> **CI self-bootstraps on the first release.** `android-release.yml` fires on a `vX.Y.Z` tag or
+> manual `workflow_dispatch`, but `workflow_dispatch` is only exposed for workflows already on the
+> default branch (`main`), and the triggering tags are created by `release.yml` only on a merge to
+> `main`. So the workflow's first real exercise is the **first release tag** — there is no way to
+> dispatch-smoke-test it earlier; watch that first run live instead. For the full dual-platform
+> release procedure, use the **`parallel-release`** skill (`/parallel-release`).
+
 ---
 
 ## Google Play submission — app entry and service account
@@ -46,7 +53,9 @@ Only after step 4 succeeds should `android-release.yml` be allowed to run agains
 `eas submit` needs two things that only exist per-app, created once by a human:
 
 1. **A Play Console app entry** for your package name — create it in the Play Console before any submit, and complete the Data safety / content rating / privacy policy / target audience gates that block even an internal-track release. The package name is permanent once bound.
-2. **A Google Play service account** with app-scoped *Release to testing tracks* permission (Play Console → Setup → API access → link/create a GCP project → enable the Google Play Android Developer API → create a service account → download its JSON key → invite that email under Users and permissions). Upload the JSON via `eas credentials` as in step 2 above — never commit it, never put it in a GitHub secret and write it to disk in CI. `eas.json`'s `submit.production.android` only needs `track` and `releaseStatus`; it does not need a `serviceAccountKeyPath`.
+2. **A Google Play service account** with permission to release to the app's testing tracks. **The "API access" page is at the account level, not inside the app**, and Google hides it from the app nav — go straight to **https://play.google.com/console/api-access** (only the account owner/admin can see it). There: link/create a GCP project → enable the **Google Play Android Developer API** → create a service account → download its JSON key. Then **Play Console → Users and permissions** → invite that service-account email and grant it access to the app. Upload the JSON via `eas credentials` as in step 2 above — never commit it, never put it in a GitHub secret and write it to disk in CI. `eas.json`'s `submit.production.android` only needs `track` and `releaseStatus`; it does not need a `serviceAccountKeyPath`.
+
+   > **First-submit permission gotcha.** If `eas submit` fails with `The service account is missing the necessary permissions`, the grant is missing, insufficient, or hasn't propagated. Granular permissions (*Release to testing tracks* + *View app information*) are flaky while the app is still a **Draft** — if they keep erroring, grant the service account **Admin (all permissions)** in Users and permissions. Then wait **~3–5 minutes for propagation** and re-run `eas submit` (no rebuild needed).
 
 ---
 
@@ -56,7 +65,7 @@ Only after step 4 succeeds should `android-release.yml` be allowed to run agains
 eas build --platform android --profile production
 ```
 
-After the one-time setup above, this and `eas submit` also work non-interactively in CI (`android-release.yml`, triggered on `v*` tags).
+After the one-time setup above, this and `eas submit` also work non-interactively in CI (`android-release.yml`, triggered on `v[0-9]+.[0-9]+.[0-9]+` tags).
 
 ---
 

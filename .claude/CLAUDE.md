@@ -84,7 +84,9 @@ When the user says to cut a release:
 4. Creates and pushes an annotated git tag `vVERSION`.
 5. Creates a GitHub Release with the extracted release notes.
 
-`.github/workflows/android-release.yml` triggers on push of any `v*` tag (i.e. immediately after the above) or manual `workflow_dispatch`. It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
+`.github/workflows/android-release.yml` triggers on push of a semver tag matching `v[0-9]+.[0-9]+.[0-9]+` (i.e. immediately after the above — the narrow glob avoids firing on arbitrary `v*` tags) or manual `workflow_dispatch`. It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
+
+> **For the full simultaneous iOS + Android release procedure — recurring flow, the one-time Android bootstrap, what's automated vs manual, and verification — use the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`).** The checklists below are the per-store manual tails of that procedure.
 
 ## Apple App Store checklist
 After `release/x.x.x` is merged to `main` and CI is green:
@@ -488,7 +490,7 @@ All six specialist subagents live in [.claude/agents/](agents/) and ship with th
 |---|---|---|
 | `ios-frontend` | React Native + Expo UI work | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-*` bundle |
 | `backend-integrator` | Third-party service integration | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching` |
-| `release-manager` | Runs the full release workflow above | `commit`, `commit-push-pr`, `review`, `verify` |
+| `release-manager` | Runs the full release workflow above | `parallel-release`, `commit`, `commit-push-pr`, `review`, `verify` |
 | `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
 | `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
 | `devops-agent` | Package risk assessment + controlled installation | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
