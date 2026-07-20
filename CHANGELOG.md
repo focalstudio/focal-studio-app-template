@@ -10,12 +10,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Account deletion flow** — Settings now has a "Danger Zone" card with a Delete Account row behind a two-step confirmation, plus a `deleteAccount()` method on `useAuthStore`. Required by Google Play "Data safety" and Apple App Privacy once an app supports account creation. The template scaffold clears local state only; each app wires its own backend delete call into it (Supabase example documented in `src/store/useAuthStore.ts`).
+- Settings → Support → **Request Data Deletion** — `mailto:` fallback so users who no longer have the app installed can still request deletion, which stores expect regardless of the in-app flow.
+- `store-listing/privacy-policy-template.html` — reusable privacy policy page with a `#delete` anchor documenting how to delete an account and what is retained. Copy into the `focalstudio.github.io` Pages repo per app; Play's account-deletion URL points at that anchor.
+- **Data safety checklist** in `.claude/CLAUDE.md`, wired into both the Apple and Google Play release checklists, and a corresponding section in the `app-bootstrapper` setup-tracking issue so new apps handle this before their first submission rather than at rejection.
 - `.claude/skills/parallel-release/` — authoritative runbook skill for simultaneous iOS (Xcode Cloud) + Android (EAS) releases: recurring release flow, the one-time Android bootstrap a newly created app must complete before CI can succeed (keystore, Play Console app + gates, service account, local proof), automation map, gotchas, and verification. Wired into the `release-manager` agent and indexed in `.claude/SKILLS.md`.
 - `app-bootstrapper` agent now seeds the one-time Android release bootstrap (Play Console app, service account, keystore, local `eas build`/`eas submit` proof) into the setup-tracking issue it creates for every new app, plus a Phase 7 next-step pointer — so future apps don't discover the manual Android setup only at first release.
 - `LICENSE` — proprietary "all rights reserved" license; satisfies GitHub's Community Standards License item and codifies the README's copyright stance
 - Unit tests covering `hydrate()` validation and setters for all four Zustand stores (`useAuthStore`, `usePaywallStore`, `useOnboardingStore`, `useAppStore`), plus a `version-consistency` test asserting `src/constants.ts` `APP_VERSION`/`DEV_MODE_KEY` stay in sync with `package.json`
 
 ### Fixed
+- **Analytics opt-out was silently ignored on every cold start.** `useAppStore.hydrate()` restored the persisted `analyticsEnabled` value into the store but never pushed it into `src/services/analytics.ts`, whose module-level `enabled` flag reset to `true` on each launch — so a user who opted out kept sending events until they manually re-toggled. `hydrate()` and `setAnalyticsEnabled()` now both apply the preference to the service, and `initAnalytics()` re-applies it to the PostHog client so init/hydrate ordering doesn't matter.
 - `scripts/bump-version.sh`: now updates `APP_VERSION` in `src/constants.ts` (it previously only updated the version-scoped `DEV_MODE_KEY`, leaving `APP_VERSION` stale after every release)
 
 ### Fixed

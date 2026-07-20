@@ -3,7 +3,7 @@ import type { Theme, NotificationPrefs } from "../types";
 import { STORAGE_PREFIX, DEV_MODE_KEY } from "../constants";
 import { loadJson, saveJson, loadString, saveString } from "../utils/storage";
 import { rescheduleNotifications } from "../services/notifications";
-import { Analytics } from "../services/analytics";
+import { Analytics, setAnalyticsEnabled as applyAnalyticsEnabled } from "../services/analytics";
 
 const THEME_KEY = `${STORAGE_PREFIX}theme`;
 const NOTIF_KEY = `${STORAGE_PREFIX}notification_prefs`;
@@ -52,6 +52,7 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalyticsEnabled: (analyticsEnabled) => {
     set({ analyticsEnabled });
     saveString(`${STORAGE_PREFIX}analytics`, String(analyticsEnabled));
+    applyAnalyticsEnabled(analyticsEnabled);
   },
 
   setDevMode: (devMode) => {
@@ -84,11 +85,17 @@ export const useAppStore = create<AppState>((set) => ({
 
     const analyticsStr = await loadString(`${STORAGE_PREFIX}analytics`, "true");
     const devModeStr = await loadString(DEV_MODE_KEY_STORE, "false");
+    const analyticsEnabled = analyticsStr !== "false";
+
+    // Push the persisted preference into the analytics service. Without this the
+    // service's module-level `enabled` flag stays at its `true` default on every
+    // cold start, silently re-opting-in a user who had opted out.
+    applyAnalyticsEnabled(analyticsEnabled);
 
     set({
       theme,
       notificationPrefs,
-      analyticsEnabled: analyticsStr !== "false",
+      analyticsEnabled,
       devMode: devModeStr === "true",
     });
   },

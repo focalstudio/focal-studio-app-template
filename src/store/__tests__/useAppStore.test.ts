@@ -8,6 +8,7 @@ const ANALYTICS_KEY = `${STORAGE_PREFIX}analytics`;
 
 jest.mock("../../services/analytics", () => ({
   Analytics: { appError: jest.fn() },
+  setAnalyticsEnabled: jest.fn(),
 }));
 jest.mock("../../services/notifications", () => ({
   rescheduleNotifications: jest.fn().mockResolvedValue(undefined),
@@ -16,6 +17,9 @@ jest.mock("../../services/notifications", () => ({
 const { rescheduleNotifications } = jest.requireMock("../../services/notifications") as {
   rescheduleNotifications: jest.Mock;
 };
+const { setAnalyticsEnabled: applyAnalyticsEnabled } = jest.requireMock(
+  "../../services/analytics"
+) as { setAnalyticsEnabled: jest.Mock };
 
 const initialState = useAppStore.getState();
 
@@ -23,6 +27,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   useAppStore.setState(initialState, true);
   rescheduleNotifications.mockClear();
+  applyAnalyticsEnabled.mockClear();
 });
 
 describe("useAppStore", () => {
@@ -33,6 +38,12 @@ describe("useAppStore", () => {
     expect(state.devMode).toBe(false);
     expect(state.notificationPrefs.dailyReminderEnabled).toBe(false);
     expect(state.notificationPrefs.reengagementEnabled).toBe(false);
+  });
+
+  it("setAnalyticsEnabled applies the preference to the analytics service", () => {
+    useAppStore.getState().setAnalyticsEnabled(false);
+    expect(useAppStore.getState().analyticsEnabled).toBe(false);
+    expect(applyAnalyticsEnabled).toHaveBeenCalledWith(false);
   });
 
   it("updates theme via setTheme", () => {
@@ -100,6 +111,21 @@ describe("useAppStore", () => {
       await AsyncStorage.setItem(ANALYTICS_KEY, "no");
       await useAppStore.getState().hydrate();
       expect(useAppStore.getState().analyticsEnabled).toBe(true);
+    });
+
+    // Regression: hydrate() used to restore analyticsEnabled into the store but
+    // never push it into the analytics service, whose module-level `enabled` flag
+    // reset to true on every cold start — silently re-opting-in a user who had
+    // opted out. The service must be told on every hydrate, not just on toggle.
+    it("hydrate applies the persisted analytics preference to the analytics service", async () => {
+      await AsyncStorage.setItem(ANALYTICS_KEY, "false");
+      await useAppStore.getState().hydrate();
+      expect(applyAnalyticsEnabled).toHaveBeenCalledWith(false);
+
+      applyAnalyticsEnabled.mockClear();
+      await AsyncStorage.setItem(ANALYTICS_KEY, "true");
+      await useAppStore.getState().hydrate();
+      expect(applyAnalyticsEnabled).toHaveBeenCalledWith(true);
     });
 
     it("devMode defaults to false and is on only for the exact string 'true'", async () => {

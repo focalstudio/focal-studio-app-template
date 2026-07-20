@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<!--
+  Privacy policy template for Focal Studio apps.
+
+  HOW TO USE
+  1. Copy this file into the focalstudio.github.io repo as `privacy-<app-slug>.html`.
+  2. Replace every [PLACEHOLDER] below. Search for "[" to find them all.
+  3. Delete any section that does not apply to your app (e.g. Account & Sync if
+     the app is fully offline). Do NOT delete section 6 — store review requires
+     a data-deletion section once the app supports account creation.
+  4. Merge to main; GitHub Pages publishes from main at the repo root.
+  5. Set PRIVACY_POLICY_URL in src/constants.ts to the published URL, and update
+     both files in store-listing/ to match.
+
+  The #delete anchor on section 6 is what the Google Play "Data safety" form's
+  account-deletion URL field should point at.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy – [APP_NAME]</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f2ee;
+      color: #1a1a1a;
+      line-height: 1.7;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+
+    header {
+      border-bottom: 2px solid [APP_COLOR];
+      padding-bottom: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    header h1 { font-size: 1.75rem; color: [APP_COLOR]; margin-bottom: .25rem; }
+    header p { color: #666; font-size: .9rem; }
+
+    h2 {
+      font-size: 1.1rem;
+      color: #1a1a1a;
+      margin: 2rem 0 .6rem;
+      padding-left: .75rem;
+      border-left: 3px solid [APP_COLOR];
+      scroll-margin-top: 1rem;
+    }
+
+    h3 { font-size: .98rem; margin: 1.25rem 0 .4rem; }
+
+    p { margin-bottom: .75rem; }
+    ul { margin: .5rem 0 .75rem 1.5rem; }
+    ul li { margin-bottom: .35rem; }
+    a { color: [APP_COLOR]; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: .75rem 0 1rem;
+      font-size: .92rem;
+    }
+    th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #e8e8e8; }
+    th { background: #faf9f7; font-weight: 600; }
+
+    .callout {
+      background: #faf9f7;
+      border-left: 3px solid [APP_COLOR];
+      border-radius: 0 6px 6px 0;
+      padding: 1rem 1.15rem;
+      margin: 1rem 0;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid #e0e0e0;
+      font-size: .85rem;
+      color: #888;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .container { padding: 1.75rem 1.25rem; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Privacy Policy</h1>
+      <p>[APP_NAME] · Last updated [LAST_UPDATED]</p>
+    </header>
+
+    <p>
+      [APP_NAME] is built by Focal Studio. This policy explains what data the app
+      collects, why, and how you can remove it. If anything here is unclear, email
+      <a href="mailto:[SUPPORT_EMAIL]">[SUPPORT_EMAIL]</a>.
+    </p>
+
+    <h2 id="collect">1. Information We Collect</h2>
+
+    <h3>Information you provide</h3>
+    <ul>
+      <li><strong>Account details</strong> — your email address and display name, used to sign you in and sync your data across devices.</li>
+      <li><strong>App content</strong> — [DESCRIBE_USER_CONTENT: e.g. recipes, meal plans, and shopping lists you create].</li>
+    </ul>
+
+    <h3>Information collected automatically</h3>
+    <ul>
+      <li><strong>Anonymous usage analytics</strong> — which screens are opened and which features are used, so we can see what needs improving. This is not linked to your name or email, and you can turn it off entirely (see section 4).</li>
+      <li><strong>Crash and error reports</strong> — technical details about failures, used only to fix bugs.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>We do not sell your data.</strong> We do not share it with advertisers, data brokers, or any third party for marketing purposes.
+    </div>
+
+    <h2 id="storage">2. Where Your Data Lives</h2>
+    <p>
+      Data is stored in two places: locally on your device, and on our hosted backend
+      ([BACKEND_PROVIDER: e.g. Supabase]) so it can sync across your devices. Data in
+      transit is encrypted over HTTPS, and access is restricted so that you can only
+      read and write your own records.
+    </p>
+
+    <h2 id="third-parties">3. Third-Party Services</h2>
+    <table>
+      <thead>
+        <tr><th>Service</th><th>Purpose</th><th>Data shared</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>[BACKEND_PROVIDER]</td><td>Account, storage, and sync</td><td>Account details and app content</td></tr>
+        <tr><td>PostHog</td><td>Anonymous product analytics</td><td>Anonymous usage events only</td></tr>
+        <tr><td>[ADD_OR_REMOVE_ROWS]</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="analytics">4. Turning Off Analytics</h2>
+    <p>
+      Analytics is optional. Open <strong>Settings → Privacy</strong> in the app and turn
+      the <strong>Analytics</strong> toggle off. No further usage events are sent from that
+      point on, and your choice persists across app restarts and updates.
+    </p>
+
+    <h2 id="permissions">5. Permissions</h2>
+    <p>[APP_NAME] requests only the permissions it needs:</p>
+    <ul>
+      <li><strong>Notifications</strong> — optional; used for reminders you opt into. Denying this does not limit any other feature.</li>
+      <li>[LIST_OTHER_PERMISSIONS: camera, photo library, etc., each with its purpose]</li>
+    </ul>
+
+    <h2 id="delete">6. How to Delete Your Account and Data</h2>
+    <p>You can delete your account and its data at any time, directly in the app:</p>
+    <ol style="margin: .5rem 0 .75rem 1.5rem;">
+      <li>Open <strong>Settings</strong>.</li>
+      <li>Scroll to <strong>Danger Zone</strong>.</li>
+      <li>Tap <strong>Delete Account</strong> and confirm.</li>
+    </ol>
+
+    <p><strong>Deleted immediately and permanently:</strong></p>
+    <ul>
+      <li>Your account and sign-in credentials</li>
+      <li>Your profile</li>
+      <li>[LIST_CASCADE_DELETED_DATA: everything removed with the account]</li>
+      <li>All app data cached on the device</li>
+    </ul>
+
+    <p><strong>Retained, and why:</strong></p>
+    <ul>
+      <li>[LIST_RETAINED_DATA_AND_REASON — e.g. content you shared into a group that
+          other members still rely on is kept but permanently de-attributed from you.
+          Delete this section only if nothing is retained.]</li>
+      <li>Anonymous analytics events, which contain no information identifying you and
+          therefore cannot be traced back to a deleted account.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>No longer have the app installed?</strong> Email
+      <a href="mailto:[SUPPORT_EMAIL]?subject=Data%20Deletion%20Request">[SUPPORT_EMAIL]</a>
+      from the address on your account with the subject "Data Deletion Request". We will
+      confirm your identity and delete the account within 30 days.
+    </div>
+
+    <h2 id="rights">7. Your Rights</h2>
+    <p>
+      Depending on where you live (including under GDPR and CCPA), you may have the right
+      to access, correct, export, or delete your personal data, and to object to certain
+      processing. Deletion is available in-app as described above; for any other request,
+      email <a href="mailto:[SUPPORT_EMAIL]">[SUPPORT_EMAIL]</a> and we will respond within 30 days.
+    </p>
+
+    <h2 id="children">8. Children's Privacy</h2>
+    <p>
+      [APP_NAME] is not directed at children under 13, and we do not knowingly collect data
+      from them. If you believe a child has provided us data, email
+      <a href="mailto:[SUPPORT_EMAIL]">[SUPPORT_EMAIL]</a> and we will delete it.
+    </p>
+
+    <h2 id="changes">9. Changes to This Policy</h2>
+    <p>
+      We may update this policy as the app changes. The "Last updated" date at the top
+      always reflects the current version. Material changes will be surfaced in the app.
+    </p>
+
+    <h2 id="contact">10. Contact</h2>
+    <p>
+      Questions about this policy or your data:
+      <a href="mailto:[SUPPORT_EMAIL]">[SUPPORT_EMAIL]</a>
+    </p>
+
+    <footer>
+      [APP_NAME] · by Focal Studio
+    </footer>
+  </div>
+</body>
+</html>

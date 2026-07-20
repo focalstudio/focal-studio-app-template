@@ -71,6 +71,8 @@ focal-studio-app-template/
 | Wire a third-party SDK | `src/services/<name>.ts` + a store in `src/store/` |
 | Change theming | `src/theme/` (then use `useTheme()` everywhere) |
 | Persist data | `src/utils/storage.ts` helpers — never `AsyncStorage.*` directly |
+| Wire account deletion | `src/store/useAuthStore.ts` → `deleteAccount()` — the scaffold clears local state only; add the backend call and **throw on failure** |
+| Change the privacy policy | `store-listing/privacy-policy-template.html`, then republish the app's page in the `focalstudio.github.io` repo |
 | Cut a release | invoke `release-manager` subagent — do not do this by hand |
 
 ---
