@@ -152,6 +152,17 @@ gh issue create \
 - [ ] `eas credentials --platform android` → generate the keystore + upload the service-account JSON
 - [ ] Prove locally before trusting CI: `eas build -p android --profile production` then `eas submit -p android --profile production --latest` (must land a draft in the Play internal track)
 
+## Privacy & store data-safety — required before first submission
+> Both stores reject apps that support account creation but offer no way to delete an
+> account, and Play needs a live deletion URL. The template ships the flow; these steps
+> make it real. Details: README "Privacy & store compliance".
+- [ ] Copy `store-listing/privacy-policy-template.html` into the `focalstudio.github.io` repo as `privacy-<app-slug>.html` and replace every `[PLACEHOLDER]`
+- [ ] Fill in section 6 to match what deletion actually does for this app, including anything **retained** after deletion
+- [ ] Merge to `main`, then verify `curl -I https://focalstudio.github.io/privacy-<app-slug>.html` returns 200
+- [ ] Set `PRIVACY_POLICY_URL` in `src/constants.ts` and update both files in `store-listing/` to the published URL
+- [ ] Wire the real backend delete into `useAuthStore.deleteAccount()` — the template scaffold clears local state only and will NOT delete the remote account
+- [ ] Point Play's Data safety account-deletion URL at the page's `#delete` anchor
+
 ## First run verification
 - [ ] `npm install` passes cleanly
 - [ ] `npx expo start --ios` launches the app

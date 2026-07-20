@@ -46,6 +46,15 @@ describe("useAuthStore", () => {
     expect(state.isLoading).toBe(false);
   });
 
+  it("deleteAccount clears user, isAuthenticated, and persisted storage", async () => {
+    useAuthStore.getState().setUser({ id: "1", email: "a@b.c" });
+    await useAuthStore.getState().deleteAccount();
+    const state = useAuthStore.getState();
+    expect(state.user).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    expect(await AsyncStorage.getItem(AUTH_KEY)).toBeNull();
+  });
+
   const malformed: [string, unknown][] = [
     ["empty object", {}],
     ["non-string id", { id: 1, email: "a@b.c" }],

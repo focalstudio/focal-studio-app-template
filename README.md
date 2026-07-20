@@ -189,9 +189,34 @@ Android setup: [KEYSTORE.md](KEYSTORE.md).
 
 ---
 
-## Privacy policy
+## Privacy & store compliance
 
-[PRIVACY_POLICY_URL]
+Every app built from this template ships two features that Google Play's **Data safety**
+form and Apple's App Privacy questionnaire require once the app supports accounts:
+
+| Feature | Where | Notes |
+|---|---|---|
+| **Account deletion** | Settings → Danger Zone → Delete Account | Two-step confirmation, then `useAuthStore.deleteAccount()`. The template scaffold only clears local state — **wire your backend's delete call into it before shipping** (see the notes at the bottom of `src/store/useAuthStore.ts`). |
+| **Analytics opt-out** | Settings → Privacy → Analytics | Persisted across restarts and re-applied to the analytics service on hydration. |
+| **Data deletion by email** | Settings → Support → Request Data Deletion | `mailto:` fallback for users who no longer have the app installed. Stores expect this path to exist regardless. |
+
+### Privacy policy page
+
+Stores require a publicly reachable, app-specific privacy policy URL, and Play needs a
+deletion URL that explains how to remove an account.
+
+1. Copy [`store-listing/privacy-policy-template.html`](store-listing/privacy-policy-template.html)
+   into the [focalstudio.github.io](https://github.com/focalstudio/focalstudio.github.io)
+   repo as `privacy-<app-slug>.html`.
+2. Replace every `[PLACEHOLDER]` — search the file for `[` to find them all.
+3. Fill in section 6 to match what your app's deletion actually does, including anything
+   deliberately **retained** after deletion. Getting this wrong is a store-rejection risk.
+4. Merge to `main` (Pages publishes from the repo root), then set `PRIVACY_POLICY_URL` in
+   `src/constants.ts` and update both files in `store-listing/`.
+
+Point Play's account-deletion URL at the `#delete` anchor of the published page.
+
+Current value: [PRIVACY_POLICY_URL]
 
 ---
 

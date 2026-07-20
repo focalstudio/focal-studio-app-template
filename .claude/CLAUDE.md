@@ -97,6 +97,7 @@ After `release/x.x.x` is merged to `main` and CI is green:
 4. When the build completes, download the `.ipa` and upload via Xcode Organizer or `eas submit`.
 5. In App Store Connect: select the new build, add release notes (match CHANGELOG), submit for review.
 6. Verify dev mode is off: tap the app title 5× — confirm no dev badge appears.
+7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
 
 ## Google Play checklist
 `android-release.yml` builds and submits automatically once the tag lands (see above) — this checklist is what's left to do by hand:
@@ -106,6 +107,26 @@ After `release/x.x.x` is merged to `main` and CI is green:
 3. Add release notes (match CHANGELOG) and review the release.
 4. Roll out to Internal testing, verify on a real device, then promote through Closed/Open/Production tracks per your own rollout policy — this template does not automate promotion beyond the internal track.
 5. Verify dev mode is off on the installed build.
+6. **Data safety check** (see below) — Play rejects submissions whose Data safety answers don't match observed behaviour.
+
+## Data safety checklist (both stores)
+
+Run this before every store submission. All three items ship with the template but each
+one has to actually work in the built app, not just exist in the source:
+
+- [ ] **Account deletion works end-to-end.** Settings → Danger Zone → Delete Account, on a
+      real build against the production backend. Confirm the account is genuinely gone —
+      not just signed out. `useAuthStore.deleteAccount()` must throw on a failed backend
+      call so the UI surfaces the error rather than faking success.
+- [ ] **Analytics opt-out survives a cold start.** Toggle Analytics off, force-quit,
+      relaunch, and confirm no events are sent before touching the toggle again. The
+      preference is re-applied during `useAppStore.hydrate()` — verify it, don't assume it.
+- [ ] **Privacy policy URL resolves.** `curl -I` the URL in `src/constants.ts` and expect
+      200. It must be app-specific and its deletion section must match what deletion
+      actually does, **including anything retained**. Point Play's account-deletion URL at
+      the page's `#delete` anchor.
+- [ ] **`store-listing/*.md` URLs match `src/constants.ts`.** These drift easily; a stale
+      URL in the listing files is a common rejection cause.
 
 First-ever Android release for a newly bootstrapped app additionally needs the one-time setup in [KEYSTORE.md](../KEYSTORE.md) (keystore generation, Play Console app entry, service account) run **before** any tag push, since CI cannot generate a keystore non-interactively.
 
