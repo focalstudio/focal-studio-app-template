@@ -62,7 +62,7 @@ See [AGENTS.md](AGENTS.md) for the full orchestration playbook and [.claude/CLAU
 | `ci.yml` | Every push / PR | Lint, type-check, test |
 | `eas-preview.yml` | Push to `dev` | EAS preview build (iOS + Android) |
 | `release.yml` | Merge to `main` | Auto-tag + GitHub Release |
-| `android-release.yml` | `v[0-9]+.[0-9]+.[0-9]+` tag push (from `release.yml`) | EAS Android production build + Play internal-track submit |
+| `android-release.yml` | Called by `release.yml` as a reusable workflow right after tagging (or manual `workflow_dispatch`) | EAS Android production build + Play internal-track submit |
 | `release-review.yml` | Push to `release/*` | Quality gate |
 
 ---
@@ -157,8 +157,9 @@ Add `EXPO_TOKEN` to your GitHub repo secrets to enable EAS preview builds in CI.
 5. On merge: `release.yml` auto-creates tag and GitHub Release
 6. Open backmerge PR: `release/x.x.x` → `dev`
 
-On merge to `main`, `release.yml` tags `vX.Y.Z`, which auto-triggers `android-release.yml` (EAS
-Android build + submit to the Play internal track). iOS ships in parallel via Xcode Cloud.
+On merge to `main`, `release.yml` tags `vX.Y.Z` and then calls `android-release.yml` directly as a
+reusable workflow in the same run (EAS Android build + submit to the Play internal track) — no tag
+push event involved. iOS ships in parallel via Xcode Cloud.
 
 Full simultaneous iOS + Android procedure — recurring flow, the one-time Android bootstrap
 (keystore, Play Console app, service account), and verification — is the **`parallel-release`**

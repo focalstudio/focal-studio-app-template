@@ -1,10 +1,16 @@
 name: Android Release
 
 on:
-  push:
-    tags:
-      # Matches only the semver tags release.yml creates (vX.Y.Z), not arbitrary "v*" tags.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  # Invoked by release.yml as a reusable workflow, in the same run, right after it
+  # creates the vX.Y.Z tag.
+  #
+  # Deliberately NOT `push: tags:`. release.yml pushes that tag using the default
+  # GITHUB_TOKEN, and GitHub never fires workflows from events created by that token
+  # (its recursion guard), so a tag trigger here would be dead code — it silently
+  # never ran. Calling this workflow directly sidesteps the event system entirely
+  # and needs no PAT.
+  workflow_call: {}
+  # Manual rerun path (e.g. re-submitting after fixing something in Play Console).
   workflow_dispatch: {}
 
 env:

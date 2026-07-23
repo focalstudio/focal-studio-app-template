@@ -73,7 +73,7 @@ When the user says to cut a release:
 9. **Immediately after step 7** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
    > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
 10. Follow the **Apple App Store checklist** for the iOS upload.
-11. Follow the **Google Play checklist** for the Android upload — `android-release.yml` fires automatically off the `vx.x.x` tag created in step 8, but Play Console review steps are still manual.
+11. Follow the **Google Play checklist** for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 8, but Play Console review steps are still manual.
 12. Verify dev mode is off on device before store submission.
 
 ## Automated release workflow
@@ -83,8 +83,9 @@ When the user says to cut a release:
 3. Extracts the matching `## [VERSION]` section from `CHANGELOG.md` as release notes.
 4. Creates and pushes an annotated git tag `vVERSION`.
 5. Creates a GitHub Release with the extracted release notes.
+6. If (and only if) a new tag was actually created in this run, calls `.github/workflows/android-release.yml` as a reusable workflow (`uses:` + `secrets: inherit`) in a dependent job — no PAT or extra secret needed, since a `push: tags:` trigger would never fire for a tag pushed with the default `GITHUB_TOKEN`.
 
-`.github/workflows/android-release.yml` triggers on push of a semver tag matching `v[0-9]+.[0-9]+.[0-9]+` (i.e. immediately after the above — the narrow glob avoids firing on arbitrary `v*` tags) or manual `workflow_dispatch`. It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
+`.github/workflows/android-release.yml` itself has no tag trigger — it's `workflow_call` (invoked by `release.yml` above) plus `workflow_dispatch` for manual reruns (e.g. re-submitting after fixing something in Play Console). It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
 
 > **For the full simultaneous iOS + Android release procedure — recurring flow, the one-time Android bootstrap, what's automated vs manual, and verification — use the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`).** The checklists below are the per-store manual tails of that procedure.
 
@@ -100,7 +101,7 @@ After `release/x.x.x` is merged to `main` and CI is green:
 7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
 
 ## Google Play checklist
-`android-release.yml` builds and submits automatically once the tag lands (see above) — this checklist is what's left to do by hand:
+`android-release.yml` builds and submits automatically as part of the same `release.yml` run (see above) — this checklist is what's left to do by hand:
 
 1. Confirm the CI run succeeded: check the **Android Release** workflow in GitHub Actions.
 2. In Play Console → your app → **Internal testing**: confirm the new build appears as a draft release (`releaseStatus: "draft"` in `eas.json` — this is deliberate so nothing auto-promotes before review).
