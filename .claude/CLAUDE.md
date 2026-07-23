@@ -59,6 +59,14 @@ When asked for code changes, follow this workflow unless explicitly told otherwi
 
 If a branch already exists for the task, use that branch instead of creating a second one.
 
+## Session workflow
+Two slash commands bracket every work session (defined in [.claude/commands/](commands/)):
+
+- **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
+- **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
+
+`STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
+
 ## Release workflow
 When the user says to cut a release:
 
