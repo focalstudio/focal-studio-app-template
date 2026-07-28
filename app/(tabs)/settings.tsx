@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
@@ -52,6 +52,13 @@ export default function SettingsScreen() {
     useAppStore();
   const { signOut, deleteAccount } = useAuthStore();
   const [isDeleting, setIsDeleting] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -83,6 +90,8 @@ export default function SettingsScreen() {
       // Keep the raw error out of the UI (a backend delete can surface internal
       // database or auth text) but keep it for diagnostics.
       Analytics.appError(err instanceof Error ? err.message : String(err), "deleteAccount");
+      // Skip UI + state updates if the screen unmounted mid-request (matches login.tsx).
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Couldn't Delete Account",
         "Something went wrong and your account was not deleted. Please try again, or contact support if the problem continues."

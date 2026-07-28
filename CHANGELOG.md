@@ -16,7 +16,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - 
 
 ### Fixed
-- 
+- `app/(tabs)/settings.tsx`: guard the account-deletion error path against state updates after unmount. `performDelete()` now tracks mount state with an `isMountedRef` and skips the `Alert` + `setIsDeleting(false)` if the screen unmounted mid-request — matching the existing pattern in `app/(auth)/login.tsx`.
 
 ### Removed
 - 
