@@ -1,0 +1,40 @@
+{
+  "_comment": "Copy this file to privacy.config.json and edit for your app. App identity (name, slug, colour, support email, privacy URL) is read from src/constants.ts — do not duplicate it here. Then run: node scripts/gen-privacy-policy.mjs. See store-listing/PRIVACY.md.",
+
+  "lang": "en",
+  "lastUpdated": "auto",
+
+  "dataModel": "backend",
+  "backendProvider": "Supabase",
+  "userContent": "the recipes, meal plans, and shopping lists you create",
+
+  "collectsAnalytics": true,
+  "collectsCrashReports": true,
+  "analyticsOptOutPath": "Settings → Privacy → Analytics",
+
+  "thirdParties": [
+    { "service": "Supabase", "purpose": "Account, storage, and sync", "dataShared": "Account details and app content" },
+    { "service": "PostHog", "purpose": "Anonymous product analytics", "dataShared": "Anonymous usage events only" }
+  ],
+
+  "permissions": [
+    { "name": "Notifications", "purpose": "optional; used for reminders you opt into. Denying this does not limit any other feature.", "platform": "all" }
+  ],
+
+  "deletion": {
+    "inApp": true,
+    "steps": ["Open Settings.", "Scroll to Danger Zone.", "Tap Delete Account and confirm."],
+    "deletedImmediately": [
+      "Your account and sign-in credentials",
+      "Your profile",
+      "Everything removed with the account (list your app's user content here)",
+      "All app data cached on the device"
+    ],
+    "retained": [
+      { "item": "Anonymous analytics events", "reason": "they contain no information identifying you and therefore cannot be traced back to a deleted account" }
+    ],
+    "emailFallback": true
+  },
+
+  "childrenNotice": true
+}
