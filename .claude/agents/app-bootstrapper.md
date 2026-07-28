@@ -156,10 +156,10 @@ gh issue create \
 > Both stores reject apps that support account creation but offer no way to delete an
 > account, and Play needs a live deletion URL. The template ships the flow; these steps
 > make it real. Details: README "Privacy & store compliance".
-- [ ] Copy `store-listing/privacy-policy-template.html` into the `focalstudio.github.io` repo as `privacy-<app-slug>.html` and replace every `[PLACEHOLDER]`
-- [ ] Fill in section 6 to match what deletion actually does for this app, including anything **retained** after deletion
-- [ ] Merge to `main`, then verify `curl -I https://focalstudio.github.io/privacy-<app-slug>.html` returns 200
-- [ ] Set `PRIVACY_POLICY_URL` in `src/constants.ts` and update both files in `store-listing/` to the published URL
+- [ ] Set `PRIVACY_POLICY_URL` in `src/constants.ts` to `https://focalstudio.github.io/privacy-<app-slug>.html`, and update both files in `store-listing/` to match
+- [ ] Author `store-listing/privacy.config.json` (copy `privacy.config.example.json`) with this app's real data practices — especially `deletion`, matching what deletion actually does including anything **retained**. See [store-listing/PRIVACY.md](../../store-listing/PRIVACY.md)
+- [ ] Run `node scripts/gen-privacy-policy.mjs` → produces `store-listing/privacy-<app-slug>.html`; open a PR adding it to the `focalstudio.github.io` repo root and merge to `main`
+- [ ] Verify `curl -I https://focalstudio.github.io/privacy-<app-slug>.html` returns 200 (or push a branch to run `verify-privacy.yml`)
 - [ ] Wire the real backend delete into `useAuthStore.deleteAccount()` — the template scaffold clears local state only and will NOT delete the remote account
 - [ ] Point Play's Data safety account-deletion URL at the page's `#delete` anchor
 

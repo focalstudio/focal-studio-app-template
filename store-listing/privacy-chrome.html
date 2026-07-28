@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  Site-chrome wrapper for generated privacy pages.
+
+  This is a copy of the focalstudio.github.io site chrome (nav, footer, styles.css
+  link, app-carousel strip) with token slots that scripts/gen-privacy-policy.mjs fills.
+  The generator injects the rendered policy body into {{CONTENT}} and writes the result
+  to store-listing/privacy-<slug>.html, ready to publish in the Pages repo.
+
+  Why a static copy: the policy CONTENT is owned by the app repo (its data practices);
+  the CHROME is owned by focalstudio.github.io. Keeping a copy here lets each app render
+  a complete, site-consistent page without a live cross-repo dependency. If the Pages
+  site chrome changes (nav links, styles.css version, footer), refresh this file to match.
+  The verify workflow is style-agnostic, so drift here only affects appearance, never the
+  #delete anchor or URL contract.
+
+  Tokens: {{LANG}} {{TITLE}} {{META_DESCRIPTION}} {{ASSET_VERSION}} {{APP_NAME}}
+          {{LAST_UPDATED}} {{CONTENT}} {{YEAR}}
+-->
+<html lang="{{LANG}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}" />
+  <link rel="stylesheet" href="assets/styles.css?v={{ASSET_VERSION}}" />
+</head>
+<body>
+
+  <!-- ── Navigation ───────────────────────────────────────── -->
+  <nav class="site-nav" aria-label="Main navigation">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">Focal Studio</a>
+
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="apps.html">My Apps</a></li>
+        <li><a href="contact.html">Contact</a></li>
+        <li><a href="privacy-policy.html" class="active">Privacy Policy</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+
+    <section class="app-strip-shell" data-app-carousel></section>
+
+    <div class="container">
+
+      <!-- ── Page header ─────────────────────────────────────── -->
+      <header class="page-header">
+        <h1>Privacy Policy</h1>
+        <p>{{APP_NAME}} &nbsp;·&nbsp; Last updated: {{LAST_UPDATED}}</p>
+      </header>
+
+      <!-- ── Policy content (generated) ──────────────────────── -->
+      <section class="section">
+        <div class="policy-content">
+{{CONTENT}}
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ── Footer ───────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span class="footer-copy">&copy; {{YEAR}} Focal Studio</span>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="contact.html">Contact</a>
+        <a href="privacy-policy.html">Privacy Policy</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="assets/script.js?v={{ASSET_VERSION}}"></script>
+</body>
+</html>
