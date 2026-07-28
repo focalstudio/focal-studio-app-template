@@ -21,7 +21,7 @@ build/
 # the focalstudio.github.io repo instead of committing here). Keep the committed sources.
 store-listing/privacy-*.html
 !store-listing/privacy-policy-template.html
-!store-listing/privacy-chrome.html
+!store-listing/privacy-shell.html
 
 # Per-app privacy config is committed; the example is the shared template.
 

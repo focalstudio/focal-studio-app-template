@@ -2,7 +2,6 @@
   "_comment": "Copy this file to privacy.config.json and edit for your app. App identity (name, slug, colour, support email, privacy URL) is read from src/constants.ts — do not duplicate it here. Then run: node scripts/gen-privacy-policy.mjs. See store-listing/PRIVACY.md.",
 
   "lang": "en",
-  "assetVersion": "20260508",
   "lastUpdated": "auto",
 
   "dataModel": "backend",

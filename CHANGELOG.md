@@ -10,14 +10,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
-- Per-app privacy-policy generator. `scripts/gen-privacy-policy.mjs` renders a complete
-  `privacy-<app-slug>.html` (styled to match the `focalstudio.github.io` site chrome) from
-  `store-listing/privacy.config.json` + `src/constants.ts`, failing on unfilled placeholders,
-  a missing `#delete` anchor, or a `PRIVACY_POLICY_URL` that doesn't match the slug. Ships
-  with `store-listing/privacy-chrome.html`, `privacy.config.example.json`, and
-  `store-listing/PRIVACY.md`. New `.github/workflows/verify-privacy.yml` regenerates the page
-  and checks the live URL resolves (200) with the `#delete` anchor — no-ops in the
-  un-bootstrapped template. Convention: one privacy page **per app**, never a shared policy.
+- Per-app privacy-policy generator. `scripts/gen-privacy-policy.mjs` renders a complete,
+  standalone-styled `privacy-<app-slug>.html` from `store-listing/privacy.config.json` +
+  `src/constants.ts`, failing on unfilled placeholders, a missing `#delete` anchor, or a
+  `PRIVACY_POLICY_URL` that doesn't match the slug. Ships with `store-listing/privacy-shell.html`
+  (self-contained styling matching `privacy-policy-template.html` and the published pages),
+  `privacy.config.example.json`, and `store-listing/PRIVACY.md`. New
+  `.github/workflows/verify-privacy.yml` regenerates the page and checks the live URL resolves
+  (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
+  privacy page **per app**, never a shared policy.
 
 ### Changed
 - 

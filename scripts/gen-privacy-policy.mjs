@@ -297,8 +297,8 @@ const lastUpdated =
 
 const body = renderBody(cfg, C);
 
-let html = readFileSync(p("store-listing", "privacy-chrome.html"), "utf8");
-// Strip the wrapper's authoring comment (everything up to the first <html ...>).
+let html = readFileSync(p("store-listing", "privacy-shell.html"), "utf8");
+// Strip the shell's authoring comment (everything up to the first <html ...>).
 html = html.replace(/^<!DOCTYPE html>\s*<!--[\s\S]*?-->\s*/, "<!DOCTYPE html>\n");
 html = html
   .replaceAll("{{LANG}}", esc(cfg.lang || "en"))
@@ -307,7 +307,7 @@ html = html
     "{{META_DESCRIPTION}}",
     esc(`Privacy Policy for ${C.APP_NAME}. What data the app collects, why, and how to delete it.`)
   )
-  .replaceAll("{{ASSET_VERSION}}", esc(cfg.assetVersion || "1"))
+  .replaceAll("{{APP_COLOR}}", esc(C.APP_COLOR))
   .replaceAll("{{APP_NAME}}", esc(C.APP_NAME))
   .replaceAll("{{LAST_UPDATED}}", esc(lastUpdated))
   .replaceAll("{{YEAR}}", String(now.getFullYear()))
@@ -315,7 +315,7 @@ html = html
 
 // ── Validate output ────────────────────────────────────────────────────────
 const leftoverToken = html.match(/\{\{[A-Z_]+\}\}/);
-if (leftoverToken) die(`unfilled chrome token ${leftoverToken[0]} remains in output`);
+if (leftoverToken) die(`unfilled shell token ${leftoverToken[0]} remains in output`);
 const leftoverPlaceholder = html.match(/\[[A-Z][A-Z0-9_ ]+\]/);
 if (leftoverPlaceholder)
   die(

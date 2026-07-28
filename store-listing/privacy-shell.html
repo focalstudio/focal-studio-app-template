@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!--
+  Standalone page shell for generated privacy pages.
+
+  Self-contained styling (no external CSS) matching store-listing/privacy-policy-template.html
+  and the published privacy-<slug>.html pages on focalstudio.github.io. scripts/gen-privacy-policy.mjs
+  injects the rendered policy body into {{CONTENT}} and writes store-listing/privacy-<slug>.html.
+
+  Tokens: {{LANG}} {{TITLE}} {{META_DESCRIPTION}} {{APP_NAME}} {{APP_COLOR}}
+          {{LAST_UPDATED}} {{CONTENT}} {{YEAR}}
+-->
+<html lang="{{LANG}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f2ee;
+      color: #1a1a1a;
+      line-height: 1.7;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+
+    header {
+      border-bottom: 2px solid {{APP_COLOR}};
+      padding-bottom: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    header h1 { font-size: 1.75rem; color: {{APP_COLOR}}; margin-bottom: .25rem; }
+    header p { color: #666; font-size: .9rem; }
+
+    h2 {
+      font-size: 1.1rem;
+      color: #1a1a1a;
+      margin: 2rem 0 .6rem;
+      padding-left: .75rem;
+      border-left: 3px solid {{APP_COLOR}};
+      scroll-margin-top: 1rem;
+    }
+
+    h3 { font-size: .98rem; margin: 1.25rem 0 .4rem; }
+
+    p { margin-bottom: .75rem; }
+    ul, ol { margin: .5rem 0 .75rem 1.5rem; }
+    li { margin-bottom: .35rem; }
+    a { color: {{APP_COLOR}}; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: .75rem 0 1rem;
+      font-size: .92rem;
+    }
+    th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #e8e8e8; }
+    th { background: #faf9f7; font-weight: 600; }
+
+    .callout {
+      background: #faf9f7;
+      border-left: 3px solid {{APP_COLOR}};
+      border-radius: 0 6px 6px 0;
+      padding: 1rem 1.15rem;
+      margin: 1rem 0;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid #e0e0e0;
+      font-size: .85rem;
+      color: #888;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .container { padding: 1.75rem 1.25rem; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Privacy Policy</h1>
+      <p>{{APP_NAME}} · Last updated {{LAST_UPDATED}}</p>
+    </header>
+
+{{CONTENT}}
+
+    <footer>
+      {{APP_NAME}} · by Focal Studio
+    </footer>
+  </div>
+</body>
+</html>

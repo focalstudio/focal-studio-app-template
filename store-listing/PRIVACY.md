@@ -12,7 +12,7 @@ store-rejection cause).
 | File | Role |
 |------|------|
 | `privacy-policy-template.html` | Reference/annotated placeholder policy (human copy-out fallback). |
-| `privacy-chrome.html` | Site-chrome wrapper (nav/footer/styles) matching focalstudio.github.io. Generator fills its `{{TOKENS}}`. |
+| `privacy-shell.html` | Standalone page shell (self-contained CSS) matching the published pages. Generator fills its `{{TOKENS}}`. |
 | `privacy.config.example.json` | Copy to `privacy.config.json` and edit for your app. |
 | `privacy.config.json` | **Your app's** data practices (gitignored-free; commit it). Drives generation. |
 
@@ -36,12 +36,15 @@ root. GitHub Pages serves it from `main`. Point Play's account-deletion URL at t
 `#delete` anchor. (A later Phase-2 workflow can open this PR automatically — see the repo
 issues.)
 
+> The generated page is **standalone-styled** (self-contained CSS from `privacy-shell.html`),
+> matching `privacy-policy-template.html` and the published `privacy-<slug>.html` pages. It
+> does not depend on the Pages site's stylesheet.
+
 ## Config reference
 
 | Key | Meaning |
 |-----|---------|
 | `lang` | `<html lang>` value (default `en`). |
-| `assetVersion` | Cache-bust query for `styles.css` / `script.js` on the Pages site. |
 | `lastUpdated` | `"auto"` → current `Month YYYY`, or a literal string. |
 | `dataModel` | `"backend"` (accounts + hosted sync) or `"local-first"` (on-device only). |
 | `backendProvider` | Backend name, used when `dataModel` is `backend`. |
