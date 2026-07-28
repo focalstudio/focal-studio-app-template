@@ -2,7 +2,7 @@
   "expo": {
     "name": "[APP_NAME]",
     "slug": "[APP_SLUG]",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "[APP_SLUG]",
@@ -23,7 +23,11 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "[APP_COLOR]"
       },
-      "package": "[APP_ID]"
+      "package": "[APP_ID]",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "bundler": "metro",

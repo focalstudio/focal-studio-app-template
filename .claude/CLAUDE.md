@@ -59,6 +59,14 @@ When asked for code changes, follow this workflow unless explicitly told otherwi
 
 If a branch already exists for the task, use that branch instead of creating a second one.
 
+## Session workflow
+Two slash commands bracket every work session (defined in [.claude/commands/](commands/)):
+
+- **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
+- **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
+
+`STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
+
 ## Release workflow
 When the user says to cut a release:
 
@@ -73,7 +81,8 @@ When the user says to cut a release:
 9. **Immediately after step 7** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
    > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
 10. Follow the **Apple App Store checklist** for the iOS upload.
-11. Verify dev mode is off on device before store submission.
+11. Follow the **Google Play checklist** for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 8, but Play Console review steps are still manual.
+12. Verify dev mode is off on device before store submission.
 
 ## Automated release workflow
 `.github/workflows/release.yml` triggers on every push to `main`. It:
@@ -82,6 +91,11 @@ When the user says to cut a release:
 3. Extracts the matching `## [VERSION]` section from `CHANGELOG.md` as release notes.
 4. Creates and pushes an annotated git tag `vVERSION`.
 5. Creates a GitHub Release with the extracted release notes.
+6. If (and only if) a new tag was actually created in this run, calls `.github/workflows/android-release.yml` as a reusable workflow (`uses:` + `secrets: inherit`) in a dependent job — no PAT or extra secret needed, since a `push: tags:` trigger would never fire for a tag pushed with the default `GITHUB_TOKEN`.
+
+`.github/workflows/android-release.yml` itself has no tag trigger — it's `workflow_call` (invoked by `release.yml` above) plus `workflow_dispatch` for manual reruns (e.g. re-submitting after fixing something in Play Console). It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
+
+> **For the full simultaneous iOS + Android release procedure — recurring flow, the one-time Android bootstrap, what's automated vs manual, and verification — use the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`).** The checklists below are the per-store manual tails of that procedure.
 
 ## Apple App Store checklist
 After `release/x.x.x` is merged to `main` and CI is green:
@@ -92,6 +106,38 @@ After `release/x.x.x` is merged to `main` and CI is green:
 4. When the build completes, download the `.ipa` and upload via Xcode Organizer or `eas submit`.
 5. In App Store Connect: select the new build, add release notes (match CHANGELOG), submit for review.
 6. Verify dev mode is off: tap the app title 5× — confirm no dev badge appears.
+7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
+
+## Google Play checklist
+`android-release.yml` builds and submits automatically as part of the same `release.yml` run (see above) — this checklist is what's left to do by hand:
+
+1. Confirm the CI run succeeded: check the **Android Release** workflow in GitHub Actions.
+2. In Play Console → your app → **Internal testing**: confirm the new build appears as a draft release (`releaseStatus: "draft"` in `eas.json` — this is deliberate so nothing auto-promotes before review).
+3. Add release notes (match CHANGELOG) and review the release.
+4. Roll out to Internal testing, verify on a real device, then promote through Closed/Open/Production tracks per your own rollout policy — this template does not automate promotion beyond the internal track.
+5. Verify dev mode is off on the installed build.
+6. **Data safety check** (see below) — Play rejects submissions whose Data safety answers don't match observed behaviour.
+
+## Data safety checklist (both stores)
+
+Run this before every store submission. All three items ship with the template but each
+one has to actually work in the built app, not just exist in the source:
+
+- [ ] **Account deletion works end-to-end.** Settings → Danger Zone → Delete Account, on a
+      real build against the production backend. Confirm the account is genuinely gone —
+      not just signed out. `useAuthStore.deleteAccount()` must throw on a failed backend
+      call so the UI surfaces the error rather than faking success.
+- [ ] **Analytics opt-out survives a cold start.** Toggle Analytics off, force-quit,
+      relaunch, and confirm no events are sent before touching the toggle again. The
+      preference is re-applied during `useAppStore.hydrate()` — verify it, don't assume it.
+- [ ] **Privacy policy URL resolves.** `curl -I` the URL in `src/constants.ts` and expect
+      200. It must be app-specific and its deletion section must match what deletion
+      actually does, **including anything retained**. Point Play's account-deletion URL at
+      the page's `#delete` anchor.
+- [ ] **`store-listing/*.md` URLs match `src/constants.ts`.** These drift easily; a stale
+      URL in the listing files is a common rejection cause.
+
+First-ever Android release for a newly bootstrapped app additionally needs the one-time setup in [KEYSTORE.md](../KEYSTORE.md) (keystore generation, Play Console app entry, service account) run **before** any tag push, since CI cannot generate a keystore non-interactively.
 
 ## Git safety rules
 - Never commit directly to `main` or `dev`.
@@ -474,7 +520,7 @@ All six specialist subagents live in [.claude/agents/](agents/) and ship with th
 |---|---|---|
 | `ios-frontend` | React Native + Expo UI work | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-*` bundle |
 | `backend-integrator` | Third-party service integration | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching` |
-| `release-manager` | Runs the full release workflow above | `commit`, `commit-push-pr`, `review`, `verify` |
+| `release-manager` | Runs the full release workflow above | `parallel-release`, `commit`, `commit-push-pr`, `review`, `verify` |
 | `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
 | `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
 | `devops-agent` | Package risk assessment + controlled installation | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |

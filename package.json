@@ -1,6 +1,6 @@
 {
   "name": "[APP_SLUG]",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -10,6 +10,9 @@
     "build:ios": "eas build --platform ios --profile production",
     "build:android": "eas build --platform android --profile production",
     "preview:ios": "eas build --platform ios --profile preview",
+    "preview:android": "eas build --platform android --profile preview",
+    "submit:ios": "eas submit --platform ios --profile production --latest",
+    "submit:android": "eas submit --platform android --profile production --latest",
     "test": "jest --watchAll=false",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",

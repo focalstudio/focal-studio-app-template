@@ -1,5 +1,5 @@
-import React, { useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
+import React, { useCallback, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Card } from "@/components/ui/Card";
@@ -21,11 +21,26 @@ const THEMES: { label: string; value: Theme }[] = [
 ];
 
 
-function Row({ label, onPress }: { label: string; onPress: () => void }) {
+function Row({
+  label,
+  onPress,
+  destructive,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+}) {
   const { colors } = useTheme();
   return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
+    <Pressable
+      style={[styles.row, disabled && styles.rowDisabled]}
+      onPress={disabled ? undefined : onPress}
+    >
+      <Text style={[styles.rowLabel, { color: destructive ? colors.danger : colors.text }]}>
+        {label}
+      </Text>
       <Text style={{ color: colors.textTertiary }}>›</Text>
     </Pressable>
   );
@@ -35,7 +50,8 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const { theme, setTheme, analyticsEnabled, setAnalyticsEnabled: setStoreAnalytics } =
     useAppStore();
-  const { signOut } = useAuthStore();
+  const { signOut, deleteAccount } = useAuthStore();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +70,50 @@ export default function SettingsScreen() {
 
   async function handleRateUs() {
     await maybeRequestRating(5, 5);
+  }
+
+  async function performDelete() {
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+      // Deliberately no setIsDeleting(false) on this path — the screen is
+      // navigating away, and the account no longer exists to retry against.
+      router.replace("/(auth)/login");
+    } catch (err) {
+      // Keep the raw error out of the UI (a backend delete can surface internal
+      // database or auth text) but keep it for diagnostics.
+      Analytics.appError(err instanceof Error ? err.message : String(err), "deleteAccount");
+      Alert.alert(
+        "Couldn't Delete Account",
+        "Something went wrong and your account was not deleted. Please try again, or contact support if the problem continues."
+      );
+      // Stay signed in — the account still exists.
+      setIsDeleting(false);
+    }
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all associated data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you sure?",
+              "This is your last chance to cancel — your account and data will be permanently deleted.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete Account", style: "destructive", onPress: performDelete },
+              ]
+            );
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -98,6 +158,13 @@ export default function SettingsScreen() {
             label="Feature Request"
             onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Feature Request`)}
           />
+          <Divider />
+          <Row
+            label="Request Data Deletion"
+            onPress={() =>
+              Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Data Deletion Request`)
+            }
+          />
         </Card>
 
         {/* Account */}
@@ -109,6 +176,17 @@ export default function SettingsScreen() {
               signOut();
               router.replace("/(auth)/login");
             }}
+          />
+        </Card>
+
+        {/* Danger Zone */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Danger Zone</Text>
+          <Row
+            label="Delete Account"
+            destructive
+            disabled={isDeleting}
+            onPress={handleDeleteAccount}
           />
         </Card>
 
@@ -130,6 +208,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: Spacing.md,
   },
+  rowDisabled: { opacity: 0.5 },
   rowLabel: { fontSize: FontSize.md },
   footer: { textAlign: "center", fontSize: FontSize.sm },
 });

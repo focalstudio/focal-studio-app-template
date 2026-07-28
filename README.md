@@ -60,8 +60,9 @@ See [AGENTS.md](AGENTS.md) for the full orchestration playbook and [.claude/CLAU
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `ci.yml` | Every push / PR | Lint, type-check, test |
-| `eas-preview.yml` | Push to `dev` | EAS preview build (iOS) |
+| `eas-preview.yml` | Push to `dev` | EAS preview build (iOS + Android) |
 | `release.yml` | Merge to `main` | Auto-tag + GitHub Release |
+| `android-release.yml` | Called by `release.yml` as a reusable workflow right after tagging (or manual `workflow_dispatch`) | EAS Android production build + Play internal-track submit |
 | `release-review.yml` | Push to `release/*` | Quality gate |
 
 ---
@@ -156,7 +157,14 @@ Add `EXPO_TOKEN` to your GitHub repo secrets to enable EAS preview builds in CI.
 5. On merge: `release.yml` auto-creates tag and GitHub Release
 6. Open backmerge PR: `release/x.x.x` → `dev`
 
-Full checklist including App Store upload: [.claude/CLAUDE.md](.claude/CLAUDE.md).
+On merge to `main`, `release.yml` tags `vX.Y.Z` and then calls `android-release.yml` directly as a
+reusable workflow in the same run (EAS Android build + submit to the Play internal track) — no tag
+push event involved. iOS ships in parallel via Xcode Cloud.
+
+Full simultaneous iOS + Android procedure — recurring flow, the one-time Android bootstrap
+(keystore, Play Console app, service account), and verification — is the **`parallel-release`**
+skill (`/parallel-release`), also referenced from [.claude/CLAUDE.md](.claude/CLAUDE.md). First-time
+Android setup: [KEYSTORE.md](KEYSTORE.md).
 
 ---
 
@@ -182,9 +190,34 @@ Full checklist including App Store upload: [.claude/CLAUDE.md](.claude/CLAUDE.md
 
 ---
 
-## Privacy policy
+## Privacy & store compliance
 
-[PRIVACY_POLICY_URL]
+Every app built from this template ships two features that Google Play's **Data safety**
+form and Apple's App Privacy questionnaire require once the app supports accounts:
+
+| Feature | Where | Notes |
+|---|---|---|
+| **Account deletion** | Settings → Danger Zone → Delete Account | Two-step confirmation, then `useAuthStore.deleteAccount()`. The template scaffold only clears local state — **wire your backend's delete call into it before shipping** (see the notes at the bottom of `src/store/useAuthStore.ts`). |
+| **Analytics opt-out** | Settings → Privacy → Analytics | Persisted across restarts and re-applied to the analytics service on hydration. |
+| **Data deletion by email** | Settings → Support → Request Data Deletion | `mailto:` fallback for users who no longer have the app installed. Stores expect this path to exist regardless. |
+
+### Privacy policy page
+
+Stores require a publicly reachable, app-specific privacy policy URL, and Play needs a
+deletion URL that explains how to remove an account.
+
+1. Copy [`store-listing/privacy-policy-template.html`](store-listing/privacy-policy-template.html)
+   into the [focalstudio.github.io](https://github.com/focalstudio/focalstudio.github.io)
+   repo as `privacy-<app-slug>.html`.
+2. Replace every `[PLACEHOLDER]` — search the file for `[` to find them all.
+3. Fill in section 6 to match what your app's deletion actually does, including anything
+   deliberately **retained** after deletion. Getting this wrong is a store-rejection risk.
+4. Merge to `main` (Pages publishes from the repo root), then set `PRIVACY_POLICY_URL` in
+   `src/constants.ts` and update both files in `store-listing/`.
+
+Point Play's account-deletion URL at the `#delete` anchor of the published page.
+
+Current value: [PRIVACY_POLICY_URL]
 
 ---
 

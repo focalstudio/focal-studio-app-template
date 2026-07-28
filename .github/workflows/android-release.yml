@@ -1,0 +1,60 @@
+name: Android Release
+
+on:
+  # Invoked by release.yml as a reusable workflow, in the same run, right after it
+  # creates the vX.Y.Z tag.
+  #
+  # Deliberately NOT `push: tags:`. release.yml pushes that tag using the default
+  # GITHUB_TOKEN, and GitHub never fires workflows from events created by that token
+  # (its recursion guard), so a tag trigger here would be dead code — it silently
+  # never ran. Calling this workflow directly sidesteps the event system entirely
+  # and needs no PAT.
+  workflow_call: {}
+  # Manual rerun path (e.g. re-submitting after fixing something in Play Console).
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build-and-submit:
+    name: EAS Build & Submit (Android)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Check if app is bootstrapped
+        id: bootstrap_check
+        run: |
+          if grep -q '\[APP_SLUG\]' app.json; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Template placeholders still present — skipping Android release."
+            echo "Run scripts/init.sh to bootstrap a real app before EAS builds will work."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Android production
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: eas build --platform android --profile production --non-interactive
+
+      - name: Submit to Play internal track
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: eas submit --platform android --profile production --non-interactive --latest

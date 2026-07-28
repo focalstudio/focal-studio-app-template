@@ -145,6 +145,24 @@ gh issue create \
 - [ ] Add `EXPO_PUBLIC_POSTHOG_KEY` to `.env.local`
 - [ ] Add `EXPO_PUBLIC_POSTHOG_KEY` to GitHub Actions secrets
 
+## Android release (Google Play) — one-time bootstrap
+> Required before the first `vX.Y.Z` release tag, or `android-release.yml` fails — CI cannot do these non-interactively. Full guide: `KEYSTORE.md` and the `parallel-release` skill (`/parallel-release`).
+- [ ] Create the Play Console app for the bundle ID + clear the release gates (privacy policy, App access, Ads, content rating, target audience, data safety); create an Internal testing track
+- [ ] Create a Google Play service account at https://play.google.com/console/api-access (link/create a GCP project → enable the Google Play Android Developer API → service account → JSON key), then grant it release-to-testing access under Users and permissions
+- [ ] `eas credentials --platform android` → generate the keystore + upload the service-account JSON
+- [ ] Prove locally before trusting CI: `eas build -p android --profile production` then `eas submit -p android --profile production --latest` (must land a draft in the Play internal track)
+
+## Privacy & store data-safety — required before first submission
+> Both stores reject apps that support account creation but offer no way to delete an
+> account, and Play needs a live deletion URL. The template ships the flow; these steps
+> make it real. Details: README "Privacy & store compliance".
+- [ ] Copy `store-listing/privacy-policy-template.html` into the `focalstudio.github.io` repo as `privacy-<app-slug>.html` and replace every `[PLACEHOLDER]`
+- [ ] Fill in section 6 to match what deletion actually does for this app, including anything **retained** after deletion
+- [ ] Merge to `main`, then verify `curl -I https://focalstudio.github.io/privacy-<app-slug>.html` returns 200
+- [ ] Set `PRIVACY_POLICY_URL` in `src/constants.ts` and update both files in `store-listing/` to the published URL
+- [ ] Wire the real backend delete into `useAuthStore.deleteAccount()` — the template scaffold clears local state only and will NOT delete the remote account
+- [ ] Point Play's Data safety account-deletion URL at the page's `#delete` anchor
+
 ## First run verification
 - [ ] `npm install` passes cleanly
 - [ ] `npx expo start --ios` launches the app
@@ -199,6 +217,7 @@ Manual next steps:
 5. Create .env.local with EXPO_PUBLIC_POSTHOG_KEY
 6. Open IDEA.md and review the feature list + non-goals
 7. Open Obsidian vault and verify Dashboard/Roadmap/Kanban render
+8. Before the first Android release: complete the one-time Play/keystore bootstrap (KEYSTORE.md + /parallel-release) — tracked in the setup issue above
 ```
 
 ## Hard rules

@@ -10,8 +10,12 @@ env:
 
 jobs:
   preview:
-    name: EAS Preview (iOS)
+    name: EAS Preview (${{ matrix.platform }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +47,6 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build iOS preview
+      - name: Build ${{ matrix.platform }} preview
         if: steps.bootstrap_check.outputs.skip == 'false'
-        run: eas build --platform ios --profile preview --non-interactive
+        run: eas build --platform ${{ matrix.platform }} --profile preview --non-interactive
