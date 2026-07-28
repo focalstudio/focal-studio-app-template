@@ -5,7 +5,7 @@
  *
  *   Inputs : store-listing/privacy.config.json   (this app's data practices)
  *            src/constants.ts                     (APP_NAME/APP_SLUG/APP_COLOR/… — identity)
- *            store-listing/privacy-chrome.html    (site-chrome wrapper with {{TOKENS}})
+ *            store-listing/privacy-shell.html     (standalone page shell with {{TOKENS}})
  *   Output : store-listing/privacy-<slug>.html    (publish this to the Pages repo)
  *
  * Fails (non-zero exit) if any [PLACEHOLDER] survives, the #delete anchor is missing, or
@@ -22,6 +22,53 @@ const p = (...s) => join(ROOT, ...s);
 function die(msg) {
   console.error(`\n✖ gen-privacy-policy: ${msg}\n`);
   process.exit(1);
+}
+
+// ── Validate the config up front so a missing key can never render as the literal
+// string "undefined" in a published page while CI still looks green. ───────────
+function validateConfig(cfg) {
+  const errors = [];
+  const req = (cond, msg) => { if (!cond) errors.push(msg); };
+  const isNonEmptyStr = (v) => typeof v === "string" && v.trim().length > 0;
+  const isRowArray = (v, keys) =>
+    Array.isArray(v) && v.every((r) => r && typeof r === "object" && keys.every((k) => isNonEmptyStr(r[k])));
+
+  req(cfg.dataModel === "backend" || cfg.dataModel === "local-first",
+    'dataModel must be "backend" or "local-first"');
+  req(isNonEmptyStr(cfg.userContent), "userContent is required (a phrase describing what the user creates)");
+  if (cfg.dataModel === "backend" && !isNonEmptyStr(cfg.whereDataLives)) {
+    req(isNonEmptyStr(cfg.backendProvider),
+      "backendProvider is required when dataModel is \"backend\" (or set whereDataLives)");
+  }
+  if (cfg.collectsAnalytics) {
+    req(isNonEmptyStr(cfg.analyticsOptOutPath),
+      "analyticsOptOutPath is required when collectsAnalytics is true");
+  }
+  if (cfg.thirdParties !== undefined) {
+    req(isRowArray(cfg.thirdParties, ["service", "purpose", "dataShared"]),
+      "thirdParties must be an array of { service, purpose, dataShared }");
+  }
+  if (cfg.permissions !== undefined) {
+    req(isRowArray(cfg.permissions, ["name", "purpose"]),
+      "permissions must be an array of { name, purpose[, platform] }");
+  }
+  const d = cfg.deletion;
+  req(d && typeof d === "object", "deletion block is required");
+  if (d && typeof d === "object") {
+    req(Array.isArray(d.deletedImmediately) && d.deletedImmediately.every(isNonEmptyStr) && d.deletedImmediately.length > 0,
+      "deletion.deletedImmediately must be a non-empty array of strings");
+    if (d.inApp) {
+      req(Array.isArray(d.steps) && d.steps.every(isNonEmptyStr) && d.steps.length > 0,
+        "deletion.steps must be a non-empty array of strings when deletion.inApp is true");
+    }
+    if (d.retained !== undefined) {
+      req(isRowArray(d.retained, ["item", "reason"]),
+        "deletion.retained must be an array of { item, reason }");
+    }
+  }
+  if (errors.length) {
+    die(`privacy.config.json is incomplete:\n  - ${errors.join("\n  - ")}`);
+  }
 }
 
 // ── Read app identity from src/constants.ts ────────────────────────────────
@@ -41,11 +88,15 @@ function readConstants() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+// Escapes text AND attribute contexts (title, meta content, lang). Quotes are escaped
+// too so a value containing " or ' cannot break out of an attribute or inject markup.
 const esc = (s) =>
   String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const mailto = (email, subject) =>
   `<a href="mailto:${esc(email)}${subject ? `?subject=${encodeURIComponent(subject)}` : ""}">${esc(email)}</a>`;
@@ -276,9 +327,17 @@ try {
   die(`privacy.config.json is not valid JSON: ${e.message}`);
 }
 
+validateConfig(cfg);
+
 const C = readConstants();
 for (const [k, v] of Object.entries(C)) {
   if (!v) die(`could not read ${k} from src/constants.ts`);
+}
+
+// APP_COLOR lands unescaped in a <style> block, where HTML entities would not decode.
+// Reject anything that isn't a plain CSS colour token so it can't break out of the CSS.
+if (!/^#?[0-9a-zA-Z(),.%\s-]+$/.test(C.APP_COLOR)) {
+  die(`APP_COLOR ("${C.APP_COLOR}") is not a plain CSS colour — it must not contain quotes, braces, or angle brackets.`);
 }
 
 const slug = C.APP_SLUG;
