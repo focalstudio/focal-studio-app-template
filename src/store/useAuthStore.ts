@@ -55,10 +55,23 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 /*
- * To wire in a real auth provider (Firebase, Supabase, custom):
- * 1. Install the SDK (e.g. `npx expo install firebase`)
+ * To wire in a real auth provider (Supabase, Firebase, custom):
+ * 1. Install the SDK. Read the provider sections of the `expo-services` skill
+ *    first — the React Native specifics are absent from every upstream
+ *    quickstart and each one silently logs users out on cold start:
+ *      - Supabase: needs an explicit `auth.storage` adapter,
+ *        `detectSessionInUrl: false`, and a module-scope AppState listener
+ *        driving startAutoRefresh/stopAutoRefresh.
+ *      - Firebase JS SDK: needs
+ *        `initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })`.
+ *      - React Native Firebase: cannot run in Expo Go (needs expo-dev-client),
+ *        and on this template's SDK 56 / RN 0.85 it additionally requires
+ *        `expo-build-properties` with `useFrameworks: "static"` and
+ *        `forceStaticLinking` naming every RNFB module, or the iOS build fails.
  * 2. Replace setUser/signOut with SDK auth calls
- * 3. Subscribe to auth state changes in app/_layout.tsx
+ * 3. Subscribe to auth state changes from an `init()` action on this store that
+ *    returns its unsubscribe; call it from a useEffect in app/_layout.tsx and
+ *    return that function as the effect cleanup.
  * 4. Implement deleteAccount() — call your provider's delete API BEFORE
  *    clearing local state, and throw if it fails so the UI can surface the
  *    error and keep the user signed in.

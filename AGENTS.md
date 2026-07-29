@@ -157,7 +157,7 @@ The orchestrator reads this, forwards to `devops-agent`, and resumes the coding 
 
 1. **Editing on `main` or `dev` directly.** Always branch first. (Exception: `app-bootstrapper` initialising a brand-new repo.)
 2. **Hardcoding colors, spacing, or font sizes.** Use `useTheme()` and tokens in `src/theme/`.
-3. **Calling `AsyncStorage.getItem/setItem` directly.** Use `src/utils/storage.ts` — there was a null-handling bug (commit `825e87b`) the helpers paper over.
+3. **Calling `AsyncStorage.getItem/setItem` directly.** Use `src/utils/storage.ts` — there was a null-handling bug (commit `825e87b`) the helpers paper over. They are **named exports** (`loadJson`, `saveJson`, `removeItem`, …), not a `storage` object; prefix keys with `STORAGE_PREFIX`.
 4. **Adding a native module config plugin without flagging it.** It invalidates the EAS build cache. Surface this in your report.
 5. **Putting keyboard input inside a modal.** iOS layout shifts. Use pickers/toggles.
 6. **Merging the release PR with `--delete-branch`.** Auto-closes the dev backmerge PR. Use `gh pr merge NNN --merge` only.
