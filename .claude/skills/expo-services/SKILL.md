@@ -81,7 +81,24 @@ Direct `AsyncStorage.getItem(...)` calls are a bug magnet — they return `strin
 | `EXPO_PUBLIC_*` | bundled into the client | API URLs, public anon keys, feature flags |
 | (no prefix) | not bundled — read via `expo-constants` extra | server-only keys, never for the client |
 
-Never commit `.env` files. Document every new var in `README.md` under "Environment variables".
+**Adding a variable is a three-file change. All three are required:**
+
+1. **[env.js](../../../env.js)** — add it to the Zod schema. This runs at build time via `app.config.js`, so a missing or malformed value fails the build instead of surfacing as `undefined` on a user's device. If a provider needs it, add it to that provider's branch in the `superRefine` so it is required only when that backend is selected.
+2. **[.env.example](../../../.env.example)** — document it, commented out if optional.
+3. **[README.md](../../../README.md)** — add a row to the Environment variables table.
+
+**Read it back through [src/env.ts](../../../src/env.ts), never `process.env` directly:**
+
+```ts
+import { env, requireEnv } from "@/env";
+
+env.EXPO_PUBLIC_POSTHOG_KEY             // string | undefined, already validated
+requireEnv("EXPO_PUBLIC_SUPABASE_URL")  // throws rather than yielding undefined
+```
+
+`process.env` bypasses validation entirely, so a typo silently yields `undefined` — exactly what the schema exists to catch.
+
+Never commit `.env` files.
 
 ## Cleanup contracts
 
