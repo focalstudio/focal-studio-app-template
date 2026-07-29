@@ -5,17 +5,22 @@ import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/store/useAuthStore";
+import { authErrorMessage } from "@/services/auth";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME } from "@/constants";
 
 /*
- * Wire in real auth: replace handleLogin with your provider's sign-in call,
- * then call setUser with the returned user object.
+ * This screen is provider-agnostic. It calls the store, the store calls the
+ * AuthProvider port, and `scripts/add-backend.sh` swaps which provider that is.
+ * Wiring a backend should not require editing this file.
  */
 
 export default function LoginScreen() {
   const { colors } = useTheme();
-  // const { setUser } = useAuthStore(); // Uncomment when wiring real auth
+  const signIn = useAuthStore((s) => s.signIn);
+  const signInWithApple = useAuthStore((s) => s.signInWithApple);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,31 +33,29 @@ export default function LoginScreen() {
     };
   }, []);
 
-  async function handleLogin() {
+  // Navigation is handled by the Stack.Protected guards in app/_layout.tsx —
+  // once isAuthenticated flips, the router moves to (tabs) on its own. Calling
+  // router.replace here as well would race those guards.
+  async function runAuth(action: () => Promise<unknown>) {
     setError("");
+    setLoading(true);
+    try {
+      await action();
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      if (err instanceof Error) console.error("[Auth]", err.message);
+      setError(authErrorMessage(err));
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  }
+
+  async function handleLogin() {
     if (!email || !password) {
       setError("Please fill in all fields.");
       return;
     }
-    setLoading(true);
-    try {
-      // Replace this block with your auth provider's sign-in call, e.g.:
-      // const user = await signInWithEmailAndPassword(auth, email, password);
-      // setUser({ id: user.uid, email: user.email! });
-      throw new Error(
-        `[${APP_NAME}] Auth not wired — replace this block with your real auth provider before shipping.`
-      );
-      // if (!isMountedRef.current) return;
-      // setUser({ id: "placeholder", email });
-      // router.replace("/(tabs)");
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      // Log setup errors visibly in dev; always show a generic message to users.
-      if (err instanceof Error) console.error("[Auth]", err.message);
-      setError("Invalid email or password.");
-    } finally {
-      if (isMountedRef.current) setLoading(false);
-    }
+    await runAuth(() => signIn(email, password));
   }
 
   return (
@@ -99,9 +102,23 @@ export default function LoginScreen() {
           <View style={[styles.line, { backgroundColor: colors.border }]} />
         </View>
 
-        {/* Placeholder social auth buttons — wire in Apple/Google Sign-In */}
-        <Button label="Continue with Apple" variant="secondary" onPress={() => {}} />
-        <Button label="Continue with Google" variant="secondary" onPress={() => {}} />
+        {/*
+          These call optional methods on the AuthProvider port. The local
+          scaffold omits them, so both surface "not configured" rather than
+          silently doing nothing — a dead button is indistinguishable from a
+          broken one, and it used to ship that way in every new app.
+          Full Apple + Google wiring lives in the social sign-in recipe.
+        */}
+        <Button
+          label="Continue with Apple"
+          variant="secondary"
+          onPress={() => runAuth(signInWithApple)}
+        />
+        <Button
+          label="Continue with Google"
+          variant="secondary"
+          onPress={() => runAuth(signInWithGoogle)}
+        />
 
         <Pressable onPress={() => router.push("/(auth)/signup")} style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>

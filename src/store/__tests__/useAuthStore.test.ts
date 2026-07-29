@@ -1,77 +1,224 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "../useAuthStore";
 import { STORAGE_PREFIX } from "../../constants";
+import { AuthError, authProvider } from "../../services/auth";
+import type { AuthSession } from "../../services/auth";
 
-const AUTH_KEY = `${STORAGE_PREFIX}auth_user`;
+const SESSION_KEY = `${STORAGE_PREFIX}auth_session`;
+const LEGACY_USER_KEY = `${STORAGE_PREFIX}auth_user`;
+
+const session: AuthSession = {
+  accessToken: "token",
+  refreshToken: "refresh",
+  expiresAt: null,
+  user: { id: "1", email: "a@b.c", name: "Ada" },
+};
 
 const initialState = useAuthStore.getState();
 
 beforeEach(async () => {
   await AsyncStorage.clear();
   useAuthStore.setState(initialState, true);
+  jest.restoreAllMocks();
 });
 
-describe("useAuthStore", () => {
-  it("setUser sets user and isAuthenticated, and persists it", async () => {
-    const user = { id: "1", email: "a@b.c" };
-    useAuthStore.getState().setUser(user);
-    expect(useAuthStore.getState().user).toEqual(user);
-    expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(await AsyncStorage.getItem(AUTH_KEY)).toBe(JSON.stringify(user));
-  });
-
-  it("signOut clears user and removes persisted key", async () => {
-    useAuthStore.getState().setUser({ id: "1", email: "a@b.c" });
-    useAuthStore.getState().signOut();
-    expect(useAuthStore.getState().user).toBeNull();
-    expect(useAuthStore.getState().isAuthenticated).toBe(false);
-    expect(await AsyncStorage.getItem(AUTH_KEY)).toBeNull();
-  });
-
-  it("hydrate with no stored key results in signed-out state and isLoading false", async () => {
+describe("useAuthStore — hydration", () => {
+  it("hydrate with no stored session results in signed-out state and clears isLoading", async () => {
     await useAuthStore.getState().hydrate();
     const state = useAuthStore.getState();
+    expect(state.session).toBeNull();
     expect(state.user).toBeNull();
     expect(state.isAuthenticated).toBe(false);
     expect(state.isLoading).toBe(false);
   });
 
-  it("hydrate restores a valid persisted user", async () => {
-    const user = { id: "1", email: "a@b.c" };
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  it("hydrate restores a valid persisted session", async () => {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
     await useAuthStore.getState().hydrate();
     const state = useAuthStore.getState();
-    expect(state.user).toEqual(user);
+    expect(state.session).toEqual(session);
+    expect(state.user).toEqual(session.user);
     expect(state.isAuthenticated).toBe(true);
     expect(state.isLoading).toBe(false);
   });
 
-  it("deleteAccount clears user, isAuthenticated, and persisted storage", async () => {
-    useAuthStore.getState().setUser({ id: "1", email: "a@b.c" });
-    await useAuthStore.getState().deleteAccount();
+  it("hydrate migrates a legacy bare-user blob and drops the old key", async () => {
+    const legacyUser = { id: "9", email: "legacy@b.c" };
+    await AsyncStorage.setItem(LEGACY_USER_KEY, JSON.stringify(legacyUser));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(useAuthStore.getState().user).toEqual(legacyUser);
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(await AsyncStorage.getItem(LEGACY_USER_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(SESSION_KEY)).not.toBeNull();
+  });
+
+  // A provider that throws at boot (offline, corrupt keychain) must not trap
+  // the user behind the splash screen, which waits on isLoading.
+  it("hydrate clears isLoading even when the provider throws", async () => {
+    jest.spyOn(authProvider, "getSession").mockRejectedValueOnce(new Error("offline"));
+    await useAuthStore.getState().hydrate();
     const state = useAuthStore.getState();
-    expect(state.user).toBeNull();
     expect(state.isAuthenticated).toBe(false);
-    expect(await AsyncStorage.getItem(AUTH_KEY)).toBeNull();
+    expect(state.isLoading).toBe(false);
   });
 
   const malformed: [string, unknown][] = [
     ["empty object", {}],
-    ["non-string id", { id: 1, email: "a@b.c" }],
-    ["missing email", { id: "x" }],
+    ["non-string accessToken", { accessToken: 1, refreshToken: null, expiresAt: null, user: { id: "x", email: "a@b" } }],
+    ["missing user", { accessToken: "t", refreshToken: null, expiresAt: null }],
+    ["user with non-string id", { accessToken: "t", refreshToken: null, expiresAt: null, user: { id: 1, email: "a@b" } }],
+    ["user missing email", { accessToken: "t", refreshToken: null, expiresAt: null, user: { id: "x" } }],
+    ["expiresAt as a string", { accessToken: "t", refreshToken: null, expiresAt: "soon", user: { id: "x", email: "a@b" } }],
     ["a raw string", "a string"],
     ["null", null],
   ];
 
   it.each(malformed)(
-    "hydrate rejects malformed persisted user (%s) and still clears isLoading",
+    "hydrate rejects a malformed persisted session (%s) and still clears isLoading",
     async (_desc, raw) => {
-      await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(raw));
+      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(raw));
       await useAuthStore.getState().hydrate();
       const state = useAuthStore.getState();
-      expect(state.user).toBeNull();
+      expect(state.session).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
     }
   );
+});
+
+describe("useAuthStore — the local scaffold refuses remote calls", () => {
+  // The previous scaffold let signup mint { id: "placeholder" } and granted
+  // full app access, shipping silently in any app that hadn't wired auth.
+  it("signUp throws not_wired instead of granting access", async () => {
+    await expect(
+      useAuthStore.getState().signUp("a@b.c", "password", "Ada")
+    ).rejects.toMatchObject({ code: "not_wired" });
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("signIn throws not_wired", async () => {
+    await expect(
+      useAuthStore.getState().signIn("a@b.c", "password")
+    ).rejects.toMatchObject({ code: "not_wired" });
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("resetPassword throws not_wired", async () => {
+    await expect(
+      useAuthStore.getState().resetPassword("a@b.c")
+    ).rejects.toMatchObject({ code: "not_wired" });
+  });
+
+  // The local provider omits the optional social methods entirely, so the
+  // buttons report "not configured" rather than silently doing nothing.
+  it.each(["signInWithApple", "signInWithGoogle"] as const)(
+    "%s throws not_wired when the provider omits it",
+    async (method) => {
+      await expect(useAuthStore.getState()[method]()).rejects.toMatchObject({
+        code: "not_wired",
+      });
+    }
+  );
+
+  it("resets isSubmitting after a failed action", async () => {
+    await expect(useAuthStore.getState().signIn("a@b.c", "pw")).rejects.toThrow();
+    expect(useAuthStore.getState().isSubmitting).toBe(false);
+  });
+});
+
+describe("useAuthStore — signOut", () => {
+  it("clears session, user, and persisted storage", async () => {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+
+    await useAuthStore.getState().signOut();
+
+    const state = useAuthStore.getState();
+    expect(state.session).toBeNull();
+    expect(state.user).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    expect(await AsyncStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  // Opposite of deleteAccount: a failed remote sign-out must never strand the
+  // user in a signed-in UI they can't leave.
+  it("clears local state even when the provider's signOut throws", async () => {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await useAuthStore.getState().hydrate();
+    jest.spyOn(authProvider, "signOut").mockRejectedValueOnce(new Error("network"));
+
+    await expect(useAuthStore.getState().signOut()).resolves.toBeUndefined();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().isSubmitting).toBe(false);
+  });
+});
+
+describe("useAuthStore — deleteAccount contract", () => {
+  it("clears session and storage on success", async () => {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await useAuthStore.getState().hydrate();
+
+    await useAuthStore.getState().deleteAccount();
+
+    const state = useAuthStore.getState();
+    expect(state.session).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    expect(await AsyncStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  /**
+   * The load-bearing case for Google Play's "Data safety" account-deletion
+   * requirement. Signing a user out while their account still exists is
+   * indistinguishable from a successful deletion, so a failed remote delete
+   * must propagate AND leave the user signed in.
+   */
+  it("rethrows and keeps the user signed in when the remote delete fails", async () => {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await useAuthStore.getState().hydrate();
+    jest
+      .spyOn(authProvider, "deleteAccount")
+      .mockRejectedValueOnce(new AuthError("network", "backend unreachable"));
+
+    await expect(useAuthStore.getState().deleteAccount()).rejects.toMatchObject({
+      code: "network",
+    });
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.user).toEqual(session.user);
+    expect(state.isSubmitting).toBe(false);
+  });
+});
+
+describe("useAuthStore — init", () => {
+  it("returns an unsubscribe function", () => {
+    const unsubscribe = useAuthStore.getState().init();
+    expect(typeof unsubscribe).toBe("function");
+    expect(() => unsubscribe()).not.toThrow();
+  });
+
+  it("applies sessions pushed by the provider out of band", () => {
+    let emit: ((s: AuthSession | null) => void) | undefined;
+    jest.spyOn(authProvider, "subscribe").mockImplementation((onChange) => {
+      emit = onChange;
+      return () => {};
+    });
+
+    const unsubscribe = useAuthStore.getState().init();
+
+    emit?.(session);
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().user).toEqual(session.user);
+
+    // e.g. an expiry or a sign-out performed on another device
+    emit?.(null);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().session).toBeNull();
+
+    unsubscribe();
+  });
 });
