@@ -35,6 +35,7 @@ Press `i` for iOS Simulator, `a` for Android.
 | Navigation | Expo Router 5 (file-based) |
 | State | Zustand 5 |
 | Storage | AsyncStorage |
+| Backend | None by default — `bash scripts/add-backend.sh <supabase\|firebase>` |
 | Build | EAS Build + EAS Submit |
 | Testing | Jest + React Native Testing Library |
 | Analytics | PostHog RN SDK (EU-hosted, optional) |
@@ -128,6 +129,33 @@ scripts/
 | `npm run preview:ios` | EAS preview build (iOS) |
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
+| `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
+
+---
+
+## Backend
+
+The template ships with **no backend** and no backend dependency. Auth sits behind a
+provider port (`src/services/auth/`), and the shipped `local` provider persists a session
+across launches so the UI is navigable — every call needing a server throws `not_wired`.
+
+Wire one in with a single command:
+
+```bash
+bash scripts/add-backend.sh supabase   # or: firebase
+```
+
+It installs the packages, drops the adapter into `src/services/auth/`, activates it, makes
+the provider's env vars required, and prints the remaining manual steps.
+
+| Provider | Guide | Notes |
+|---|---|---|
+| Supabase | [docs/backends/supabase.md](docs/backends/supabase.md) | Recommended default. Ships a `schema.sql` with RLS policies, a signup trigger, and the `delete_own_account()` function account deletion depends on. |
+| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin. Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
+
+**Writing your own?** Implement the `AuthProvider` port in
+[`src/services/auth/types.ts`](src/services/auth/types.ts) and change one export line.
+Don't edit `useAuthStore` or the `(auth)` screens — they're provider-agnostic.
 
 ---
 

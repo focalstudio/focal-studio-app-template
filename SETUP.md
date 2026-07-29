@@ -183,20 +183,29 @@ Copy the templates from `obsidian-templates/` into the vault folder. Ask Claude 
 
 ## Phase 6 — Wire auth and paywall (ongoing)
 
-Auth:
-- Pick your backend: [Supabase](https://supabase.com), [Firebase](https://firebase.google.com), or a custom API.
-- Install the SDK and replace the placeholder `handleLogin` / `handleSignup` calls in `app/(auth)/`.
-- See `src/store/useAuthStore.ts` for the integration comment, and the **Auth providers**
-  section of the `expo-services` skill for the React Native specifics.
+Auth — one command:
 
-> **Do not follow an upstream quickstart verbatim.** Every one of them omits the RN-only
-> setup, and each omission fails the same way — the user is silently signed out on every
-> cold start, which you will not notice in a simulator session:
-> - **Supabase** needs an explicit `auth.storage` adapter, `detectSessionInUrl: false`,
->   and an `AppState` listener registered once at module scope.
-> - **Firebase JS SDK** needs `initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })`.
-> - **React Native Firebase** cannot run in Expo Go, and on this template's SDK 56 / RN 0.85
->   it needs `expo-build-properties` with `forceStaticLinking` or the iOS build fails.
+```bash
+bash scripts/add-backend.sh supabase   # or: firebase
+```
+
+This installs the packages, drops the provider adapter into `src/services/auth/`, activates
+it, makes its env vars required, and prints the remaining manual steps (project creation,
+credentials, SQL). Then follow the matching guide:
+
+- [docs/backends/supabase.md](docs/backends/supabase.md) — recommended default
+- [docs/backends/firebase.md](docs/backends/firebase.md) — JS SDK path; read the
+  "Pick a path first" table before running, since migrating to React Native Firebase later
+  means a config plugin and a dev client
+
+You should **not** need to edit `app/(auth)/` or `src/store/useAuthStore.ts` — they're
+provider-agnostic. If you're writing your own backend, implement the `AuthProvider` port in
+`src/services/auth/types.ts` instead.
+
+> **Don't follow an upstream quickstart verbatim.** Every one omits the React Native
+> specifics, and each omission fails the same silent way — the user is signed out on every
+> cold start, which you won't notice in a simulator session. The shipped adapters already
+> handle these; the guides above explain each one.
 
 Before shipping, run the **Data safety checklist** in `.claude/CLAUDE.md` — in particular,
 verify `deleteAccount()` genuinely deletes the remote account and throws when it cannot.

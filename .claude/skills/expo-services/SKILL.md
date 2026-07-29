@@ -144,7 +144,15 @@ src/services/auth/
   index.ts     ← `export const authProvider = localAuthProvider` — the ONE line to swap
 ```
 
-To add a backend, **write an adapter that implements `AuthProvider` and change that one line**. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
+**Supabase and Firebase are already written.** Do not hand-roll either one:
+
+```bash
+bash scripts/add-backend.sh supabase   # or: firebase
+```
+
+That installs the packages, copies the adapter from `templates/backends/<provider>/`, activates it, makes its env vars required in `env.js`, and prints the manual steps. Full guides: [docs/backends/supabase.md](../../../docs/backends/supabase.md), [docs/backends/firebase.md](../../../docs/backends/firebase.md).
+
+For any **other** backend, write an adapter implementing `AuthProvider` and change that one line. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
 
 Three contracts the port enforces, all load-bearing:
 
