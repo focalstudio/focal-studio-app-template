@@ -20,6 +20,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
   privacy page **per app**, never a shared policy.
 
+- **TanStack Query data layer.** `QueryClientProvider` in `app/_layout.tsx`, a shared client
+  in `src/lib/queryClient.ts`, and an `AppState` bridge into React Query's `focusManager` —
+  without it `refetchOnWindowFocus` silently does nothing on native, since there is no
+  browser window to focus. Mutations default to `retry: 0` because retrying a non-idempotent
+  POST can double-charge. **The cache is cleared on sign-out and account deletion**;
+  otherwise the previous user's data is served to whoever signs in next on the same device,
+  which renders before any refetch resolves and is a data leak on a shared device. It is
+  deliberately *not* cleared when a delete fails — the user is still signed in and still
+  looking at their data. Both backend guides show the matching query-hook pattern.
 - **One-command backend setup.** `bash scripts/add-backend.sh <supabase|firebase>` installs
   the provider's packages, copies its `AuthProvider` adapter into `src/services/auth/`,
   activates it, promotes its env vars to required in `env.js`, uncomments them in

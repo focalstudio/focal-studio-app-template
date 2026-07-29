@@ -110,6 +110,46 @@ Step 3 is the one people skip. `deleteAccount()` throwing on failure is the cont
 
 ---
 
+## Fetching data
+
+The template wires a `QueryClientProvider` in `app/_layout.tsx`. Keep Supabase calls in
+hooks under `src/hooks/`, not in screens:
+
+```ts
+// src/hooks/useProfile.ts
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/services/auth/supabase";
+import { useAuthStore } from "@/store/useAuthStore";
+
+export function useProfile() {
+  const userId = useAuthStore((s) => s.user?.id);
+
+  return useQuery({
+    // Scope the key by user id. Two accounts on one device must never share
+    // a cache entry, even before the sign-out clear runs.
+    queryKey: ["profile", userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+```
+
+The cache is cleared on sign-out and account deletion (`clearQueryCache()` in
+`useAuthStore`), so the previous user's rows can't be served to the next one.
+
+**Watch for the offline false positive.** If `getSession()` fails while offline, the client
+falls back to the publishable key, `auth.uid()` becomes NULL, RLS denies the row, and you
+get a **406 that looks like a broken policy** but is a network problem. Don't "fix" your
+RLS in response to it.
+
 ## Adding tables
 
 Follow the pattern in `schema.sql`: reference `auth.users(id) on delete cascade`, enable RLS, write policies with `(select auth.uid())` and `to authenticated`, and index the policy column. The cascade is what keeps account deletion working as your schema grows — without it you'll be deleting rows by hand in the RPC.

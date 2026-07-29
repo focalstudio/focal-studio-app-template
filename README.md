@@ -35,6 +35,7 @@ Press `i` for iOS Simulator, `a` for Android.
 | Navigation | Expo Router 5 (file-based) |
 | State | Zustand 5 |
 | Storage | AsyncStorage |
+| Data fetching | TanStack Query 5 |
 | Backend | None by default — `bash scripts/add-backend.sh <supabase\|firebase>` |
 | Build | EAS Build + EAS Submit |
 | Testing | Jest + React Native Testing Library |

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { User } from "../types";
 import { authProvider, AuthError } from "../services/auth";
 import type { AuthSession } from "../services/auth";
+import { clearQueryCache } from "../lib/queryClient";
 
 type AuthState = {
   session: AuthSession | null;
@@ -130,6 +131,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Intentionally swallowed; local state is cleared regardless.
     } finally {
+      // Must happen on every path, including the failed one. Cached data
+      // belonging to the outgoing user would otherwise be served to whoever
+      // signs in next on this device.
+      clearQueryCache();
       set({ ...signedOut, isSubmitting: false });
     }
   },
@@ -153,8 +158,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   deleteAccount: async () => {
     set({ isSubmitting: true });
     try {
-      // Throws on failure, so the `set` below never runs — that is the point.
+      // Throws on failure, so nothing below runs — that is the point. The
+      // cache must NOT be cleared on the failure path: the user is still
+      // signed in and still looking at their data.
       await authProvider.deleteAccount();
+      clearQueryCache();
       set(signedOut);
     } finally {
       set({ isSubmitting: false });

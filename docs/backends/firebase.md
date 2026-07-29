@@ -140,6 +140,40 @@ Two known traps: `eas build --local` reads secret-backed vars as `undefined`, an
 
 ---
 
+## Fetching data
+
+The template wires a `QueryClientProvider` in `app/_layout.tsx`. Keep Firestore calls in
+hooks under `src/hooks/`, not in screens:
+
+```ts
+// src/hooks/useProfile.ts
+import { useQuery } from "@tanstack/react-query";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+
+export function useProfile() {
+  const userId = useAuthStore((s) => s.user?.id);
+
+  return useQuery({
+    // Scope the key by uid. Two accounts on one device must never share a
+    // cache entry, even before the sign-out clear runs.
+    queryKey: ["profile", userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const snap = await getDoc(doc(getFirestore(), "profiles", userId!));
+      if (!snap.exists()) throw new Error("Profile not found");
+      return snap.data();
+    },
+  });
+}
+```
+
+The cache is cleared on sign-out and account deletion (`clearQueryCache()` in
+`useAuthStore`), so the previous user's data can't be served to the next one.
+
+For realtime (`onSnapshot`), prefer a `useEffect` subscription writing into
+`queryClient.setQueryData` over a polling `useQuery` — and remember the unsubscribe.
+
 ## Gotchas
 
 - **Crashlytics doesn't report native crashes under `expo-dev-client`** — the custom error overlay swallows them. Only release builds validate it.
