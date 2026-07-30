@@ -90,6 +90,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
   user-facing string, so provider-internal database and JWT text never reaches the UI.
 
 ### Fixed
+- 🔴 **The test suite went red the moment you wired a backend.** Running
+  `scripts/add-backend.sh supabase` left a generated app with two failing suites, so the
+  first thing anyone saw after connecting a backend was a broken build they hadn't caused.
+  `useAuthStore.test.ts` couldn't even load — the barrel now pulls in the Supabase adapter,
+  whose `expo-sqlite` import has no native module under Jest — and its assertions were
+  written against the local scaffold, so they'd have been false anyway once a real provider
+  was active. `env-schema.test.ts` hardcoded the template's `BACKEND = "none"` default.
+
+  Split by what each file actually tests: `useAuthStore.test.ts` now mocks the auth barrel
+  and covers store logic against a fake provider, and the scaffold's own behaviour moved to
+  `src/services/auth/__tests__/local.test.ts`, which imports `local.ts` directly and so
+  stays valid whatever backend is wired. The env tests assert the *rule* — that selecting a
+  backend promotes its variables from optional to required — against whichever backend is
+  actually selected, which also means the Firebase branch is covered for the first time.
+  A generated Supabase app now runs the full suite green.
+
 - 🔴 **Signup granted full app access without a backend.** `app/(auth)/signup.tsx` called
   `setUser({ id: "placeholder", … })` and navigated into the app, so any app built from the
   template that hadn't wired auth yet shipped a working-looking signup that authenticated
