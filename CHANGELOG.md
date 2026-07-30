@@ -20,7 +20,36 @@ Versioning: [Semantic Versioning](https://semver.org/)
   (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
   privacy page **per app**, never a shared policy.
 
+### Fixed
+- **`expo-services` skill documented a storage API that does not exist.** It told agents to
+  write `storage.setJSON(...)` / `storage.getJSON(...)`, but `src/utils/storage.ts` exports
+  named functions (`loadJson`, `saveJson`, `removeItem`, …) and no `storage` object — any
+  agent following the skill produced code that failed `tsc` on the first line. Corrected, and
+  the `STORAGE_PREFIX` key convention documented alongside it.
+- **Contradictory guidance on where an SDK auth listener belongs.** The skill said the store's
+  `init()`, `useAuthStore.ts` said `app/_layout.tsx`, and neither `init()` nor a listener
+  existed. Settled on one rule — `init()` on the store returns its unsubscribe, `_layout.tsx`
+  owns the lifecycle — and applied it everywhere.
+- **`backend-integrator` requested `@supabase/ssr`** in its canonical `PACKAGES_NEEDED`
+  example. That is a Next.js server package with no use in React Native. Replaced with the
+  real RN package set, plus an explicit rule against server-side packages.
+- The skill's store contract referenced `init()` / `reset()` actions that no store in the
+  repo has. Rewritten to match the actual `hydrate()` / `signOut()` shape.
+
 ### Changed
+- **Backend integration guidance now covers what actually breaks in React Native.** The
+  Supabase section grew from three bullets to the full set of RN-specific requirements
+  (session storage adapter and why not SecureStore, `detectSessionInUrl: false`, the
+  module-scope `AppState` refresh listener, URL polyfill, RLS policy performance, and the
+  `signOut()`-after-delete failure). Added a **Firebase section**, which did not exist:
+  RN Firebase vs JS SDK trade-offs, `getReactNativePersistence`, the `forceStaticLinking`
+  requirement on this template's SDK 56 / RN 0.85, and how to get `google-services.json`
+  to EAS without committing it. `SETUP.md` Phase 6 and the `useAuthStore` wiring comment
+  now carry the same warnings.
+- Documented `EXPO_PUBLIC_SUPABASE_*` and `EXPO_PUBLIC_FIREBASE_*` in `.env.example` and
+  the README. They previously appeared only inside a `devops-agent` example block.
+- Allowlisted `firebase.google.com` and `rnfirebase.io` for `WebFetch`; only `supabase.com`
+  was reachable before.
 - 
 
 ### Fixed

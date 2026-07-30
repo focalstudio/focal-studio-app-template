@@ -20,10 +20,11 @@ For AI-API integrations only, also load `claude-api` (caching, model selection).
 
 1. **Service code goes in `src/services/`.** Create the dir if missing. One file per provider (e.g. `src/services/supabase.ts`, `src/services/revenuecat.ts`).
 2. **Stores consume services, components consume stores.** Do not call SDKs directly from screens. Add or extend a Zustand store in [src/store/](../../src/store/).
-3. **Persistence via the storage helpers** in [src/utils/storage.ts](../../src/utils/storage.ts). Do not call AsyncStorage directly elsewhere — the helpers handle JSON, defaults, and the null-safety bug fixed in commit 825e87b.
-4. **No secrets in code.** Use Expo env vars (`EXPO_PUBLIC_*` for client-readable, server-only for the rest). Document any new env var in `README.md`.
+3. **Persistence via the storage helpers** in [src/utils/storage.ts](../../src/utils/storage.ts). They are **named exports** — `loadJson` / `saveJson` / `loadString` / `saveString` / `loadNumber` / `saveNumber` / `removeItem` — not a `storage` object. Prefix every key with `STORAGE_PREFIX` from `src/constants.ts`. Do not call AsyncStorage directly elsewhere; the helpers handle JSON, defaults, and the null-safety bug fixed in commit 825e87b.
+4. **No secrets in code.** Use Expo env vars (`EXPO_PUBLIC_*` for client-readable, server-only for the rest). Document any new env var in `README.md` **and** `.env.example`.
 5. **No native module additions without explicit instruction.** Adding a config plugin invalidates the EAS build cache — surface this risk in your report.
-6. **Cleanup guarantees.** Every subscription, timer, or notification handler must have a paired teardown in `useEffect` cleanup or store `reset()`.
+6. **Cleanup guarantees.** Every subscription, timer, or notification handler must have a paired teardown: `useEffect` cleanup in a component, or a store `init()` that returns its own unsubscribe.
+7. **Auth session persistence is where RN integrations fail.** Before wiring Supabase or Firebase, read the provider sections in the `expo-services` skill — the RN-specific requirements (session storage adapter, `detectSessionInUrl: false`, the module-scope `AppState` refresh listener, `getReactNativePersistence`) are absent from every upstream quickstart and each one silently logs users out on cold start.
 
 ## Dependency Gate protocol
 
@@ -45,11 +46,15 @@ If a new unexpected package need surfaces mid-run:
 PACKAGES_NEEDED:
   - package: @supabase/supabase-js
     reason: Supabase JS client for auth and database access
-  - package: @supabase/ssr
-    reason: Server-side rendering helpers for Supabase session management
+  - package: expo-sqlite
+    reason: Backs the auth session store (localStorage shim); avoids SecureStore's 2048-byte cap
+  - package: react-native-url-polyfill
+    reason: React Native has no native URL; supabase-js throws on Hermes without it
 
 STATUS: awaiting_approval
 ```
+
+> This is a React Native app. Never request server-side packages — `@supabase/ssr`, `next-auth`, `firebase-admin` and similar have no use here and will be rejected.
 
 ## Workflow
 

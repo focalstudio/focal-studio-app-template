@@ -143,6 +143,18 @@ cp .env.example .env.local
 |----------|----------|---------|
 | `EXPO_PUBLIC_POSTHOG_KEY` | No | PostHog analytics (disabled if empty) |
 | `EXPO_PUBLIC_POSTHOG_HOST` | No | PostHog host (defaults to EU) |
+| `EXPO_PUBLIC_SUPABASE_URL` | Only if using Supabase | Project URL from the Supabase dashboard |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only if using Supabase | Publishable key (`sb_publishable_…`; older docs call it the anon key) |
+| `EXPO_PUBLIC_FIREBASE_*` | Only if using the Firebase JS SDK | API key, auth domain, project ID, app ID — see `.env.example` |
+
+The template ships with **no backend wired** — auth is local-only until you add one. The
+backend variables above are commented out in `.env.example`; uncomment the block for the
+provider your app uses.
+
+> The React Native Firebase path does not use `EXPO_PUBLIC_FIREBASE_*`. It reads
+> `google-services.json` / `GoogleService-Info.plist`, which are gitignored. EAS only
+> uploads git-tracked files, so supply them as **file-type EAS environment variables**
+> rather than committing them.
 
 Add `EXPO_TOKEN` to your GitHub repo secrets to enable EAS preview builds in CI.
 
