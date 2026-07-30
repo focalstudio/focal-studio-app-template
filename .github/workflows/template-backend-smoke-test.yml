@@ -1,0 +1,163 @@
+---
+name: Template Backend Scripts Smoke Test
+
+# scripts/add-backend.sh and scripts/add-social-auth.sh are the second and third
+# things every downstream app runs, and nothing tests them. Neither script needs
+# real credentials to be exercised structurally: env.js's zod schema is
+# format-only (z.url(), no network), so placeholder values satisfy it.
+#
+# The trap: add-backend.sh rewrites BACKEND in env.js. From that point on,
+# env.js THROWS until matching EXPO_PUBLIC_* vars exist — and app.config.js
+# requires env.js, so every subsequent Expo-touching step (expo install inside
+# add-social-auth.sh, expo-doctor, tsc) needs it too. add-social-auth.sh's own
+# placeholder fallback is scoped to a single `expo install` subshell and does
+# not persist to later steps, so each job below sets its own job-level env:
+# block with placeholder credentials.
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "scripts/add-backend.sh"
+      - "scripts/add-social-auth.sh"
+      - "templates/backends/**"
+      - "templates/social/**"
+      - "env.js"
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  supabase:
+    name: Wire Supabase Backend
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run add-backend.sh supabase
+        run: bash scripts/add-backend.sh supabase
+
+      - name: Assert structural changes
+        run: |
+          set -e
+          [ -f "src/services/auth/supabase.ts" ] || { echo "::error::src/services/auth/supabase.ts was not created"; exit 1; }
+          grep -q "supabaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with supabaseAuthProvider"; exit 1; }
+          grep -q 'const BACKEND = "supabase";' env.js || { echo "::error::env.js BACKEND was not set to supabase"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_SUPABASE_URL=" .env.example || { echo "::error::.env.example Supabase URL line was not uncommented"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=" .env.example || { echo "::error::.env.example Supabase key line was not uncommented"; exit 1; }
+          echo "Supabase backend wired correctly."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+  supabase-plus-social:
+    name: Wire Supabase Backend + Sign in with Apple
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # add-social-auth.sh takes no arguments, is Supabase-only, and exits if
+      # src/services/auth/supabase.ts is absent — so it must run after
+      # add-backend.sh supabase, in the same job.
+      - name: Run add-backend.sh supabase
+        run: bash scripts/add-backend.sh supabase
+
+      - name: Run add-social-auth.sh
+        run: bash scripts/add-social-auth.sh
+
+      - name: Assert structural changes
+        run: |
+          set -e
+          [ -f "src/services/auth/supabase.ts" ] || { echo "::error::src/services/auth/supabase.ts was not created"; exit 1; }
+          [ -f "src/services/auth/social.ts" ] || { echo "::error::src/services/auth/social.ts was not created"; exit 1; }
+          grep -q "supabaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with supabaseAuthProvider"; exit 1; }
+          grep -q "socialAuth" src/services/auth/index.ts || { echo "::error::index.ts was not composed with socialAuth"; exit 1; }
+          grep -q 'const BACKEND = "supabase";' env.js || { echo "::error::env.js BACKEND was not set to supabase"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_SUPABASE_URL=" .env.example || { echo "::error::.env.example Supabase URL line was not uncommented"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=" .env.example || { echo "::error::.env.example Supabase key line was not uncommented"; exit 1; }
+          echo "Supabase backend + Sign in with Apple wired correctly."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+  firebase:
+    name: Wire Firebase Backend
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_FIREBASE_API_KEY: placeholder-key
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: placeholder-project
+      EXPO_PUBLIC_FIREBASE_APP_ID: 1:000000000000:web:placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run add-backend.sh firebase
+        run: bash scripts/add-backend.sh firebase
+
+      - name: Assert structural changes
+        run: |
+          set -e
+          [ -f "src/services/auth/firebase.ts" ] || { echo "::error::src/services/auth/firebase.ts was not created"; exit 1; }
+          grep -q "firebaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with firebaseAuthProvider"; exit 1; }
+          grep -q 'const BACKEND = "firebase";' env.js || { echo "::error::env.js BACKEND was not set to firebase"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_FIREBASE_API_KEY=" .env.example || { echo "::error::.env.example Firebase API key line was not uncommented"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_FIREBASE_PROJECT_ID=" .env.example || { echo "::error::.env.example Firebase project ID line was not uncommented"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_FIREBASE_APP_ID=" .env.example || { echo "::error::.env.example Firebase app ID line was not uncommented"; exit 1; }
+          echo "Firebase backend wired correctly."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
