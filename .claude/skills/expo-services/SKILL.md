@@ -117,7 +117,25 @@ Adding any package with a config plugin (e.g. `expo-notifications`, `react-nativ
 
 ### Auth providers (Supabase / Firebase)
 
-**Read this before writing any auth code.** Keep the provider behind a single service module that `useAuthStore` consumes — screens must never import an SDK. Swapping backends should touch one file, not every `(auth)` screen.
+**Read this before writing any auth code.** Auth is not wired by hand in this template. It goes behind the `AuthProvider` port in [src/services/auth/types.ts](../../../src/services/auth/types.ts):
+
+```
+src/services/auth/
+  types.ts     ← the AuthProvider port + AuthSession + AuthError. Read this first.
+  local.ts     ← the no-backend scaffold. Throws `not_wired` for every remote call.
+  messages.ts  ← AuthError code → user-facing string
+  index.ts     ← `export const authProvider = localAuthProvider` — the ONE line to swap
+```
+
+To add a backend, **write an adapter that implements `AuthProvider` and change that one line**. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
+
+Three contracts the port enforces, all load-bearing:
+
+1. **Throw `AuthError` with a `code`**, never a raw provider error. Supabase and Firebase both surface internal database and JWT text; `messages.ts` maps codes to safe strings.
+2. **`deleteAccount()` must throw on remote failure** and must not clear local state. Signing a user out while their account still exists is indistinguishable from a successful deletion — the exact failure Google Play's "Data safety" requirement targets. `signOut()` is the deliberate opposite: it clears locally even if the remote call fails, so a network error can't strand someone in a signed-in UI.
+3. **`subscribe()` returns its own unsubscribe.** `useAuthStore.init()` wires it up; `app/_layout.tsx` owns the lifecycle.
+
+Social sign-in (`signInWithApple` / `signInWithGoogle`) is **optional** on the port. A provider that omits them makes the UI say "not configured" instead of rendering a dead button.
 
 The notes below are the parts that actually break in React Native. Generic SDK quickstarts omit most of them.
 

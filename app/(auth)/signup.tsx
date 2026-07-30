@@ -1,22 +1,30 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/store/useAuthStore";
+import { authErrorMessage } from "@/services/auth";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 
 export default function SignupScreen() {
   const { colors } = useTheme();
-  const { setUser } = useAuthStore();
+  const signUp = useAuthStore((s) => s.signUp);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   async function handleSignup() {
     setError("");
@@ -30,13 +38,27 @@ export default function SignupScreen() {
     }
     setLoading(true);
     try {
-      // TODO: replace with real auth call
-      setUser({ id: "placeholder", email, name });
-      router.replace("/(tabs)");
-    } catch {
-      setError("Could not create account. Please try again.");
+      const signedIn = await signUp(email, password, name);
+      if (!isMountedRef.current) return;
+      if (!signedIn) {
+        // Provider requires email confirmation — there is no session yet, so
+        // the Stack.Protected guards will keep us in (auth). Say so explicitly
+        // instead of leaving the user on a form that looks like it failed.
+        Alert.alert(
+          "Check your email",
+          "We sent you a confirmation link. Open it to finish creating your account, then sign in."
+        );
+        router.replace("/(auth)/login");
+        return;
+      }
+      // Signed in — the Stack.Protected guard in app/_layout.tsx routes to
+      // (tabs) on its own. No router call here, or it races the guard.
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      if (err instanceof Error) console.error("[Auth]", err.message);
+      setError(authErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }
 

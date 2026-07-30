@@ -1,27 +1,42 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/store/useAuthStore";
+import { authErrorMessage } from "@/services/auth";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 
 export default function ForgotPasswordScreen() {
   const { colors } = useTheme();
+  const resetPassword = useAuthStore((s) => s.resetPassword);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   async function handleReset() {
     if (!email) return;
+    setError("");
     setLoading(true);
     try {
-      // TODO: replace with real password reset call
-      // e.g. await sendPasswordResetEmail(auth, email);
-      setSent(true);
+      await resetPassword(email);
+      if (isMountedRef.current) setSent(true);
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      if (err instanceof Error) console.error("[Auth]", err.message);
+      setError(authErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }
 
@@ -48,6 +63,7 @@ export default function ForgotPasswordScreen() {
             keyboardType="email-address"
             textContentType="emailAddress"
             placeholder="you@example.com"
+            error={error}
           />
         )}
 

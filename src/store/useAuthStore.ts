@@ -1,89 +1,163 @@
 import { create } from "zustand";
 import type { User } from "../types";
-import { STORAGE_PREFIX } from "../constants";
-import { loadJson, saveJson, removeItem } from "../utils/storage";
-
-const AUTH_KEY = `${STORAGE_PREFIX}auth_user`;
+import { authProvider, AuthError } from "../services/auth";
+import type { AuthSession } from "../services/auth";
 
 type AuthState = {
+  session: AuthSession | null;
   user: User | null;
   isAuthenticated: boolean;
+  /** Boot-time hydration flag. Gates the splash screen — NOT per-action loading. */
   isLoading: boolean;
-  setUser: (user: User) => void;
-  signOut: () => void;
-  deleteAccount: () => Promise<void>;
+  /** True while a user-initiated auth action is in flight. Drives button spinners. */
+  isSubmitting: boolean;
+
   hydrate: () => Promise<void>;
+  init: () => () => void;
+
+  signIn: (email: string, password: string) => Promise<void>;
+  /** Resolves false when the provider requires email confirmation first. */
+  signUp: (email: string, password: string, name?: string) => Promise<boolean>;
+  signInWithApple: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
+const signedOut = { session: null, user: null, isAuthenticated: false } as const;
+
+function applySession(session: AuthSession | null) {
+  return session === null
+    ? signedOut
+    : { session, user: session.user, isAuthenticated: true };
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  isAuthenticated: false,
+  ...signedOut,
   isLoading: true,
+  isSubmitting: false,
 
-  setUser: (user) => {
-    set({ user, isAuthenticated: true });
-    saveJson(AUTH_KEY, user);
-  },
-
-  signOut: () => {
-    set({ user: null, isAuthenticated: false });
-    removeItem(AUTH_KEY);
-  },
-
-  // Permanently deletes the account. This template has no backend, so the
-  // scaffold only clears local state — see step 4 of the wiring notes below.
-  //
-  // Contract for implementers: if the remote delete fails, THROW. Do not fall
-  // through to clearing local state. Signing a user out while their account
-  // still exists looks like deletion succeeded and is exactly the failure the
-  // Play "Data safety" account-deletion requirement exists to prevent.
-  deleteAccount: async () => {
-    // 1. Delete the remote account here (throws on failure).
-    // 2. Only then clear local state:
-    set({ user: null, isAuthenticated: false });
-    await removeItem(AUTH_KEY);
-  },
-
+  /**
+   * Restores a persisted session once at boot. `app/_layout.tsx` holds the
+   * splash screen until this settles.
+   */
   hydrate: async () => {
-    const raw = await loadJson<unknown>(AUTH_KEY, null);
-    const isValidUser = (v: unknown): v is User =>
-      typeof v === "object" && v !== null && "id" in v && "email" in v &&
-      typeof (v as User).id === "string" && typeof (v as User).email === "string";
-    const user = isValidUser(raw) ? raw : null;
-    set({ user, isAuthenticated: user !== null, isLoading: false });
+    try {
+      const session = await authProvider.getSession();
+      set({ ...applySession(session), isLoading: false });
+    } catch {
+      // A provider that cannot reach the network must not trap the user on the
+      // splash screen. Fall back to signed-out; the listener will correct us.
+      set({ ...signedOut, isLoading: false });
+    }
+  },
+
+  /**
+   * Opens the provider's session subscription and returns its unsubscribe.
+   * Call from a `useEffect` in `app/_layout.tsx` and return this as cleanup —
+   * see the "Cleanup contracts" section of the `expo-services` skill.
+   *
+   * This catches changes the store never initiated: a background token
+   * refresh, an expiry, or a sign-out performed on another device.
+   */
+  init: () => authProvider.subscribe((session) => set(applySession(session))),
+
+  signIn: async (email, password) => {
+    set({ isSubmitting: true });
+    try {
+      const session = await authProvider.signIn(email, password);
+      set(applySession(session));
+    } finally {
+      set({ isSubmitting: false });
+    }
+  },
+
+  signUp: async (email, password, name) => {
+    set({ isSubmitting: true });
+    try {
+      const session = await authProvider.signUp(email, password, name);
+      if (session === null) return false; // confirmation email sent
+      set(applySession(session));
+      return true;
+    } finally {
+      set({ isSubmitting: false });
+    }
+  },
+
+  signInWithApple: async () => {
+    if (!authProvider.signInWithApple) {
+      throw new AuthError("not_wired", "Apple sign-in is not configured for this app.");
+    }
+    set({ isSubmitting: true });
+    try {
+      set(applySession(await authProvider.signInWithApple()));
+    } finally {
+      set({ isSubmitting: false });
+    }
+  },
+
+  signInWithGoogle: async () => {
+    if (!authProvider.signInWithGoogle) {
+      throw new AuthError("not_wired", "Google sign-in is not configured for this app.");
+    }
+    set({ isSubmitting: true });
+    try {
+      set(applySession(await authProvider.signInWithGoogle()));
+    } finally {
+      set({ isSubmitting: false });
+    }
+  },
+
+  resetPassword: async (email) => {
+    set({ isSubmitting: true });
+    try {
+      await authProvider.resetPassword(email);
+    } finally {
+      set({ isSubmitting: false });
+    }
+  },
+
+  /**
+   * Clears local state even if the provider's remote sign-out fails. A failed
+   * sign-out must never strand the user in a signed-in UI — the opposite of
+   * the deleteAccount contract below, and deliberately so.
+   */
+  signOut: async () => {
+    set({ isSubmitting: true });
+    try {
+      await authProvider.signOut();
+    } catch {
+      // Intentionally swallowed; local state is cleared regardless.
+    } finally {
+      set({ ...signedOut, isSubmitting: false });
+    }
+  },
+
+  /**
+   * Permanently deletes the account.
+   *
+   * Contract: if the remote delete fails, this THROWS and local state is left
+   * untouched, so the UI can surface the error and keep the user signed in.
+   * Signing someone out while their account still exists looks identical to a
+   * successful deletion — exactly the failure Google Play's "Data safety"
+   * account-deletion requirement exists to prevent.
+   *
+   * `app/(tabs)/settings.tsx` already depends on this: it catches, alerts
+   * "Couldn't Delete Account", and does not navigate away.
+   *
+   * Implementers: also purge app data cached under STORAGE_PREFIX and cancel
+   * scheduled notifications. Deleting the account server-side does not clear
+   * the device, and an orphaned reminder will fire for a deleted account.
+   */
+  deleteAccount: async () => {
+    set({ isSubmitting: true });
+    try {
+      // Throws on failure, so the `set` below never runs — that is the point.
+      await authProvider.deleteAccount();
+      set(signedOut);
+    } finally {
+      set({ isSubmitting: false });
+    }
   },
 }));
-
-/*
- * To wire in a real auth provider (Supabase, Firebase, custom):
- * 1. Install the SDK. Read the provider sections of the `expo-services` skill
- *    first — the React Native specifics are absent from every upstream
- *    quickstart and each one silently logs users out on cold start:
- *      - Supabase: needs an explicit `auth.storage` adapter,
- *        `detectSessionInUrl: false`, and a module-scope AppState listener
- *        driving startAutoRefresh/stopAutoRefresh.
- *      - Firebase JS SDK: needs
- *        `initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })`.
- *      - React Native Firebase: cannot run in Expo Go (needs expo-dev-client),
- *        and on this template's SDK 56 / RN 0.85 it additionally requires
- *        `expo-build-properties` with `useFrameworks: "static"` and
- *        `forceStaticLinking` naming every RNFB module, or the iOS build fails.
- * 2. Replace setUser/signOut with SDK auth calls
- * 3. Subscribe to auth state changes from an `init()` action on this store that
- *    returns its unsubscribe; call it from a useEffect in app/_layout.tsx and
- *    return that function as the effect cleanup.
- * 4. Implement deleteAccount() — call your provider's delete API BEFORE
- *    clearing local state, and throw if it fails so the UI can surface the
- *    error and keep the user signed in.
- *
- *    Supabase: the client SDK cannot call auth.admin.deleteUser, so expose a
- *    SECURITY DEFINER function that deletes the caller's own row and let the
- *    schema's ON DELETE CASCADE constraints clean up the rest:
- *
- *      const { error } = await supabase.rpc("delete_own_account");
- *      if (error) throw error;
- *      await supabase.auth.signOut();
- *
- *    Also purge any app data cached under STORAGE_PREFIX and cancel scheduled
- *    notifications — deleting the account server-side does not clear the device.
- */

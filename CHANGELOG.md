@@ -20,7 +20,35 @@ Versioning: [Semantic Versioning](https://semver.org/)
   (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
   privacy page **per app**, never a shared policy.
 
+- **Provider-agnostic auth port** (`src/services/auth/`). `AuthProvider` defines what any
+  backend must supply — `getSession`, `signIn`, `signUp`, `signOut`, `resetPassword`,
+  `deleteAccount`, `subscribe`, plus optional `signInWithApple` / `signInWithGoogle`.
+  Adding Supabase or Firebase means writing one adapter and changing one export line;
+  `useAuthStore` and every `(auth)` screen stay untouched. The template still installs no
+  backend dependency — the shipped `local` provider persists a session across launches and
+  throws `not_wired` for anything needing a server.
+- `useAuthStore` now carries a real session model (`accessToken` / `refreshToken` /
+  `expiresAt` / `user`) instead of a bare `{id, email, name}` blob, and owns `signIn`,
+  `signUp`, `resetPassword`, and the social entry points that previously lived as TODOs
+  inside screens. A persisted session from the old scaffold is migrated on first launch.
+- `useAuthStore.init()` subscribes to out-of-band session changes — background token
+  refresh, expiry, or a sign-out on another device — and returns its unsubscribe, which
+  `app/_layout.tsx` uses as effect cleanup.
+- `AuthError` carries a typed `code`, and `authErrorMessage()` maps it to a safe
+  user-facing string, so provider-internal database and JWT text never reaches the UI.
+
 ### Fixed
+- 🔴 **Signup granted full app access without a backend.** `app/(auth)/signup.tsx` called
+  `setUser({ id: "placeholder", … })` and navigated into the app, so any app built from the
+  template that hadn't wired auth yet shipped a working-looking signup that authenticated
+  nobody. Signup now goes through the provider and fails loudly until a backend is added.
+- 🔴 **`(tabs)` had no auth guard.** Gating was a one-shot `<Redirect>` in `app/index.tsx`,
+  so nothing reacted to auth going false mid-session, and screens navigated by hand after
+  sign-out. Replaced with `Stack.Protected` guards in `app/_layout.tsx`, which also purge
+  history — a back-swipe can no longer return to a signed-in screen after signing out.
+- **Dead social sign-in buttons.** "Continue with Apple" and "Continue with Google" were
+  wired to `onPress={() => {}}` and shipped in every new app. They now report that the
+  provider isn't configured instead of silently doing nothing.
 - **`expo-services` skill documented a storage API that does not exist.** It told agents to
   write `storage.setJSON(...)` / `storage.getJSON(...)`, but `src/utils/storage.ts` exports
   named functions (`loadJson`, `saveJson`, `removeItem`, …) and no `storage` object — any
