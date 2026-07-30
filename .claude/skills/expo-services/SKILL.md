@@ -154,6 +154,8 @@ That installs the packages, copies the adapter from `templates/backends/<provide
 
 For any **other** backend, write an adapter implementing `AuthProvider` and change that one line. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
 
+**Sign in with Apple** is opt-in on top of a wired backend: `bash scripts/add-social-auth.sh` (Supabase only for now). It composes `socialAuth` onto the provider by spread rather than editing the adapter, so adapter methods must never rely on `this`. It adds a native module — the app stops running in Expo Go and the EAS build cache is invalidated, so surface that, never add it silently.
+
 Three contracts the port enforces, all load-bearing:
 
 1. **Throw `AuthError` with a `code`**, never a raw provider error. Supabase and Firebase both surface internal database and JWT text; `messages.ts` maps codes to safe strings.

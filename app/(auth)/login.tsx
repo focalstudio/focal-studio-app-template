@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } fro
 import { router } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
+import { SocialSignInButton } from "@/components/ui/SocialSignInButton";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -16,6 +17,9 @@ import { APP_NAME } from "@/constants";
  * Wiring a backend should not require editing this file.
  */
 
+/** Which control triggered the in-flight request, so only it spins. */
+type Source = "password" | "apple" | "google";
+
 export default function LoginScreen() {
   const { colors } = useTheme();
   const signIn = useAuthStore((s) => s.signIn);
@@ -23,8 +27,14 @@ export default function LoginScreen() {
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  // Which control is mid-flight. A single shared flag would spin all three
+  // buttons at once, which reads as the whole screen being stuck.
+  const [pending, setPending] = useState<Source | null>(null);
+  // Two error slots, because they render in different places. Routing a failed
+  // Apple sign-in into the password field's error prop blames an input the
+  // user never touched.
+  const [formError, setFormError] = useState("");
+  const [socialError, setSocialError] = useState("");
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -36,26 +46,29 @@ export default function LoginScreen() {
   // Navigation is handled by the Stack.Protected guards in app/_layout.tsx —
   // once isAuthenticated flips, the router moves to (tabs) on its own. Calling
   // router.replace here as well would race those guards.
-  async function runAuth(action: () => Promise<unknown>) {
-    setError("");
-    setLoading(true);
+  async function runAuth(action: () => Promise<unknown>, source: Source) {
+    setFormError("");
+    setSocialError("");
+    setPending(source);
     try {
       await action();
     } catch (err) {
       if (!isMountedRef.current) return;
       if (err instanceof Error) console.error("[Auth]", err.message);
-      setError(authErrorMessage(err));
+      const message = authErrorMessage(err);
+      if (source === "password") setFormError(message);
+      else setSocialError(message);
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isMountedRef.current) setPending(null);
     }
   }
 
   async function handleLogin() {
     if (!email || !password) {
-      setError("Please fill in all fields.");
+      setFormError("Please fill in all fields.");
       return;
     }
-    await runAuth(() => signIn(email, password));
+    await runAuth(() => signIn(email, password), "password");
   }
 
   return (
@@ -87,14 +100,19 @@ export default function LoginScreen() {
             secureTextEntry
             textContentType="password"
             placeholder="••••••••"
-            error={error}
+            error={formError}
           />
           <Pressable onPress={() => router.push("/(auth)/forgot-password")}>
             <Text style={[styles.link, { color: colors.accent }]}>Forgot password?</Text>
           </Pressable>
         </View>
 
-        <Button label="Sign In" onPress={handleLogin} loading={loading} />
+        <Button
+          label="Sign In"
+          onPress={handleLogin}
+          loading={pending === "password"}
+          disabled={pending !== null}
+        />
 
         <View style={styles.dividerRow}>
           <View style={[styles.line, { backgroundColor: colors.border }]} />
@@ -103,22 +121,33 @@ export default function LoginScreen() {
         </View>
 
         {/*
-          These call optional methods on the AuthProvider port. The local
-          scaffold omits them, so both surface "not configured" rather than
-          silently doing nothing — a dead button is indistinguishable from a
-          broken one, and it used to ship that way in every new app.
-          Full Apple + Google wiring lives in the social sign-in recipe.
+          These call optional methods on the AuthProvider port. Until
+          `bash scripts/add-social-auth.sh` composes an implementation on, they
+          surface "not configured" rather than silently doing nothing — a dead
+          button is indistinguishable from a broken one, and it used to ship
+          that way in every new app.
+
+          Apple is iOS-only: the recipe uses the native sheet, so on Android the
+          button could only ever fail, which is the dead-button problem again.
         */}
-        <Button
-          label="Continue with Apple"
-          variant="secondary"
-          onPress={() => runAuth(signInWithApple)}
+        {Platform.OS === "ios" && (
+          <SocialSignInButton
+            provider="apple"
+            onPress={() => runAuth(signInWithApple, "apple")}
+            loading={pending === "apple"}
+            disabled={pending !== null}
+          />
+        )}
+        <SocialSignInButton
+          provider="google"
+          onPress={() => runAuth(signInWithGoogle, "google")}
+          loading={pending === "google"}
+          disabled={pending !== null}
         />
-        <Button
-          label="Continue with Google"
-          variant="secondary"
-          onPress={() => runAuth(signInWithGoogle)}
-        />
+
+        {socialError !== "" && (
+          <Text style={[styles.socialError, { color: colors.danger }]}>{socialError}</Text>
+        )}
 
         <Pressable onPress={() => router.push("/(auth)/signup")} style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
@@ -143,6 +172,7 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   line: { flex: 1, height: 1 },
   or: { fontSize: FontSize.sm },
+  socialError: { fontSize: FontSize.sm, textAlign: "center" },
   footer: { alignItems: "center" },
   footerText: { fontSize: FontSize.md },
 });

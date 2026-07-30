@@ -60,7 +60,8 @@ AppState.addEventListener("change", (state) => {
   }
 });
 
-function toAuthSession(session: Session | null): AuthSession | null {
+/** Exported so `social.ts` maps sessions identically. See add-social-auth.sh. */
+export function toAuthSession(session: Session | null): AuthSession | null {
   if (!session) return null;
   return {
     accessToken: session.access_token,
@@ -81,8 +82,11 @@ function toAuthSession(session: Session | null): AuthSession | null {
  *
  * Never surface `error.message` directly — Supabase returns internal Postgres
  * and GoTrue text that leaks schema detail and reads as gibberish to a user.
+ *
+ * Exported so `social.ts` reuses this table rather than growing a second copy
+ * that drifts the first time a case is added here.
  */
-function toAuthError(error: SupabaseAuthError | Error): AuthError {
+export function toAuthError(error: SupabaseAuthError | Error): AuthError {
   const code = (error as SupabaseAuthError).code;
   const status = (error as SupabaseAuthError).status;
 
@@ -179,8 +183,10 @@ export const supabaseAuthProvider: AuthProvider = {
     return () => data.subscription.unsubscribe();
   },
 
-  // Social sign-in is intentionally not implemented here. Apple + Google need
-  // native modules and per-provider dashboard configuration; see the social
-  // sign-in recipe issue. Omitting them makes the UI report "not configured"
-  // rather than rendering a dead button.
+  // Social sign-in is intentionally not implemented here. It needs native
+  // modules and dashboard configuration that not every app wants, so it is
+  // opt-in: `bash scripts/add-social-auth.sh` installs the packages and
+  // composes the methods onto this provider in src/services/auth/index.ts.
+  // Until then, omitting them makes the UI report "not configured" rather
+  // than rendering a dead button.
 };

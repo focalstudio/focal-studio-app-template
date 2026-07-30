@@ -24,6 +24,8 @@ export type AuthErrorCode =
   | "email_not_confirmed"
   /** Provider needs a fresh login before it will delete the account. */
   | "requires_recent_login"
+  /** User backed out of a native sheet or OAuth browser. Not a failure. */
+  | "cancelled"
   | "network"
   | "unknown";
 
@@ -54,6 +56,11 @@ export class AuthError extends Error {
  *   identical to a successful deletion, and is exactly what Google Play's
  *   "Data safety" account-deletion requirement exists to prevent.
  * - `subscribe()` must return its own unsubscribe function.
+ * - Throw `AuthError("cancelled")` when the user dismisses a native sheet or an
+ *   OAuth browser. The store swallows it, so nothing is shown for a tap the
+ *   user deliberately took back.
+ * - Methods must not depend on `this`. Social sign-in is composed onto the
+ *   active provider by object spread, which would not carry a bound receiver.
  */
 export type AuthProvider = {
   /** Identifies the active backend in logs and dev tooling. */
@@ -86,7 +93,10 @@ export type AuthProvider = {
   /**
    * Optional social sign-in. A provider that omits these signals "not
    * configured", and the UI surfaces that rather than doing nothing.
-   * See the social sign-in recipe issue for the full Apple + Google wiring.
+   *
+   * These are not implemented by the adapters themselves — run
+   * `bash scripts/add-social-auth.sh` after wiring a backend and they are
+   * composed on. See docs/backends/<provider>.md.
    */
   signInWithApple?(): Promise<AuthSession>;
   signInWithGoogle?(): Promise<AuthSession>;
