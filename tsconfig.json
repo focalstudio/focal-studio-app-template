@@ -12,5 +12,9 @@
     "**/*.tsx",
     ".expo/types/**/*.d.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "templates/backends"
   ]
 }

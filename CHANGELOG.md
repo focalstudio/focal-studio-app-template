@@ -20,6 +20,24 @@ Versioning: [Semantic Versioning](https://semver.org/)
   (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
   privacy page **per app**, never a shared policy.
 
+- **One-command backend setup.** `bash scripts/add-backend.sh <supabase|firebase>` installs
+  the provider's packages, copies its `AuthProvider` adapter into `src/services/auth/`,
+  activates it, promotes its env vars to required in `env.js`, uncomments them in
+  `.env.example`, and prints the manual steps it can't do safely. It refuses to clobber an
+  existing adapter or wire two providers at once without `--force`, and it never edits
+  `app.json` — a config plugin is always surfaced, never silent.
+  - **Supabase** ships a `schema.sql` with a `profiles` table, RLS policies written the fast
+    way (`(select auth.uid())` + `to authenticated` + an index), a signup trigger, and the
+    `delete_own_account()` SECURITY DEFINER function that account deletion depends on.
+  - **Firebase** installs the JS SDK path: no config plugin, no native modules, runs in
+    Expo Go, EAS cache untouched. The guide covers migrating to React Native Firebase when
+    Analytics/Crashlytics/FCM are needed, including the `forceStaticLinking` requirement
+    that is mandatory on this template's SDK 56 / RN 0.85.
+  - Adapter sources live in `templates/backends/`, excluded from `tsconfig` and ESLint
+    since they import SDKs the template deliberately does not install.
+- **Backend guides** at `docs/backends/supabase.md` and `docs/backends/firebase.md` —
+  setup, the React Native specifics every upstream quickstart omits, account-deletion
+  verification, and known gotchas.
 - **Build-time environment validation.** `env.js` defines a Zod schema that `app.config.js`
   runs on every `expo start`, `expo prebuild`, and EAS build, so a missing or malformed
   variable fails the build with a readable message naming every offender — instead of
