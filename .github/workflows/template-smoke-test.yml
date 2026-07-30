@@ -1,0 +1,91 @@
+name: Template Smoke Test
+
+# scripts/init.sh is the first thing every downstream app runs, and its own verification
+# block (init.sh:240-256) never exits non-zero on leftover [APP_*] placeholders. This
+# workflow runs init.sh with fixed dummy values on its own ephemeral checkout and asserts
+# the substitution actually happened, independent of init.sh's exit code.
+
+on:
+  release:
+    types: [published]
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "scripts/init.sh"
+      - "IDEA.md"
+      - "app.json"
+      - "package.json"
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  smoke-test:
+    name: Bootstrap & Verify Template
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Must run before init.sh: init.sh rewrites package.json's name, which desyncs it
+      # from package-lock.json's root packages[""] entry and can break a later npm ci.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run init.sh with dummy values
+        run: |
+          bash scripts/init.sh \
+            --name "Smoke Test App" \
+            --slug "smoke-test-app" \
+            --id "com.focalstudio.smoketestapp" \
+            --color "#007AFF" \
+            --color-dark "#0A84FF" \
+            --tagline "A smoke-test tagline" \
+            --repo "focalstudio/smoke-test-app" \
+            --no-git --no-github
+
+      - name: Assert no placeholders remain
+        run: |
+          # scripts/init.sh, SETUP.md, .claude/agents/app-bootstrapper.md, and the
+          # store-listing/*-listing.md files document the placeholder mechanism itself
+          # (e.g. init.sh's own idempotency-guard grep, SETUP.md's usage examples) and
+          # will always contain literal [APP_*] text by design — excluded from this check.
+          REMAINING=$(grep -rE "\[APP_" . --include="*.ts" --include="*.tsx" \
+            --include="*.json" --include="*.md" --include="*.sh" 2>/dev/null \
+            | grep -v node_modules | grep -v "\.git/" | grep -v package-lock.json \
+            | grep -v "scripts/init\.sh:" | grep -v "SETUP\.md:" \
+            | grep -v "\.claude/agents/app-bootstrapper\.md:" \
+            | grep -v "store-listing/.*-listing\.md:" || true)
+          if [ -n "$REMAINING" ]; then
+            echo "::error::Leftover [APP_*] placeholders after init.sh:"
+            echo "$REMAINING"
+            exit 1
+          fi
+          echo "No [APP_*] placeholders remaining."
+
+      - name: Assert app.json / package.json match injected values
+        run: |
+          set -e
+          [ "$(node -p "require('./app.json').expo.name")" = "Smoke Test App" ] || { echo "::error::app.json expo.name mismatch"; exit 1; }
+          [ "$(node -p "require('./app.json').expo.slug")" = "smoke-test-app" ] || { echo "::error::app.json expo.slug mismatch"; exit 1; }
+          [ "$(node -p "require('./package.json').name")" = "smoke-test-app" ] || { echo "::error::package.json name mismatch"; exit 1; }
+          echo "app.json / package.json match injected dummy values."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --passWithNoTests=false
