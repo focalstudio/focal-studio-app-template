@@ -3,6 +3,7 @@ import { useAuthStore } from "../useAuthStore";
 import { STORAGE_PREFIX } from "../../constants";
 import { AuthError, authProvider } from "../../services/auth";
 import type { AuthSession } from "../../services/auth";
+import { queryClient } from "../../lib/queryClient";
 
 const SESSION_KEY = `${STORAGE_PREFIX}auth_session`;
 const LEGACY_USER_KEY = `${STORAGE_PREFIX}auth_user`;
@@ -191,6 +192,63 @@ describe("useAuthStore — deleteAccount contract", () => {
     expect(state.isAuthenticated).toBe(true);
     expect(state.user).toEqual(session.user);
     expect(state.isSubmitting).toBe(false);
+  });
+});
+
+/**
+ * Leaving the outgoing user's data in the React Query cache means it is served
+ * to whoever signs in next on the same device — it renders before any refetch
+ * resolves. On a shared device that is a data leak, and it is a commonly
+ * shipped bug.
+ */
+describe("useAuthStore — query cache is scoped to the session", () => {
+  const seedCache = () =>
+    queryClient.setQueryData(["private", "data"], { secret: "previous user" });
+
+  beforeEach(() => {
+    queryClient.clear();
+  });
+
+  // The last test in this block deliberately leaves data cached. Each cached
+  // query schedules a garbage-collection timer (gcTime defaults to 5 minutes),
+  // and a live timer keeps Jest's event loop open — the suite passes but the
+  // process never exits. Clearing destroys the queries and their timers.
+  afterAll(() => {
+    queryClient.clear();
+  });
+
+  it("signOut clears the cache", async () => {
+    seedCache();
+    await useAuthStore.getState().signOut();
+    expect(queryClient.getQueryData(["private", "data"])).toBeUndefined();
+  });
+
+  it("signOut clears the cache even when the provider throws", async () => {
+    seedCache();
+    jest.spyOn(authProvider, "signOut").mockRejectedValueOnce(new Error("network"));
+    await useAuthStore.getState().signOut();
+    expect(queryClient.getQueryData(["private", "data"])).toBeUndefined();
+  });
+
+  it("deleteAccount clears the cache on success", async () => {
+    seedCache();
+    await useAuthStore.getState().deleteAccount();
+    expect(queryClient.getQueryData(["private", "data"])).toBeUndefined();
+  });
+
+  // The user is still signed in and still looking at their data, so wiping it
+  // here would blank the UI behind the "Couldn't Delete Account" alert.
+  it("deleteAccount leaves the cache intact when the remote delete fails", async () => {
+    seedCache();
+    jest
+      .spyOn(authProvider, "deleteAccount")
+      .mockRejectedValueOnce(new AuthError("network", "backend unreachable"));
+
+    await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow();
+
+    expect(queryClient.getQueryData(["private", "data"])).toEqual({
+      secret: "previous user",
+    });
   });
 });
 

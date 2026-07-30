@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient, initQueryFocusBridge } from "@/lib/queryClient";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
@@ -32,12 +34,16 @@ export default function RootLayout() {
   // becomes this effect's cleanup — see "Cleanup contracts" in expo-services.
   useEffect(() => useAuthStore.getState().init(), []);
 
+  // Feeds app-state changes to React Query, which otherwise waits on browser
+  // window focus events that never fire on native.
+  useEffect(() => initQueryFocusBridge(), []);
+
   // Guards must stay false until hydration settles, or the very first render
   // would route a signed-in user to login before their session is restored.
   const booted = !authLoading && !onboardingLoading;
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
@@ -55,6 +61,6 @@ export default function RootLayout() {
           <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
         </Stack.Protected>
       </Stack>
-    </>
+    </QueryClientProvider>
   );
 }
