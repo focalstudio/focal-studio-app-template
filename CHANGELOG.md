@@ -18,6 +18,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `expo-doctor` against the bootstrapped result. Triggers on `release: published`, PRs
   touching `scripts/init.sh` / `IDEA.md` / `app.json` / `package.json`, and manual
   dispatch.
+- **CI smoke test for `scripts/add-backend.sh` and `scripts/add-social-auth.sh`.** New
+  `template-backend-smoke-test.yml` workflow runs three independent jobs on fresh
+  checkouts — Supabase, Supabase + Sign in with Apple, and Firebase — and asserts the
+  adapter file, `src/services/auth/index.ts` activation, `env.js`'s `BACKEND` constant,
+  and the uncommented `.env.example` lines all landed correctly, then runs `expo-doctor`,
+  `tsc`, and lint against the wired-up tree. Each job sets its own job-level placeholder
+  `env:` block, since `add-backend.sh` rewrites `BACKEND` in `env.js` and every
+  subsequent Expo-touching step needs matching vars or `env.js` throws. Triggers on PRs
+  touching the backend/social scripts or templates, and manual dispatch.
 
 ### Changed
 - 
