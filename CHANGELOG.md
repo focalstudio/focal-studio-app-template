@@ -10,7 +10,14 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
-- 
+- **CI smoke test for `scripts/init.sh`.** New `template-smoke-test.yml` workflow runs
+  `init.sh` with fixed dummy flags on its own ephemeral checkout, then asserts no
+  `[APP_*]` placeholders remain and that `app.json` / `package.json` match the injected
+  values — `init.sh`'s own verification block never exits non-zero, so this catches a
+  broken substitution that it would silently miss. Runs `tsc`, lint, tests, and
+  `expo-doctor` against the bootstrapped result. Triggers on `release: published`, PRs
+  touching `scripts/init.sh` / `IDEA.md` / `app.json` / `package.json`, and manual
+  dispatch.
 
 ### Changed
 - 
