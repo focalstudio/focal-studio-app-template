@@ -21,6 +21,7 @@
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase, toAuthSession, toAuthError } from "./supabase";
+import { appleNameToPersist } from "./appleName";
 import { AuthError } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
 
@@ -96,21 +97,17 @@ export const socialAuth: Required<Pick<AuthProvider, "signInWithApple">> = {
 /**
  * Persists the name Apple gives us, once.
  *
- * Apple returns `fullName` only on the *first ever* authorization for this
- * Apple ID and app pair. Every later sign-in returns nulls — reinstalling does
- * not reset it; the user has to revoke the app under Settings -> Apple ID ->
- * Sign in with Apple. If we don't write it now it is gone for good, and the
- * account is stuck showing an email address where its name should be.
+ * The decision of *what* to write lives in `appleNameToPersist` — a pure
+ * function with real test coverage, because Apple sends the name only on the
+ * first authorization ever and a bug here cannot be recovered per user. All
+ * that is left here is the write itself.
  */
 async function captureAppleName(
   session: AuthSession,
   credential: AppleAuthentication.AppleAuthenticationCredential
 ): Promise<AuthSession> {
-  const name = [credential.fullName?.givenName, credential.fullName?.familyName]
-    .filter(Boolean)
-    .join(" ");
-
-  if (!name || session.user.name) return session;
+  const name = appleNameToPersist(credential.fullName, session.user.name);
+  if (name === null) return session;
 
   try {
     await supabase.auth.updateUser({ data: { name } });
