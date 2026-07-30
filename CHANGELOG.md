@@ -10,6 +10,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- 
+
+### Changed
+- 
+
+### Fixed
+- 
+
+### Removed
+- 
+
+---
+
+## [0.8.0] — 2026-07-30
+
+### Added
 - **Sign in with Apple (Supabase).** `bash scripts/add-social-auth.sh` — run after
   `add-backend.sh` — installs `expo-apple-authentication`, drops `social.ts` beside the
   adapter, and composes it onto the port (`{ ...supabaseAuthProvider, ...socialAuth }`), so
@@ -131,6 +147,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
   real RN package set, plus an explicit rule against server-side packages.
 - The skill's store contract referenced `init()` / `reset()` actions that no store in the
   repo has. Rewritten to match the actual `hydrate()` / `signOut()` shape.
+- `app/(tabs)/settings.tsx`: guard the account-deletion error path against state updates
+  after unmount. `performDelete()` now tracks mount state with an `isMountedRef` and skips
+  the `Alert` + `setIsDeleting(false)` if the screen unmounted mid-request — matching the
+  existing pattern in `app/(auth)/login.tsx`.
 
 ### Changed
 - **Backend integration guidance now covers what actually breaks in React Native.** The
@@ -156,12 +176,6 @@ Versioning: [Semantic Versioning](https://semver.org/)
   button is iOS-only — the recipe uses the native sheet, so elsewhere it could only fail.
 - `toAuthSession` / `toAuthError` are now exported from the Supabase adapter template so the
   social module reuses that error-mapping table instead of growing a copy that drifts.
-
-### Fixed
-- `app/(tabs)/settings.tsx`: guard the account-deletion error path against state updates after unmount. `performDelete()` now tracks mount state with an `isMountedRef` and skips the `Alert` + `setIsDeleting(false)` if the screen unmounted mid-request — matching the existing pattern in `app/(auth)/login.tsx`.
-
-### Removed
-- 
 
 ---
 
