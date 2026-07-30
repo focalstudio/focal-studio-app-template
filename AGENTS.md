@@ -72,6 +72,7 @@ focal-studio-app-template/
 | Change theming | `src/theme/` (then use `useTheme()` everywhere) |
 | Persist data | `src/utils/storage.ts` helpers — never `AsyncStorage.*` directly |
 | Wire an auth backend | **`bash scripts/add-backend.sh <supabase\|firebase>`** — do not hand-roll it. For any other backend, implement the `AuthProvider` port in `src/services/auth/types.ts` and swap the one export in `src/services/auth/index.ts`. **Never edit `useAuthStore` or the `(auth)` screens** — they are provider-agnostic |
+| Add Sign in with Apple | **`bash scripts/add-social-auth.sh`** after the backend (Supabase only for now). It composes `socialAuth` onto the provider — still no store or screen edits. Adds native code: breaks Expo Go and invalidates the EAS cache, so say so |
 | Wire account deletion | The adapter's `deleteAccount()` — it **must throw on remote failure** and leave local state intact; `useAuthStore` and `settings.tsx` already depend on that |
 | Change the privacy policy | `store-listing/privacy-policy-template.html`, then republish the app's page in the `focalstudio.github.io` repo |
 | Cut a release | invoke `release-manager` subagent — do not do this by hand |

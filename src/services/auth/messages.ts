@@ -23,6 +23,11 @@ export function authErrorMessage(err: unknown): string {
         return "Please confirm your email address, then sign in.";
       case "requires_recent_login":
         return "For your security, please sign in again before continuing.";
+      // The store swallows this before any screen sees it. The case exists so a
+      // custom screen that renders the error itself can't show "Something went
+      // wrong" for a sheet the user deliberately dismissed.
+      case "cancelled":
+        return "Sign-in was cancelled.";
       case "network":
         return "No connection. Check your network and try again.";
       case "unknown":

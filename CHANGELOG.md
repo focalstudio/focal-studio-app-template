@@ -10,6 +10,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Sign in with Apple (Supabase).** `bash scripts/add-social-auth.sh` — run after
+  `add-backend.sh` — installs `expo-apple-authentication`, drops `social.ts` beside the
+  adapter, and composes it onto the port (`{ ...supabaseAuthProvider, ...socialAuth }`), so
+  the ~190-line adapter is never rewritten by a script. Uses the native sheet and
+  `signInWithIdToken`; no browser, no redirect URI. The module captures the user's name on
+  the first authorization, which is the only time Apple ever sends it. The script prints the
+  `app.json` plugin and `usesAppleSignIn` steps and never edits it. **Adding this means the
+  app no longer runs in Expo Go and the EAS build cache is invalidated** — both surfaced, not
+  silent. Mandatory under App Store guideline 4.8 once any other third-party login is offered.
+  Google is tracked separately; Firebase's Apple path is still to come.
+
+- Branded `SocialSignInButton` for Apple and Google, drawn with the already-present
+  `react-native-svg` — no new dependency. Provider appearance rules are binding and get
+  checked at review, so it follows Apple's HIG and Google's Identity guidelines rather than
+  the app's design tokens. The Google variant ships styled but still reports "not configured"
+  until Google sign-in lands.
+
 - Per-app privacy-policy generator. `scripts/gen-privacy-policy.mjs` renders a complete,
   standalone-styled `privacy-<app-slug>.html` from `store-listing/privacy.config.json` +
   `src/constants.ts`, failing on unfilled placeholders, a missing `#delete` anchor, or a
@@ -113,7 +130,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
   the README. They previously appeared only inside a `devops-agent` example block.
 - Allowlisted `firebase.google.com` and `rnfirebase.io` for `WebFetch`; only `supabase.com`
   was reachable before.
-- 
+- `AuthErrorCode` gains **`cancelled`**, and the store swallows it — dismissing the Apple
+  sheet or an OAuth browser now shows nothing instead of a red error for a tap the user
+  deliberately took back. **Breaking** for hand-written adapters that exhaustively switch on
+  `AuthErrorCode`. The port also now requires that adapter methods not depend on `this`,
+  since social sign-in is composed on by object spread.
+- The login screen routes social failures to their own slot instead of the password field's
+  error prop, and spins only the button that was pressed rather than all three. Apple's
+  button is iOS-only — the recipe uses the native sheet, so elsewhere it could only fail.
+- `toAuthSession` / `toAuthError` are now exported from the Supabase adapter template so the
+  social module reuses that error-mapping table instead of growing a copy that drifts.
 
 ### Fixed
 - `app/(tabs)/settings.tsx`: guard the account-deletion error path against state updates after unmount. `performDelete()` now tracks mount state with an `isMountedRef` and skips the `Alert` + `setIsDeleting(false)` if the screen unmounted mid-request — matching the existing pattern in `app/(auth)/login.tsx`.

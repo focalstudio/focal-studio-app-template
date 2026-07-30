@@ -49,6 +49,48 @@ select relname, relrowsecurity from pg_class where relname = 'profiles';
 
 Auth → Providers → Email. With "Confirm email" on (the default), `signUp()` returns a user but **no session**. The adapter returns `null` for that case and the signup screen tells the user to check their inbox — that path is already handled, but test it, because it's the difference between "signup worked" and "signup looks broken".
 
+## 5. Sign in with Apple (optional)
+
+**App Store guideline 4.8** makes Sign in with Apple mandatory the moment your app offers any other third-party login. Adding Google later without this is a rejection.
+
+```bash
+bash scripts/add-social-auth.sh
+```
+
+That installs `expo-apple-authentication`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
+
+```ts
+export const authProvider: AuthProvider = { ...supabaseAuthProvider, ...socialAuth };
+```
+
+It does **not** touch the adapter or `app.json`. The rest is manual:
+
+> [!warning]
+> This adds a native module with a config plugin. **The app no longer runs in Expo Go** — build a dev client (`npx expo run:ios`). It also invalidates the EAS build cache, so your next build is a cold one.
+
+**1. `app.json`** — add the plugin and the entitlement:
+
+```json
+"plugins": ["expo-router", "expo-system-ui", "expo-apple-authentication"],
+"ios": { "usesAppleSignIn": true }
+```
+
+Without `usesAppleSignIn` the build fails **App Store validation at upload time**, not at runtime — so you find out at the worst possible moment.
+
+**2. Apple Developer** → Certificates, Identifiers & Profiles → Identifiers → your App ID → enable **Sign In with Apple**.
+
+That is all the native iOS flow needs. A Services ID, a Key, and a Return URL are only for the web/Android flow, which this recipe doesn't ship. The entitlement change invalidates your provisioning profile — let EAS regenerate it, or re-sync in Xcode.
+
+**3. Supabase** → Authentication → Providers → Apple → enable, then put your **iOS bundle identifier** in the *Client IDs* field.
+
+This is the step everyone misses. Without it `signInWithIdToken` fails with `Unacceptable audience in id_token` and nothing points at the cause.
+
+### What the module does for you
+
+Apple hands back the user's name **only on the very first authorization**, ever, for that Apple ID and app pair — every later sign-in returns nulls, and reinstalling doesn't reset it. The module writes it to `user_metadata` immediately via `updateUser`, because there is no second chance.
+
+One consequence to know about: `handle_new_user()` in `schema.sql` populates `profiles.name` from the metadata present **at signup**, which for an Apple user is empty at that instant. If you display `profiles.name` rather than the session's user metadata, upsert it after an Apple sign-in.
+
 ---
 
 ## What the adapter does that quickstarts skip
@@ -104,8 +146,10 @@ Step 3 is the one people skip. `deleteAccount()` throwing on failure is the cont
 ## Gotchas
 
 - **Offline `getSession()` returns `null`** even with a valid persisted session. The client then falls back to the publishable key, `auth.uid()` becomes NULL, RLS denies, and you get a **406 that looks like an RLS bug** but is a network problem. Tracked as a separate issue.
-- **`makeRedirectUri()` resolves differently** in Expo Go (`exp://`), a dev client, and a standalone build. Always test OAuth on a real build.
-- **PKCE on React Native**: Supabase's deep-linking guide shows the *implicit* flow (reading `access_token` from the URL). If you set `flowType: 'pkce'`, the callback carries `?code=` and you must call `exchangeCodeForSession(code)` — single-use, 5-minute TTL, same device. The docs don't cover this; see the social sign-in issue.
+- **Apple returns the user's name once, ever.** `fullName` and a real `email` arrive only on the *first* authorization for that Apple ID and app pair. Reinstalling the app does not reset it — to test that path again you must revoke the app under Settings → Apple ID → Sign in with Apple. Capture the name on first sign-in or it is gone for good.
+- **Apple's private relay.** Users can hide behind `@privaterelay.appleid.com`. If you send them mail, configure the relay domain and sender in Apple's console, or it silently bounces.
+- **`makeRedirectUri()` resolves differently** in Expo Go (`exp://`), a dev client, and a standalone build. Always test OAuth on a real build. Applies to Google sign-in, which is tracked as a separate issue.
+- **PKCE on React Native**: Supabase's deep-linking guide shows the *implicit* flow (reading `access_token` from the URL). If you set `flowType: 'pkce'`, the callback carries `?code=` and you must call `exchangeCodeForSession(code)` — single-use, 5-minute TTL, same device. The docs don't cover this; see the Google sign-in issue. (Sign in with Apple is unaffected — it uses a native sheet and an identity token, with no browser round-trip.)
 - **Typed database**: run `supabase gen types typescript --linked > src/types/database.types.ts` and use `createClient<Database>(...)`. Tracked as a separate issue.
 
 ---

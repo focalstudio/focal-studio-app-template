@@ -131,6 +131,7 @@ scripts/
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
 | `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
+| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase app (adds native code) |
 
 ---
 
@@ -148,6 +149,11 @@ bash scripts/add-backend.sh supabase   # or: firebase
 
 It installs the packages, drops the adapter into `src/services/auth/`, activates it, makes
 the provider's env vars required, and prints the remaining manual steps.
+
+Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple** —
+mandatory under App Store guideline 4.8 as soon as you offer any other third-party login.
+Note that it adds a native module, so the app stops running in Expo Go and needs a dev
+client. Supabase only for now; Google is tracked separately.
 
 | Provider | Guide | Notes |
 |---|---|---|

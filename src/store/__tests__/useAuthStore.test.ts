@@ -129,6 +129,74 @@ describe("useAuthStore — the local scaffold refuses remote calls", () => {
   });
 });
 
+describe("useAuthStore — social sign-in", () => {
+  type SocialMethod = "signInWithApple" | "signInWithGoogle";
+  const methods: SocialMethod[] = ["signInWithApple", "signInWithGoogle"];
+
+  /**
+   * The local provider *omits* these methods, so jest.spyOn has nothing to
+   * attach to — it throws. `scripts/add-social-auth.sh` composes them on at
+   * install time, so simulating that means assigning the property outright.
+   * Always restore, or the "throws not_wired when omitted" tests above start
+   * failing depending on execution order.
+   */
+  function withSocialMethod(method: SocialMethod, impl: () => Promise<AuthSession>) {
+    const target = authProvider as Record<string, unknown>;
+    target[method] = impl;
+    return () => {
+      delete target[method];
+    };
+  }
+
+  // Dismissing the Apple sheet is a deliberate user action. The action must
+  // resolve, not reject: a rejection would surface a red error for a tap the
+  // user took back on purpose.
+  it.each(methods)("%s resolves silently when the user cancels", async (method) => {
+    const restore = withSocialMethod(method, () => {
+      throw new AuthError("cancelled", "Sign-in was cancelled.");
+    });
+    try {
+      await expect(useAuthStore.getState()[method]()).resolves.toBeUndefined();
+
+      const state = useAuthStore.getState();
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.session).toBeNull();
+      expect(state.isSubmitting).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it.each(methods)("%s still rejects on a real failure", async (method) => {
+    const restore = withSocialMethod(method, () =>
+      Promise.reject(new AuthError("network", "offline"))
+    );
+    try {
+      await expect(useAuthStore.getState()[method]()).rejects.toMatchObject({
+        code: "network",
+      });
+      expect(useAuthStore.getState().isSubmitting).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it.each(methods)("%s adopts the session on success", async (method) => {
+    const restore = withSocialMethod(method, () => Promise.resolve(session));
+    try {
+      await useAuthStore.getState()[method]();
+
+      const state = useAuthStore.getState();
+      expect(state.session).toEqual(session);
+      expect(state.user).toEqual(session.user);
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.isSubmitting).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe("useAuthStore — signOut", () => {
   it("clears session, user, and persisted storage", async () => {
     await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));

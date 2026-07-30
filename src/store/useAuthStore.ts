@@ -34,6 +34,15 @@ function applySession(session: AuthSession | null) {
     : { session, user: session.user, isAuthenticated: true };
 }
 
+/**
+ * Dismissing the Apple sheet or the OAuth browser is a deliberate user action,
+ * not a failure. Swallowing it here rather than in each screen means no caller
+ * has to special-case it, and nobody sees a red error for a tap they took back.
+ */
+function isCancellation(err: unknown): boolean {
+  return err instanceof AuthError && err.code === "cancelled";
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   ...signedOut,
   isLoading: true,
@@ -93,6 +102,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isSubmitting: true });
     try {
       set(applySession(await authProvider.signInWithApple()));
+    } catch (err) {
+      if (!isCancellation(err)) throw err;
     } finally {
       set({ isSubmitting: false });
     }
@@ -105,6 +116,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isSubmitting: true });
     try {
       set(applySession(await authProvider.signInWithGoogle()));
+    } catch (err) {
+      if (!isCancellation(err)) throw err;
     } finally {
       set({ isSubmitting: false });
     }
