@@ -71,7 +71,9 @@ focal-studio-app-template/
 | Wire a third-party SDK | `src/services/<name>.ts` + a store in `src/store/` |
 | Change theming | `src/theme/` (then use `useTheme()` everywhere) |
 | Persist data | `src/utils/storage.ts` helpers — never `AsyncStorage.*` directly |
-| Wire account deletion | `src/store/useAuthStore.ts` → `deleteAccount()` — the scaffold clears local state only; add the backend call and **throw on failure** |
+| Wire an auth backend | **`bash scripts/add-backend.sh <supabase\|firebase>`** — do not hand-roll it. For any other backend, implement the `AuthProvider` port in `src/services/auth/types.ts` and swap the one export in `src/services/auth/index.ts`. **Never edit `useAuthStore` or the `(auth)` screens** — they are provider-agnostic |
+| Add Sign in with Apple | **`bash scripts/add-social-auth.sh`** after the backend (Supabase only for now). It composes `socialAuth` onto the provider — still no store or screen edits. Adds native code: breaks Expo Go and invalidates the EAS cache, so say so |
+| Wire account deletion | The adapter's `deleteAccount()` — it **must throw on remote failure** and leave local state intact; `useAuthStore` and `settings.tsx` already depend on that |
 | Change the privacy policy | `store-listing/privacy-policy-template.html`, then republish the app's page in the `focalstudio.github.io` repo |
 | Cut a release | invoke `release-manager` subagent — do not do this by hand |
 
@@ -157,7 +159,7 @@ The orchestrator reads this, forwards to `devops-agent`, and resumes the coding 
 
 1. **Editing on `main` or `dev` directly.** Always branch first. (Exception: `app-bootstrapper` initialising a brand-new repo.)
 2. **Hardcoding colors, spacing, or font sizes.** Use `useTheme()` and tokens in `src/theme/`.
-3. **Calling `AsyncStorage.getItem/setItem` directly.** Use `src/utils/storage.ts` — there was a null-handling bug (commit `825e87b`) the helpers paper over.
+3. **Calling `AsyncStorage.getItem/setItem` directly.** Use `src/utils/storage.ts` — there was a null-handling bug (commit `825e87b`) the helpers paper over. They are **named exports** (`loadJson`, `saveJson`, `removeItem`, …), not a `storage` object; prefix keys with `STORAGE_PREFIX`.
 4. **Adding a native module config plugin without flagging it.** It invalidates the EAS build cache. Surface this in your report.
 5. **Putting keyboard input inside a modal.** iOS layout shifts. Use pickers/toggles.
 6. **Merging the release PR with `--delete-branch`.** Auto-closes the dev backmerge PR. Use `gh pr merge NNN --merge` only.

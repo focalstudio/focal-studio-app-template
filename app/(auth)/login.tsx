@@ -3,23 +3,38 @@ import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } fro
 import { router } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
+import { SocialSignInButton } from "@/components/ui/SocialSignInButton";
 import { TextInput } from "@/components/ui/TextInput";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/store/useAuthStore";
+import { authErrorMessage } from "@/services/auth";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME } from "@/constants";
 
 /*
- * Wire in real auth: replace handleLogin with your provider's sign-in call,
- * then call setUser with the returned user object.
+ * This screen is provider-agnostic. It calls the store, the store calls the
+ * AuthProvider port, and `scripts/add-backend.sh` swaps which provider that is.
+ * Wiring a backend should not require editing this file.
  */
+
+/** Which control triggered the in-flight request, so only it spins. */
+type Source = "password" | "apple" | "google";
 
 export default function LoginScreen() {
   const { colors } = useTheme();
-  // const { setUser } = useAuthStore(); // Uncomment when wiring real auth
+  const signIn = useAuthStore((s) => s.signIn);
+  const signInWithApple = useAuthStore((s) => s.signInWithApple);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  // Which control is mid-flight. A single shared flag would spin all three
+  // buttons at once, which reads as the whole screen being stuck.
+  const [pending, setPending] = useState<Source | null>(null);
+  // Two error slots, because they render in different places. Routing a failed
+  // Apple sign-in into the password field's error prop blames an input the
+  // user never touched.
+  const [formError, setFormError] = useState("");
+  const [socialError, setSocialError] = useState("");
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -28,31 +43,32 @@ export default function LoginScreen() {
     };
   }, []);
 
-  async function handleLogin() {
-    setError("");
-    if (!email || !password) {
-      setError("Please fill in all fields.");
-      return;
-    }
-    setLoading(true);
+  // Navigation is handled by the Stack.Protected guards in app/_layout.tsx —
+  // once isAuthenticated flips, the router moves to (tabs) on its own. Calling
+  // router.replace here as well would race those guards.
+  async function runAuth(action: () => Promise<unknown>, source: Source) {
+    setFormError("");
+    setSocialError("");
+    setPending(source);
     try {
-      // Replace this block with your auth provider's sign-in call, e.g.:
-      // const user = await signInWithEmailAndPassword(auth, email, password);
-      // setUser({ id: user.uid, email: user.email! });
-      throw new Error(
-        `[${APP_NAME}] Auth not wired — replace this block with your real auth provider before shipping.`
-      );
-      // if (!isMountedRef.current) return;
-      // setUser({ id: "placeholder", email });
-      // router.replace("/(tabs)");
+      await action();
     } catch (err) {
       if (!isMountedRef.current) return;
-      // Log setup errors visibly in dev; always show a generic message to users.
       if (err instanceof Error) console.error("[Auth]", err.message);
-      setError("Invalid email or password.");
+      const message = authErrorMessage(err);
+      if (source === "password") setFormError(message);
+      else setSocialError(message);
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isMountedRef.current) setPending(null);
     }
+  }
+
+  async function handleLogin() {
+    if (!email || !password) {
+      setFormError("Please fill in all fields.");
+      return;
+    }
+    await runAuth(() => signIn(email, password), "password");
   }
 
   return (
@@ -84,14 +100,19 @@ export default function LoginScreen() {
             secureTextEntry
             textContentType="password"
             placeholder="••••••••"
-            error={error}
+            error={formError}
           />
           <Pressable onPress={() => router.push("/(auth)/forgot-password")}>
             <Text style={[styles.link, { color: colors.accent }]}>Forgot password?</Text>
           </Pressable>
         </View>
 
-        <Button label="Sign In" onPress={handleLogin} loading={loading} />
+        <Button
+          label="Sign In"
+          onPress={handleLogin}
+          loading={pending === "password"}
+          disabled={pending !== null}
+        />
 
         <View style={styles.dividerRow}>
           <View style={[styles.line, { backgroundColor: colors.border }]} />
@@ -99,9 +120,34 @@ export default function LoginScreen() {
           <View style={[styles.line, { backgroundColor: colors.border }]} />
         </View>
 
-        {/* Placeholder social auth buttons — wire in Apple/Google Sign-In */}
-        <Button label="Continue with Apple" variant="secondary" onPress={() => {}} />
-        <Button label="Continue with Google" variant="secondary" onPress={() => {}} />
+        {/*
+          These call optional methods on the AuthProvider port. Until
+          `bash scripts/add-social-auth.sh` composes an implementation on, they
+          surface "not configured" rather than silently doing nothing — a dead
+          button is indistinguishable from a broken one, and it used to ship
+          that way in every new app.
+
+          Apple is iOS-only: the recipe uses the native sheet, so on Android the
+          button could only ever fail, which is the dead-button problem again.
+        */}
+        {Platform.OS === "ios" && (
+          <SocialSignInButton
+            provider="apple"
+            onPress={() => runAuth(signInWithApple, "apple")}
+            loading={pending === "apple"}
+            disabled={pending !== null}
+          />
+        )}
+        <SocialSignInButton
+          provider="google"
+          onPress={() => runAuth(signInWithGoogle, "google")}
+          loading={pending === "google"}
+          disabled={pending !== null}
+        />
+
+        {socialError !== "" && (
+          <Text style={[styles.socialError, { color: colors.danger }]}>{socialError}</Text>
+        )}
 
         <Pressable onPress={() => router.push("/(auth)/signup")} style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
@@ -126,6 +172,7 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   line: { flex: 1, height: 1 },
   or: { fontSize: FontSize.sm },
+  socialError: { fontSize: FontSize.sm, textAlign: "center" },
   footer: { alignItems: "center" },
   footerText: { fontSize: FontSize.md },
 });

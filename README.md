@@ -35,6 +35,8 @@ Press `i` for iOS Simulator, `a` for Android.
 | Navigation | Expo Router 5 (file-based) |
 | State | Zustand 5 |
 | Storage | AsyncStorage |
+| Data fetching | TanStack Query 5 |
+| Backend | None by default — `bash scripts/add-backend.sh <supabase\|firebase>` |
 | Build | EAS Build + EAS Submit |
 | Testing | Jest + React Native Testing Library |
 | Analytics | PostHog RN SDK (EU-hosted, optional) |
@@ -128,6 +130,39 @@ scripts/
 | `npm run preview:ios` | EAS preview build (iOS) |
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
+| `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
+| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase app (adds native code) |
+
+---
+
+## Backend
+
+The template ships with **no backend** and no backend dependency. Auth sits behind a
+provider port (`src/services/auth/`), and the shipped `local` provider persists a session
+across launches so the UI is navigable — every call needing a server throws `not_wired`.
+
+Wire one in with a single command:
+
+```bash
+bash scripts/add-backend.sh supabase   # or: firebase
+```
+
+It installs the packages, drops the adapter into `src/services/auth/`, activates it, makes
+the provider's env vars required, and prints the remaining manual steps.
+
+Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple** —
+mandatory under App Store guideline 4.8 as soon as you offer any other third-party login.
+Note that it adds a native module, so the app stops running in Expo Go and needs a dev
+client. Supabase only for now; Google is tracked separately.
+
+| Provider | Guide | Notes |
+|---|---|---|
+| Supabase | [docs/backends/supabase.md](docs/backends/supabase.md) | Recommended default. Ships a `schema.sql` with RLS policies, a signup trigger, and the `delete_own_account()` function account deletion depends on. |
+| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin. Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
+
+**Writing your own?** Implement the `AuthProvider` port in
+[`src/services/auth/types.ts`](src/services/auth/types.ts) and change one export line.
+Don't edit `useAuthStore` or the `(auth)` screens — they're provider-agnostic.
 
 ---
 
@@ -143,6 +178,33 @@ cp .env.example .env.local
 |----------|----------|---------|
 | `EXPO_PUBLIC_POSTHOG_KEY` | No | PostHog analytics (disabled if empty) |
 | `EXPO_PUBLIC_POSTHOG_HOST` | No | PostHog host (defaults to EU) |
+| `EXPO_PUBLIC_SUPABASE_URL` | Only if using Supabase | Project URL from the Supabase dashboard |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only if using Supabase | Publishable key (`sb_publishable_…`; older docs call it the anon key) |
+| `EXPO_PUBLIC_FIREBASE_*` | Only if using the Firebase JS SDK | API key, auth domain, project ID, app ID — see `.env.example` |
+
+The template ships with **no backend wired** — auth is local-only until you add one. The
+backend variables above are commented out in `.env.example`; uncomment the block for the
+provider your app uses.
+
+**Every variable is validated at build time.** [`env.js`](env.js) defines a Zod schema that
+`app.config.js` runs on every `expo start`, `expo prebuild`, and EAS build, so a missing or
+malformed value fails the build with a readable message rather than surfacing as `undefined`
+three screens deep on a user's device. It also catches the common half-configured case —
+a Supabase URL with no publishable key, or the reverse.
+
+Read them in app code through [`src/env.ts`](src/env.ts), not `process.env`:
+
+```ts
+import { env, requireEnv } from "@/env";
+
+env.EXPO_PUBLIC_POSTHOG_KEY        // string | undefined, already validated
+requireEnv("EXPO_PUBLIC_SUPABASE_URL")  // throws rather than yielding undefined
+```
+
+> The React Native Firebase path does not use `EXPO_PUBLIC_FIREBASE_*`. It reads
+> `google-services.json` / `GoogleService-Info.plist`, which are gitignored. EAS only
+> uploads git-tracked files, so supply them as **file-type EAS environment variables**
+> rather than committing them.
 
 Add `EXPO_TOKEN` to your GitHub repo secrets to enable EAS preview builds in CI.
 

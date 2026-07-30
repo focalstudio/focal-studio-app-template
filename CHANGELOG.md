@@ -23,6 +23,162 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.8.0] — 2026-07-30
+
+### Added
+- **Sign in with Apple (Supabase).** `bash scripts/add-social-auth.sh` — run after
+  `add-backend.sh` — installs `expo-apple-authentication`, drops `social.ts` beside the
+  adapter, and composes it onto the port (`{ ...supabaseAuthProvider, ...socialAuth }`), so
+  the ~190-line adapter is never rewritten by a script. Uses the native sheet and
+  `signInWithIdToken`; no browser, no redirect URI. The module captures the user's name on
+  the first authorization, which is the only time Apple ever sends it. The script prints the
+  `app.json` plugin and `usesAppleSignIn` steps and never edits it. **Adding this means the
+  app no longer runs in Expo Go and the EAS build cache is invalidated** — both surfaced, not
+  silent. Mandatory under App Store guideline 4.8 once any other third-party login is offered.
+  Google is tracked separately; Firebase's Apple path is still to come.
+
+- Branded `SocialSignInButton` for Apple and Google, drawn with the already-present
+  `react-native-svg` — no new dependency. Provider appearance rules are binding and get
+  checked at review, so it follows Apple's HIG and Google's Identity guidelines rather than
+  the app's design tokens. The Google variant ships styled but still reports "not configured"
+  until Google sign-in lands.
+
+- Per-app privacy-policy generator. `scripts/gen-privacy-policy.mjs` renders a complete,
+  standalone-styled `privacy-<app-slug>.html` from `store-listing/privacy.config.json` +
+  `src/constants.ts`, failing on unfilled placeholders, a missing `#delete` anchor, or a
+  `PRIVACY_POLICY_URL` that doesn't match the slug. Ships with `store-listing/privacy-shell.html`
+  (self-contained styling matching `privacy-policy-template.html` and the published pages),
+  `privacy.config.example.json`, and `store-listing/PRIVACY.md`. New
+  `.github/workflows/verify-privacy.yml` regenerates the page and checks the live URL resolves
+  (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
+  privacy page **per app**, never a shared policy.
+
+- **TanStack Query data layer.** `QueryClientProvider` in `app/_layout.tsx`, a shared client
+  in `src/lib/queryClient.ts`, and an `AppState` bridge into React Query's `focusManager` —
+  without it `refetchOnWindowFocus` silently does nothing on native, since there is no
+  browser window to focus. Mutations default to `retry: 0` because retrying a non-idempotent
+  POST can double-charge. **The cache is cleared on sign-out and account deletion**;
+  otherwise the previous user's data is served to whoever signs in next on the same device,
+  which renders before any refetch resolves and is a data leak on a shared device. It is
+  deliberately *not* cleared when a delete fails — the user is still signed in and still
+  looking at their data. Both backend guides show the matching query-hook pattern.
+- **One-command backend setup.** `bash scripts/add-backend.sh <supabase|firebase>` installs
+  the provider's packages, copies its `AuthProvider` adapter into `src/services/auth/`,
+  activates it, promotes its env vars to required in `env.js`, uncomments them in
+  `.env.example`, and prints the manual steps it can't do safely. It refuses to clobber an
+  existing adapter or wire two providers at once without `--force`, and it never edits
+  `app.json` — a config plugin is always surfaced, never silent.
+  - **Supabase** ships a `schema.sql` with a `profiles` table, RLS policies written the fast
+    way (`(select auth.uid())` + `to authenticated` + an index), a signup trigger, and the
+    `delete_own_account()` SECURITY DEFINER function that account deletion depends on.
+  - **Firebase** installs the JS SDK path: no config plugin, no native modules, runs in
+    Expo Go, EAS cache untouched. The guide covers migrating to React Native Firebase when
+    Analytics/Crashlytics/FCM are needed, including the `forceStaticLinking` requirement
+    that is mandatory on this template's SDK 56 / RN 0.85.
+  - Adapter sources live in `templates/backends/`, excluded from `tsconfig` and ESLint
+    since they import SDKs the template deliberately does not install.
+- **Backend guides** at `docs/backends/supabase.md` and `docs/backends/firebase.md` —
+  setup, the React Native specifics every upstream quickstart omits, account-deletion
+  verification, and known gotchas.
+- **Build-time environment validation.** `env.js` defines a Zod schema that `app.config.js`
+  runs on every `expo start`, `expo prebuild`, and EAS build, so a missing or malformed
+  variable fails the build with a readable message naming every offender — instead of
+  surfacing as `undefined` three screens deep on a user's device. It also rejects the common
+  half-configured case (a Supabase URL with no publishable key, or the reverse) and promotes
+  a provider's variables from optional to required once a backend is selected. Validated
+  values are published to the Expo manifest and read back through the new typed `src/env.ts`
+  (`env`, `requireEnv`, `backend`); `process.env` reads in app code are replaced. Adds `zod`.
+- **Provider-agnostic auth port** (`src/services/auth/`). `AuthProvider` defines what any
+  backend must supply — `getSession`, `signIn`, `signUp`, `signOut`, `resetPassword`,
+  `deleteAccount`, `subscribe`, plus optional `signInWithApple` / `signInWithGoogle`.
+  Adding Supabase or Firebase means writing one adapter and changing one export line;
+  `useAuthStore` and every `(auth)` screen stay untouched. The template still installs no
+  backend dependency — the shipped `local` provider persists a session across launches and
+  throws `not_wired` for anything needing a server.
+- `useAuthStore` now carries a real session model (`accessToken` / `refreshToken` /
+  `expiresAt` / `user`) instead of a bare `{id, email, name}` blob, and owns `signIn`,
+  `signUp`, `resetPassword`, and the social entry points that previously lived as TODOs
+  inside screens. A persisted session from the old scaffold is migrated on first launch.
+- `useAuthStore.init()` subscribes to out-of-band session changes — background token
+  refresh, expiry, or a sign-out on another device — and returns its unsubscribe, which
+  `app/_layout.tsx` uses as effect cleanup.
+- `AuthError` carries a typed `code`, and `authErrorMessage()` maps it to a safe
+  user-facing string, so provider-internal database and JWT text never reaches the UI.
+
+### Fixed
+- 🔴 **The test suite went red the moment you wired a backend.** Running
+  `scripts/add-backend.sh supabase` left a generated app with two failing suites, so the
+  first thing anyone saw after connecting a backend was a broken build they hadn't caused.
+  `useAuthStore.test.ts` couldn't even load — the barrel now pulls in the Supabase adapter,
+  whose `expo-sqlite` import has no native module under Jest — and its assertions were
+  written against the local scaffold, so they'd have been false anyway once a real provider
+  was active. `env-schema.test.ts` hardcoded the template's `BACKEND = "none"` default.
+
+  Split by what each file actually tests: `useAuthStore.test.ts` now mocks the auth barrel
+  and covers store logic against a fake provider, and the scaffold's own behaviour moved to
+  `src/services/auth/__tests__/local.test.ts`, which imports `local.ts` directly and so
+  stays valid whatever backend is wired. The env tests assert the *rule* — that selecting a
+  backend promotes its variables from optional to required — against whichever backend is
+  actually selected, which also means the Firebase branch is covered for the first time.
+  A generated Supabase app now runs the full suite green.
+
+- 🔴 **Signup granted full app access without a backend.** `app/(auth)/signup.tsx` called
+  `setUser({ id: "placeholder", … })` and navigated into the app, so any app built from the
+  template that hadn't wired auth yet shipped a working-looking signup that authenticated
+  nobody. Signup now goes through the provider and fails loudly until a backend is added.
+- 🔴 **`(tabs)` had no auth guard.** Gating was a one-shot `<Redirect>` in `app/index.tsx`,
+  so nothing reacted to auth going false mid-session, and screens navigated by hand after
+  sign-out. Replaced with `Stack.Protected` guards in `app/_layout.tsx`, which also purge
+  history — a back-swipe can no longer return to a signed-in screen after signing out.
+- **Dead social sign-in buttons.** "Continue with Apple" and "Continue with Google" were
+  wired to `onPress={() => {}}` and shipped in every new app. They now report that the
+  provider isn't configured instead of silently doing nothing.
+- **`expo-services` skill documented a storage API that does not exist.** It told agents to
+  write `storage.setJSON(...)` / `storage.getJSON(...)`, but `src/utils/storage.ts` exports
+  named functions (`loadJson`, `saveJson`, `removeItem`, …) and no `storage` object — any
+  agent following the skill produced code that failed `tsc` on the first line. Corrected, and
+  the `STORAGE_PREFIX` key convention documented alongside it.
+- **Contradictory guidance on where an SDK auth listener belongs.** The skill said the store's
+  `init()`, `useAuthStore.ts` said `app/_layout.tsx`, and neither `init()` nor a listener
+  existed. Settled on one rule — `init()` on the store returns its unsubscribe, `_layout.tsx`
+  owns the lifecycle — and applied it everywhere.
+- **`backend-integrator` requested `@supabase/ssr`** in its canonical `PACKAGES_NEEDED`
+  example. That is a Next.js server package with no use in React Native. Replaced with the
+  real RN package set, plus an explicit rule against server-side packages.
+- The skill's store contract referenced `init()` / `reset()` actions that no store in the
+  repo has. Rewritten to match the actual `hydrate()` / `signOut()` shape.
+- `app/(tabs)/settings.tsx`: guard the account-deletion error path against state updates
+  after unmount. `performDelete()` now tracks mount state with an `isMountedRef` and skips
+  the `Alert` + `setIsDeleting(false)` if the screen unmounted mid-request — matching the
+  existing pattern in `app/(auth)/login.tsx`.
+
+### Changed
+- **Backend integration guidance now covers what actually breaks in React Native.** The
+  Supabase section grew from three bullets to the full set of RN-specific requirements
+  (session storage adapter and why not SecureStore, `detectSessionInUrl: false`, the
+  module-scope `AppState` refresh listener, URL polyfill, RLS policy performance, and the
+  `signOut()`-after-delete failure). Added a **Firebase section**, which did not exist:
+  RN Firebase vs JS SDK trade-offs, `getReactNativePersistence`, the `forceStaticLinking`
+  requirement on this template's SDK 56 / RN 0.85, and how to get `google-services.json`
+  to EAS without committing it. `SETUP.md` Phase 6 and the `useAuthStore` wiring comment
+  now carry the same warnings.
+- Documented `EXPO_PUBLIC_SUPABASE_*` and `EXPO_PUBLIC_FIREBASE_*` in `.env.example` and
+  the README. They previously appeared only inside a `devops-agent` example block.
+- Allowlisted `firebase.google.com` and `rnfirebase.io` for `WebFetch`; only `supabase.com`
+  was reachable before.
+- `AuthErrorCode` gains **`cancelled`**, and the store swallows it — dismissing the Apple
+  sheet or an OAuth browser now shows nothing instead of a red error for a tap the user
+  deliberately took back. **Breaking** for hand-written adapters that exhaustively switch on
+  `AuthErrorCode`. The port also now requires that adapter methods not depend on `this`,
+  since social sign-in is composed on by object spread.
+- The login screen routes social failures to their own slot instead of the password field's
+  error prop, and spins only the button that was pressed rather than all three. Apple's
+  button is iOS-only — the recipe uses the native sheet, so elsewhere it could only fail.
+- `toAuthSession` / `toAuthError` are now exported from the Supabase adapter template so the
+  social module reuses that error-mapping table instead of growing a copy that drifts.
+
+---
+
 ## [0.7.0] — 2026-07-23
 
 ### Added

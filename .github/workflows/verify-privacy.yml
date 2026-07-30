@@ -1,0 +1,87 @@
+name: Verify Privacy Policy
+
+# Guards the privacy-policy contract between this app repo and the published page on
+# focalstudio.github.io. Two checks:
+#   1. The generator runs clean — config is complete, the #delete anchor is present, and
+#      PRIVACY_POLICY_URL matches privacy-<slug>.html (fails otherwise).
+#   2. The live URL in src/constants.ts actually resolves (HTTP 200) and contains the
+#      #delete anchor — catching drift where the app points at a 404 or an anchor-less page.
+#
+# No-ops gracefully in the un-bootstrapped template (placeholder constants / no config), the
+# same way android-release.yml no-ops until the app is set up.
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "store-listing/**"
+      - "src/constants.ts"
+      - "scripts/gen-privacy-policy.mjs"
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    name: Generate & verify privacy page
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read privacy URL from constants
+        id: constants
+        run: |
+          # Whitespace-tolerant so reformatting constants.ts (Prettier etc.) can't silently
+          # yield an empty URL.
+          URL=$(grep -oE 'PRIVACY_POLICY_URL[[:space:]]*=[[:space:]]*"[^"]*"' src/constants.ts | sed -E 's/.*"([^"]*)"/\1/')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Privacy URL: $URL"
+
+      - name: Gate — skip if not bootstrapped, fail on a bad/unexpected URL
+        id: gate
+        run: |
+          URL='${{ steps.constants.outputs.url }}'
+          if [ ! -f store-listing/privacy.config.json ]; then
+            echo "No store-listing/privacy.config.json — template not bootstrapped. Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$URL" | grep -q '\['; then
+            echo "PRIVACY_POLICY_URL is still a placeholder ($URL). Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$URL" ]; then
+            echo "::error::Bootstrapped (privacy.config.json present) but PRIVACY_POLICY_URL could not be parsed from src/constants.ts."
+            exit 1
+          # Only ever curl the expected Pages host/path. This bounds the runner to
+          # focalstudio.github.io so an edited PRIVACY_POLICY_URL (e.g. from a fork PR)
+          # cannot turn this job into an SSRF probe of arbitrary hosts.
+          elif ! printf '%s' "$URL" | grep -qE '^https://focalstudio\.github\.io/privacy-[a-z0-9-]+\.html$'; then
+            echo "::error::PRIVACY_POLICY_URL ($URL) must match https://focalstudio.github.io/privacy-<slug>.html."
+            exit 1
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate page (fails on incomplete config / missing anchor / URL mismatch)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/gen-privacy-policy.mjs
+
+      - name: Verify live URL resolves and has #delete anchor
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          URL='${{ steps.constants.outputs.url }}'
+          echo "Checking $URL ..."
+          CODE=$(curl -sS -o /tmp/privacy.html -w '%{http_code}' -L --retry 3 --retry-delay 5 "$URL" || echo "000")
+          echo "HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::Privacy policy URL did not return 200 (got $CODE). Publish privacy-<slug>.html to focalstudio.github.io."
+            exit 1
+          fi
+          if ! grep -q 'id="delete"' /tmp/privacy.html; then
+            echo "::error::Live privacy page is missing the #delete anchor that the store account-deletion field points at."
+            exit 1
+          fi
+          echo "OK: live page resolves and contains #delete."

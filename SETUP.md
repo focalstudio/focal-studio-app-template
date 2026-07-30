@@ -183,10 +183,32 @@ Copy the templates from `obsidian-templates/` into the vault folder. Ask Claude 
 
 ## Phase 6 — Wire auth and paywall (ongoing)
 
-Auth:
-- Pick your backend: [Firebase](https://firebase.google.com), [Supabase](https://supabase.com), or custom API.
-- Install the SDK and replace the placeholder `handleLogin` / `handleSignup` calls in `app/(auth)/`.
-- See `src/store/useAuthStore.ts` for the integration comment.
+Auth — one command:
+
+```bash
+bash scripts/add-backend.sh supabase   # or: firebase
+```
+
+This installs the packages, drops the provider adapter into `src/services/auth/`, activates
+it, makes its env vars required, and prints the remaining manual steps (project creation,
+credentials, SQL). Then follow the matching guide:
+
+- [docs/backends/supabase.md](docs/backends/supabase.md) — recommended default
+- [docs/backends/firebase.md](docs/backends/firebase.md) — JS SDK path; read the
+  "Pick a path first" table before running, since migrating to React Native Firebase later
+  means a config plugin and a dev client
+
+You should **not** need to edit `app/(auth)/` or `src/store/useAuthStore.ts` — they're
+provider-agnostic. If you're writing your own backend, implement the `AuthProvider` port in
+`src/services/auth/types.ts` instead.
+
+> **Don't follow an upstream quickstart verbatim.** Every one omits the React Native
+> specifics, and each omission fails the same silent way — the user is signed out on every
+> cold start, which you won't notice in a simulator session. The shipped adapters already
+> handle these; the guides above explain each one.
+
+Before shipping, run the **Data safety checklist** in `.claude/CLAUDE.md` — in particular,
+verify `deleteAccount()` genuinely deletes the remote account and throws when it cannot.
 
 Paywall:
 - Install [RevenueCat](https://www.revenuecat.com/docs/getting-started/installation/react-native): `npx expo install react-native-purchases`

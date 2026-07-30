@@ -133,7 +133,11 @@ one has to actually work in the built app, not just exist in the source:
 - [ ] **Privacy policy URL resolves.** `curl -I` the URL in `src/constants.ts` and expect
       200. It must be app-specific and its deletion section must match what deletion
       actually does, **including anything retained**. Point Play's account-deletion URL at
-      the page's `#delete` anchor.
+      the page's `#delete` anchor. Generate the page from the app's data practices with
+      `node scripts/gen-privacy-policy.mjs` (driven by `store-listing/privacy.config.json`)
+      and publish it to the `focalstudio.github.io` Pages repo as `privacy-<app-slug>.html` —
+      one page **per app**, never a shared policy. See [store-listing/PRIVACY.md](../store-listing/PRIVACY.md).
+      The `verify-privacy.yml` workflow automates both checks (generate + live-URL `#delete`).
 - [ ] **`store-listing/*.md` URLs match `src/constants.ts`.** These drift easily; a stale
       URL in the listing files is a common rejection cause.
 

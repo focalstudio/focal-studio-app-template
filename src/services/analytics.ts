@@ -1,13 +1,14 @@
 import PostHog from "posthog-react-native";
+import { env } from "../env";
 
 let client: PostHog | null = null;
 let enabled = true;
 
 export function initAnalytics(): void {
-  const key = process.env.EXPO_PUBLIC_POSTHOG_KEY;
+  const key = env.EXPO_PUBLIC_POSTHOG_KEY;
   if (!key) return;
   client = new PostHog(key, {
-    host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com",
+    host: env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com",
   });
   // The store may hydrate the persisted opt-out before the client exists, in
   // which case that setAnalyticsEnabled(false) call had no client to opt out.

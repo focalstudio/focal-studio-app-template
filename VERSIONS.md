@@ -47,6 +47,8 @@ Changes to any of these define a new SDK generation and require running `npx exp
 | `lucide-react-native` | `^1.17.0` |
 | `expo-constants` | `~56.0.16` |
 | `zustand` | `^5.0.3` |
+| `zod` | `^4.4.3` |
+| `@tanstack/react-query` | `^5.101.4` |
 
 ### Dev
 

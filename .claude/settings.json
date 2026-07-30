@@ -77,6 +77,8 @@
       "WebFetch(domain:reactnavigation.org)",
       "WebFetch(domain:developer.apple.com)",
       "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:firebase.google.com)",
+      "WebFetch(domain:rnfirebase.io)",
       "WebFetch(domain:revenuecat.com)",
       "WebFetch(domain:posthog.com)",
       "Skill(commit-push-pr)",

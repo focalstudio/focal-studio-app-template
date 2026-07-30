@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Card } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
@@ -52,6 +52,13 @@ export default function SettingsScreen() {
     useAppStore();
   const { signOut, deleteAccount } = useAuthStore();
   const [isDeleting, setIsDeleting] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,11 +85,14 @@ export default function SettingsScreen() {
       await deleteAccount();
       // Deliberately no setIsDeleting(false) on this path — the screen is
       // navigating away, and the account no longer exists to retry against.
-      router.replace("/(auth)/login");
+      // Navigation itself is the Stack.Protected guard's job: isAuthenticated
+      // just went false, so the router leaves (tabs) and purges the history.
     } catch (err) {
       // Keep the raw error out of the UI (a backend delete can surface internal
       // database or auth text) but keep it for diagnostics.
       Analytics.appError(err instanceof Error ? err.message : String(err), "deleteAccount");
+      // Skip UI + state updates if the screen unmounted mid-request (matches login.tsx).
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Couldn't Delete Account",
         "Something went wrong and your account was not deleted. Please try again, or contact support if the problem continues."
@@ -170,13 +180,9 @@ export default function SettingsScreen() {
         {/* Account */}
         <Card>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account</Text>
-          <Row
-            label="Sign Out"
-            onPress={() => {
-              signOut();
-              router.replace("/(auth)/login");
-            }}
-          />
+          {/* The Stack.Protected guard handles navigation once the session
+              clears — no router.replace, which would race it. */}
+          <Row label="Sign Out" onPress={() => void signOut()} />
         </Card>
 
         {/* Danger Zone */}
