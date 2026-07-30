@@ -151,6 +151,21 @@ The template ships with **no backend wired** — auth is local-only until you ad
 backend variables above are commented out in `.env.example`; uncomment the block for the
 provider your app uses.
 
+**Every variable is validated at build time.** [`env.js`](env.js) defines a Zod schema that
+`app.config.js` runs on every `expo start`, `expo prebuild`, and EAS build, so a missing or
+malformed value fails the build with a readable message rather than surfacing as `undefined`
+three screens deep on a user's device. It also catches the common half-configured case —
+a Supabase URL with no publishable key, or the reverse.
+
+Read them in app code through [`src/env.ts`](src/env.ts), not `process.env`:
+
+```ts
+import { env, requireEnv } from "@/env";
+
+env.EXPO_PUBLIC_POSTHOG_KEY        // string | undefined, already validated
+requireEnv("EXPO_PUBLIC_SUPABASE_URL")  // throws rather than yielding undefined
+```
+
 > The React Native Firebase path does not use `EXPO_PUBLIC_FIREBASE_*`. It reads
 > `google-services.json` / `GoogleService-Info.plist`, which are gitignored. EAS only
 > uploads git-tracked files, so supply them as **file-type EAS environment variables**

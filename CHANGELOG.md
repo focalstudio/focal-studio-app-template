@@ -20,6 +20,14 @@ Versioning: [Semantic Versioning](https://semver.org/)
   (200) with the `#delete` anchor — no-ops in the un-bootstrapped template. Convention: one
   privacy page **per app**, never a shared policy.
 
+- **Build-time environment validation.** `env.js` defines a Zod schema that `app.config.js`
+  runs on every `expo start`, `expo prebuild`, and EAS build, so a missing or malformed
+  variable fails the build with a readable message naming every offender — instead of
+  surfacing as `undefined` three screens deep on a user's device. It also rejects the common
+  half-configured case (a Supabase URL with no publishable key, or the reverse) and promotes
+  a provider's variables from optional to required once a backend is selected. Validated
+  values are published to the Expo manifest and read back through the new typed `src/env.ts`
+  (`env`, `requireEnv`, `backend`); `process.env` reads in app code are replaced. Adds `zod`.
 - **Provider-agnostic auth port** (`src/services/auth/`). `AuthProvider` defines what any
   backend must supply — `getSession`, `signIn`, `signUp`, `signOut`, `resetPassword`,
   `deleteAccount`, `subscribe`, plus optional `signInWithApple` / `signInWithGoogle`.
