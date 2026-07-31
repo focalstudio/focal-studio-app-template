@@ -31,6 +31,8 @@ focal-studio-app-template/
 ├── app.json               ← Expo config; native fields here invalidate EAS build cache
 ├── tsconfig.json
 │
+├── docs/testing.md        ← Jest harness: how to render a screen in a test
+│
 ├── app/                   ← Expo Router screens (file-based routing)
 │   ├── (auth)/            ← unauthenticated screens (login, signup)
 │   ├── (tabs)/            ← main app tabs (+ _layout.tsx defines tab bar)
@@ -67,6 +69,7 @@ focal-studio-app-template/
 |---|---|
 | **Bootstrap a new app** | **invoke `app-bootstrapper` agent — do not run `scripts/init.sh` by hand** |
 | Add a screen | `app/<name>.tsx` (and `app/(tabs)/_layout.tsx` if it's a tab) |
+| Test a screen | Copy `src/__tests__/screens/home-screen.test.tsx` and swap the import — see [docs/testing.md](docs/testing.md). Tests must **not** live under `app/`; Expo Router would turn them into routes |
 | Add or extend a store | `src/store/use<Name>Store.ts` |
 | Wire a third-party SDK | `src/services/<name>.ts` + a store in `src/store/` |
 | Change theming | `src/theme/` (then use `useTheme()` everywhere) |
