@@ -46,6 +46,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `types/expo-router-testing-library.d.ts`, since Expo Router registers matchers like
   `toHavePathname` at runtime but ships an empty `expect.d.ts`, so they would otherwise
   pass `npm test` and fail `npm run type-check`.
+- **Screen render tests for every remaining production screen.** Onboarding, sign up,
+  forgot password, paywall, and settings now each have a `src/__tests__/screens/*.tsx` test
+  following the harness pattern above; `login.tsx` already had render coverage from its
+  dev-seed-gate test. `settings-screen.test.tsx` also proves the two-step delete-account
+  confirmation in `app/(tabs)/settings.tsx` can't be short-circuited by a single confirm —
+  `Alert.alert` is spied, its button config captured, and callbacks invoked manually to walk
+  both alerts, since a native alert renders nothing queryable. The auth provider is mocked
+  with the same stable-object convention as `useAuthStore.test.ts`; note the screen there is
+  `require`d after `jest.mock` runs, not statically imported, because a static import gets
+  hoisted above the mock's backing `const` and would read it as `undefined`.
 - **CI smoke test for `scripts/init.sh`.** New `template-smoke-test.yml` workflow runs
   `init.sh` with fixed dummy flags on its own ephemeral checkout, then asserts no
   `[APP_*]` placeholders remain and that `app.json` / `package.json` match the injected
