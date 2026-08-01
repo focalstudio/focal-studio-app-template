@@ -118,7 +118,7 @@ Delegate the git mechanics to the **`release-manager`** agent (or follow
    `secrets: inherit`) → EAS builds the AAB (versionCode auto-incremented) and submits it to the Play
    internal track as a draft.
 5. **iOS** in parallel: the Xcode Cloud workflow archives from `main`; follow the **Apple App Store
-   checklist** in `.claude/CLAUDE.md` (build → App Store Connect → release notes → submit).
+   checklist** in `.claude/reference/store-submission.md` (build → App Store Connect → release notes → submit).
 6. **Android** finish: follow the **Google Play checklist** — confirm the CI run, add release notes,
    review the draft, roll out through Internal → Closed/Open/Production per your rollout policy.
 

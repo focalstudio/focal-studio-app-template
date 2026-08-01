@@ -207,7 +207,7 @@ provider-agnostic. If you're writing your own backend, implement the `AuthProvid
 > cold start, which you won't notice in a simulator session. The shipped adapters already
 > handle these; the guides above explain each one.
 
-Before shipping, run the **Data safety checklist** in `.claude/CLAUDE.md` — in particular,
+Before shipping, run the **Data safety checklist** in `.claude/reference/store-submission.md` — in particular,
 verify `deleteAccount()` genuinely deletes the remote account and throws when it cannot.
 
 Paywall:

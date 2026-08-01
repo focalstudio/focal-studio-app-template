@@ -10,6 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`test-engineer` subagent** ([.claude/agents/test-engineer.md](.claude/agents/test-engineer.md)) —
+  owns `src/__tests__/**` and is the only agent that writes test files. Nothing previously owned
+  testing: no agent's workflow ran `npm test`, and `ios-frontend` verified with `type-check` alone.
+  Reads [docs/testing.md](docs/testing.md) rather than loading a skill. Hard rule: never weaken an
+  assertion to make a test pass — report the bug instead.
+- **`model` and `effort` declared per agent.** Every agent was previously `model: sonnet` with no
+  `effort` set, so a mechanical release-branch script and a security review got identical
+  reasoning budget. Now tiered by cost-of-a-mistake: `qa-reviewer` and `devops-agent` on opus,
+  `aso-marketing` on haiku, the rest on sonnet, with effort from `low` to `high`. Matrix in
+  [.claude/SKILLS.md](.claude/SKILLS.md).
 - **`isDevBuild` — a build-time gate for dev-only affordances.** New export in
   [src/env.ts](src/env.ts): true in a dev client, and in any build cut from a branch that is not
   store-bound (`main` or `release/*`). `gitBranch` is baked into the Expo manifest by a new
@@ -65,7 +75,18 @@ Versioning: [Semantic Versioning](https://semver.org/)
   touching the backend/social scripts or templates, and manual dispatch.
 
 ### Changed
-- 
+- **Skills load conditionally instead of on every run.** `ios-frontend` loaded 7 skills before
+  writing a line and `qa-reviewer` loaded 6 before reading the diff, so a spacing fix cost the same
+  context as a new screen. Each agent now routes on task shape — a trivial `ios-frontend` brief
+  loads none, and `qa-reviewer` pulls the Trail of Bits stack only when the diff earns it.
+- **`.claude/CLAUDE.md` trimmed from 605 to ~430 lines.** It is injected into the orchestrator *and*
+  every subagent spawn, so its length is paid on every delegation. Xcode Cloud, Obsidian
+  conventions, issue-label tables, and the store-submission checklists moved to
+  `.claude/reference/*.md` behind one-line pointers; the ASO section was deleted as a duplicate of
+  the [`aso-rules`](.claude/skills/aso-rules/SKILL.md) skill. No guidance was lost.
+- **Long-report handoff threshold lowered from ~80 to ~50 lines**, so subagent reports round-trip
+  through `.claude/scratch/` rather than through orchestrator context.
+- `aso-marketing` no longer requests the `WebFetch` tool — its workflow never fetched a URL.
 
 ### Fixed
 - 

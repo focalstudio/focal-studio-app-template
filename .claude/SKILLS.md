@@ -2,16 +2,40 @@
 
 All skills are vendored into [`.claude/skills/`](skills/) and ship with the template — every fork inherits them automatically, no per-machine install. Each subagent in [`.claude/agents/`](agents/) declares which skills it loads.
 
+## Loading is conditional by default
+
+**A skill costs context every time it loads.** Agents therefore load skills by *task shape*, not on every run — a one-line spacing fix should not pull in the design-system stack, and a 30-line diff should not pull in the full audit stack.
+
+The table below lists what an agent *may* load. The agent's own `.md` holds the routing conditions and is authoritative. Only the skills marked **always** load unconditionally.
+
 ## Agent → skills matrix
 
-| Agent | Skills it loads |
-|---|---|
-| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-react-native`, `rn-react-best-practices`, `rn-building-ui`, `rn-composition-patterns`, `design-review` *(conditional — only for non-trivial UI changes)* |
-| `backend-integrator` | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching`, `claude-api` (Anthropic SDK only) |
-| `release-manager` | `parallel-release`, `commit`, `commit-push-pr`, `review`, `verify` |
-| `aso-marketing` | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
-| `qa-reviewer` | `review`, `security-review`, `simplify`, `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor` |
-| `devops-agent` | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
+| Agent | Always | Conditional |
+|---|---|---|
+| `ios-frontend` | — | `frontend_design`, `ui-ux-pro-max`, `rn-building-ui` (new screen / restyle) · `rn-react-native`, `rn-react-best-practices` (perf) · `rn-composition-patterns` (component API) · `design-for-ai` (unspecced design calls) · `design-review` (new or restructured screen) |
+| `backend-integrator` | `expo-services` | `react-native-expert` (native module) · `rn-data-fetching` (network) · `typescript-pro` (non-obvious types) · `claude-api` (Anthropic SDK) |
+| `test-engineer` | — | `react-native-expert` (native-module mock failures only) |
+| `release-manager` | `parallel-release` | `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | `aso-rules` | `ralph-copywriter` (full descriptions / voice shift) · `web-asset-generator` (OG images) |
+| `qa-reviewer` | `review`, `security-review` | `tob-differential-review` (>~200 lines or >5 files) · `tob-insecure-defaults` (auth/storage/network/config) · `tob-supply-chain-risk-auditor` (`package.json` changed) · `simplify` (new module/abstraction) |
+| `devops-agent` | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults` | `react-native-expert`, `expo-services` (RN/Expo-ecosystem packages) |
+
+`test-engineer` deliberately loads nothing by default — the harness conventions live in [`docs/testing.md`](../docs/testing.md), which it reads directly.
+
+## Model and effort per agent
+
+Tiered by how expensive a mistake is, not by how hard the task feels. Declared in each agent's frontmatter.
+
+| Agent | Model | Effort |
+|---|---|---|
+| `qa-reviewer` | opus | high |
+| `devops-agent` | opus | medium |
+| `backend-integrator` | sonnet | high |
+| `ios-frontend` | sonnet | medium |
+| `test-engineer` | sonnet | medium |
+| `app-bootstrapper` | sonnet | medium |
+| `release-manager` | sonnet | low |
+| `aso-marketing` | haiku | low |
 
 ## Vendored skills
 
