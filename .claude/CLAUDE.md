@@ -254,7 +254,7 @@ Examples:
 
 ## Obsidian documentation
 
-Vault: `/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/`. Produce or refresh
+Vault: `~/Obsidian/Projects/[APP_NAME]/`. Produce or refresh
 vault docs after a full audit, when a phase is planned, when a significant feature ships, or on
 explicit request.
 
