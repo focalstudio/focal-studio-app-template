@@ -46,7 +46,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `types/expo-router-testing-library.d.ts`, since Expo Router registers matchers like
   `toHavePathname` at runtime but ships an empty `expect.d.ts`, so they would otherwise
   pass `npm test` and fail `npm run type-check`.
-- **Screen render tests for the remaining six production screens.** Onboarding, sign up,
+- **Screen render tests for every remaining production screen.** Onboarding, sign up,
   forgot password, paywall, and settings now each have a `src/__tests__/screens/*.tsx` test
   following the harness pattern above; `login.tsx` already had render coverage from its
   dev-seed-gate test. `settings-screen.test.tsx` also proves the two-step delete-account
