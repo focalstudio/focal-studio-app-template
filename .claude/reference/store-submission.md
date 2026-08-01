@@ -16,7 +16,7 @@ After `release/x.x.x` is merged to `main` and CI is green:
 7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
 
 ## Google Play checklist
-`android-release.yml` builds and submits automatically as part of the same `release.yml` run (see above) — this checklist is what's left to do by hand:
+`android-release.yml` builds and submits automatically as part of the same `release.yml` run — this checklist is what's left to do by hand:
 
 1. Confirm the CI run succeeded: check the **Android Release** workflow in GitHub Actions.
 2. In Play Console → your app → **Internal testing**: confirm the new build appears as a draft release (`releaseStatus: "draft"` in `eas.json` — this is deliberate so nothing auto-promotes before review).

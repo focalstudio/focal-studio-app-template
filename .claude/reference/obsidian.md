@@ -5,7 +5,7 @@
 
 The project Obsidian vault lives at:
 ```
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/
+~/Obsidian/Projects/[APP_NAME]/
 ```
 
 ### When to produce Obsidian docs
