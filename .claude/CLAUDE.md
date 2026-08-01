@@ -232,6 +232,24 @@ Dev mode (5-tap title toggle) is off by default and protected by a version-scope
 - A fresh install or version update always starts with dev mode off.
 - Do not add build-time environment guards (`__DEV__` or `process.env.NODE_ENV`) to the toggle — these break dev mode in production EAS builds on feature branches.
 
+### Gating dev-only affordances: use `isDevBuild`
+
+`isDevBuild` (`src/env.ts`) is the canonical gate for anything that must never be reachable in a store build — dev seams, debug screens, maintainer tools. Import it rather than testing `__DEV__` yourself.
+
+```ts
+isDevBuild = __DEV__ || (gitBranch !== null && !isStoreBranch(gitBranch))
+// store-bound: `main`, or anything under `release/`
+```
+
+`gitBranch` is baked into the Expo manifest by `resolveGitBranch()` in `app.config.js` (`GITHUB_REF_NAME` → `CI_BRANCH` → `git rev-parse`). Both inputs are fixed when the bundle is built, so there is no env var to set and no runtime flag to flip.
+
+- **Why not `__DEV__` alone?** Same reason as the rule above: a production-profile build off a feature branch has `__DEV__ === false`, which is exactly the build you want the affordance in.
+- **Unresolvable branch (`null`) counts as production.** Fail closed — a missing dev affordance is an inconvenience, a shipped one is a store incident.
+- **`release/*` counts as production.** Xcode Cloud sets `CI_BRANCH` from a real checkout, so a workflow archiving off a release branch would otherwise ship dev affordances to TestFlight testers and App Review.
+- **Caveat:** a *remote* EAS build has neither CI variable and no `.git`, so `gitBranch` is null there and dev affordances are absent. Use a development-profile build, or `eas build --local` from CI, when you need them.
+- **Still your responsibility:** `eas build --local --profile production` off a `feat/*` branch bakes dev affordances in. That build is not a store path under the release workflow above, but nothing in the code stops you distributing it.
+- Keep the gate as the first thing in the component (`if (!isDevBuild) return null;`) so there is exactly one place to audit. `src/components/dev/DevSeedSessionButton.tsx` is the reference.
+
 ## UI/UX design rules
 - Invoke the `frontend_design` and `ui-ux-pro-max` skills whenever making UI/UX or frontend changes.
 - Use design tokens from `src/theme/` — never hardcode colours, spacing, or typography values.

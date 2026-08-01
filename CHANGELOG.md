@@ -10,6 +10,27 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`isDevBuild` — a build-time gate for dev-only affordances.** New export in
+  [src/env.ts](src/env.ts): true in a dev client, and in any build cut from a branch that is not
+  store-bound (`main` or `release/*`). `gitBranch` is baked into the Expo manifest by a new
+  `resolveGitBranch()` in [app.config.js](app.config.js) (`GITHUB_REF_NAME` → `CI_BRANCH` →
+  `git rev-parse`). This did not previously exist despite being referenced as existing —
+  `__DEV__` alone would delete dev affordances from production-profile builds off feature
+  branches, which `.claude/CLAUDE.md` explicitly requires them to survive. `release/*` counts as
+  production because Xcode Cloud sets `CI_BRANCH` from a real checkout, so archiving off a
+  release branch would otherwise ship dev affordances to TestFlight. An unresolvable branch
+  resolves to `null` and also counts as production: fail closed. Note that a *remote* EAS build
+  has neither CI variable and no `.git`, so dev affordances are absent there — use a
+  development-profile build or `eas build --local`.
+- **Dev-only seed-session button on the sign-in screen.** With the shipped default
+  `BACKEND="none"`, `localAuthProvider.signIn()` and `signUp()` both throw `not_wired`
+  deliberately, so the app could not be walked end to end and a UI driver like Maestro had no
+  tappable path past the auth wall. `seedLocalSession()` existed as the escape hatch but only a
+  Jest test could reach it. New `src/components/dev/DevSeedSessionButton.tsx` calls it with a
+  fixed fake session, then re-hydrates through the real `authProvider.getSession()` path so
+  `Stack.Protected` moves to `(tabs)` on its own. Gated on `isDevBuild && backend === "none"` —
+  unreachable in a store build, and hidden once a real provider is wired, since seeding writes a
+  key that provider never reads.
 - **React Native screen-test harness.** `@testing-library/react-native` was installed but
   had zero usages — nothing in the repo could render a component. Adds `setupFilesAfterEnv`,
   native-module mocks in `jest.setup.js` for the dependencies every screen pulls in
