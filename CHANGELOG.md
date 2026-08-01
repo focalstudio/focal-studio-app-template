@@ -10,6 +10,28 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Maestro E2E flow: launch through account deletion.** New
+  [.maestro/full-journey.yaml](.maestro/full-journey.yaml) drives a real iOS Simulator build
+  through the full journey — onboarding swipe-through, the #79 dev-seed-session seam past the
+  auth wall, the paywall (reached via its deep link, since nothing in the template links to it
+  yet), the settings tab, and the two-step account-deletion confirmation — asserting the app
+  lands back on the sign-in screen once `isAuthenticated` flips false. New
+  `.github/workflows/maestro-e2e.yml` runs it on `macos-latest` via `expo run:ios`, triggered
+  only by `workflow_dispatch` and `release: published` — never per-PR, since a macOS runner
+  bills at a 10x minute multiplier and `expo run:ios`'s prebuild + native compile takes
+  ~15-25 minutes. Skips cleanly (same pattern as `eas-preview.yml`) when `app.json` still has
+  template placeholders. The Maestro CLI installs via its own shell installer (not an npm
+  package) with `MAESTRO_VERSION` pinned rather than "latest" — the installer performs no
+  checksum verification, so an unpinned version would let a compromised or changed
+  `get.maestro.mobile.dev` response silently alter what CI executes; see the new "CI / build
+  tooling" table in [VERSIONS.md](VERSIONS.md). The install step fails closed (`set -euo
+  pipefail` + `curl -f`, so an HTTP error page is never piped into `bash`) and asserts
+  `maestro --version` reports the pinned version, so an installer that stopped honouring
+  `MAESTRO_VERSION` would break the build rather than silently run "latest". Evaluated Maestro Cloud as an alternative
+  runner for the test-execution step and rejected it: at this cadence (2-4 runs/month) the
+  `macos-latest` approach costs ~$0 (well within GitHub's free monthly macOS-runner minutes),
+  versus Maestro Cloud's $250/month flat subscription — which also doesn't eliminate the
+  macOS build requirement, since Maestro Cloud doesn't build the app itself.
 - **`test-engineer` subagent** ([.claude/agents/test-engineer.md](.claude/agents/test-engineer.md)) —
   owns `src/__tests__/**` and is the only agent that writes test files. Nothing previously owned
   testing: no agent's workflow ran `npm test`, and `ios-frontend` verified with `type-check` alone.
@@ -56,6 +78,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `types/expo-router-testing-library.d.ts`, since Expo Router registers matchers like
   `toHavePathname` at runtime but ships an empty `expect.d.ts`, so they would otherwise
   pass `npm test` and fail `npm run type-check`.
+- **Screen render tests for every remaining production screen.** Onboarding, sign up,
+  forgot password, paywall, and settings now each have a `src/__tests__/screens/*.tsx` test
+  following the harness pattern above; `login.tsx` already had render coverage from its
+  dev-seed-gate test. `settings-screen.test.tsx` also proves the two-step delete-account
+  confirmation in `app/(tabs)/settings.tsx` can't be short-circuited by a single confirm —
+  `Alert.alert` is spied, its button config captured, and callbacks invoked manually to walk
+  both alerts, since a native alert renders nothing queryable. The auth provider is mocked
+  with the same stable-object convention as `useAuthStore.test.ts`; note the screen there is
+  `require`d after `jest.mock` runs, not statically imported, because a static import gets
+  hoisted above the mock's backing `const` and would read it as `undefined`.
 - **CI smoke test for `scripts/init.sh`.** New `template-smoke-test.yml` workflow runs
   `init.sh` with fixed dummy flags on its own ephemeral checkout, then asserts no
   `[APP_*]` placeholders remain and that `app.json` / `package.json` match the injected

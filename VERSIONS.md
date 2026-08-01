@@ -67,6 +67,15 @@ Changes to any of these define a new SDK generation and require running `npx exp
 | `@types/react` | `~19.2.14` |
 | `react-test-renderer` | `^19.2.3` |
 
+### CI / build tooling (not npm packages)
+
+Installed via their own shell installers in CI, so `npm audit` and the tables above never
+see them — tracked here instead so they're not invisible to an upgrade pass.
+
+| Tool | Version | Notes |
+|---|---|---|
+| Maestro CLI | `2.8.0` | Pinned via `MAESTRO_VERSION` in [.github/workflows/maestro-e2e.yml](.github/workflows/maestro-e2e.yml) — the installer performs no checksum/signature verification, so an unpinned "latest" would let a compromised or changed `get.maestro.mobile.dev` response silently alter what CI executes between runs. Bump deliberately, not automatically. |
+
 ---
 
 ## Upgrade checklist
