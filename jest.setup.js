@@ -83,3 +83,21 @@ jest.mock("expo-store-review", () => ({
   isAvailableAsync: jest.fn().mockResolvedValue(false),
   requestReview: jest.fn().mockResolvedValue(undefined),
 }));
+
+/**
+ * `app/_layout.tsx` renders `<StatusBar>` unconditionally. Left unmocked, it
+ * is harmless on its own (a screen test that never mounts a tab navigator —
+ * e.g. the reference `home-screen.test.tsx`, which renders `(tabs)/index`
+ * directly via the single-screen shortcut without going through the real
+ * root layout — never trips this). But mounting the *real* root layout with
+ * a `Stack.Protected`-guarded `Tabs` navigator active (as any test of the
+ * auth/onboarding routing guards must) causes the real component to loop:
+ * each render re-registers with the native status bar module, and something
+ * in that interaction re-triggers a render on every commit, forever — a
+ * synchronous loop that starves the event loop badly enough that Jest's own
+ * `testTimeout` (itself a `setTimeout`) never gets a chance to fire. The
+ * mock avoids the native registration entirely.
+ */
+jest.mock("expo-status-bar", () => ({
+  StatusBar: () => null,
+}));

@@ -10,6 +10,19 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Screen tests for the `Stack.Protected` auth guards (#65).** New
+  [src/__tests__/screens/auth-guards.test.tsx](src/__tests__/screens/auth-guards.test.tsx) covers
+  all four guard combinations in [app/_layout.tsx](app/_layout.tsx) — signed out, signed in,
+  onboarding-incomplete (asserted against *both* auth states, so it proves onboarding takes
+  precedence rather than merely coinciding with the signed-out case), and hydration still in
+  flight — plus the #58 regression: when auth flips false mid-session, `Stack.Protected` removes
+  the `(tabs)` screens from the navigator's state rather than just navigating away from them, so
+  no history entry survives to back-swipe into. Built on the #77 harness; it registers the real
+  `_layout.tsx` and real nested paths with `renderRouter` rather than the single-screen
+  `{ index: Component }` shortcut, and controls hydration's *inputs* (the provider's
+  `getSession()` and the onboarding AsyncStorage key) because the layout's mount effect
+  re-hydrates every store and would overwrite state seeded with `setState`. `app/_layout.tsx`
+  itself is unchanged — the guard logic was already correct.
 - **Release gate now reports all four post-#74 checks in one PR comment.**
   `.github/workflows/release-review.yml`'s summary comment previously only covered
   type-check/lint/test/version/CHANGELOG. It now adds rows for the bootstrap smoke test (#75,
