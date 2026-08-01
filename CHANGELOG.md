@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.9.0] — 2026-08-01
+
 ### Fixed
 - **The Maestro E2E flow could never have passed — validated it against a real simulator and
   fixed six defects.** `.maestro/full-journey.yaml` and `.github/workflows/maestro-e2e.yml` (#80)
