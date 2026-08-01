@@ -9,6 +9,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **The Maestro E2E flow could never have passed — validated it against a real simulator and
+  fixed six defects.** `.maestro/full-journey.yaml` and `.github/workflows/maestro-e2e.yml` (#80)
+  shipped without ever executing anywhere; the workflow only fires on `workflow_dispatch` or
+  `release: published`, and manual dispatch needs the file on the default branch, so nothing had
+  exercised them. Running the flow locally against a bootstrapped app on an iOS Simulator
+  (Maestro 2.8.0) surfaced:
+  1. **The flow did not parse.** `assertVisible` takes no `timeout` property in Maestro 2.8.0 —
+     the run aborted with `Unknown Property: timeout` before executing a single step. Waiting with
+     a deadline is `extendedWaitUntil` (`visible:` + `timeout:`).
+  2. **Selectors are whole-label regexes, not substrings** — the opposite of what the flow's own
+     header comment asserted. `"Welcome to"` cannot match "Welcome to MyApp"; it needs
+     `"Welcome to.*"`. The comment is corrected in place, since it was the source of the error.
+  3. **iOS decorates accessibility labels.** A tab bar item is `"Settings, tab, 2 of 2"` and a
+     settings row is `"Delete Account, ›"` (trailing chevron), so neither bare title matched.
+  4. **The account-deletion row is below the fold**, and an off-screen row is still in the
+     accessibility tree — so `tapOn` reported COMPLETED while tapping nothing, and the two-step
+     deletion silently never started. Now scrolled into view with `scrollUntilVisible` first.
+  5. **The paywall deep link raises a native "Open in <App>?" confirmation** that the flow never
+     dismissed, so it never reached the paywall. Handled with a conditional `runFlow`, since the
+     prompt does not appear when the link is opened from inside the app.
+  6. **CI would have run the app with no JS bundle.** GitHub Actions sets `CI=1`, under which
+     `npx expo run:ios` exits once the app launches and takes Metro with it; a Debug build embeds
+     no bundle, so the app came up on a red "No script URL provided" screen. `maestro-e2e.yml`
+     now starts Metro as its own background process and waits for `packager-status:running`
+     before building, failing fast with the Metro log if it never comes up.
+
+  The flow now completes all 21 steps green, twice consecutively — including the two-step
+  account-deletion confirmation and the `Stack.Protected` redirect back to the sign-in screen once
+  `isAuthenticated` flips false.
+
 ### Added
 - **Screen tests for the `Stack.Protected` auth guards (#65).** New
   [src/__tests__/screens/auth-guards.test.tsx](src/__tests__/screens/auth-guards.test.tsx) covers
