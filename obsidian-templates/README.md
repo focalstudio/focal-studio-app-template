@@ -8,7 +8,7 @@ These templates give you a project-management hub in Obsidian from day one.
 
 1. Copy the four `.md` files from this folder into your Obsidian vault:
    ```
-   /Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/
+   ~/Obsidian/Projects/[APP_NAME]/
    ```
    Create the folder first if it doesn't exist.
 

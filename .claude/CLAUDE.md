@@ -80,8 +80,8 @@ When the user says to cut a release:
 8. The `release.yml` GitHub Actions workflow automatically creates tag `vx.x.x` and publishes a GitHub Release on merge — no manual tagging needed.
 9. **Immediately after step 7** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
    > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
-10. Follow the **Apple App Store checklist** for the iOS upload.
-11. Follow the **Google Play checklist** for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 8, but Play Console review steps are still manual.
+10. Follow the **Apple App Store checklist** in [.claude/reference/store-submission.md](reference/store-submission.md) for the iOS upload.
+11. Follow the **Google Play checklist** in the same file for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 8, but Play Console review steps are still manual.
 12. Verify dev mode is off on device before store submission.
 
 ## Automated release workflow
@@ -97,51 +97,15 @@ When the user says to cut a release:
 
 > **For the full simultaneous iOS + Android release procedure — recurring flow, the one-time Android bootstrap, what's automated vs manual, and verification — use the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`).** The checklists below are the per-store manual tails of that procedure.
 
-## Apple App Store checklist
-After `release/x.x.x` is merged to `main` and CI is green:
+## Store submission checklists
 
-1. `git checkout main && git pull`
-2. Run `eas build --platform ios --profile production` (or trigger via GitHub).
-3. Monitor the build in the [Expo dashboard](https://expo.dev).
-4. When the build completes, download the `.ipa` and upload via Xcode Organizer or `eas submit`.
-5. In App Store Connect: select the new build, add release notes (match CHANGELOG), submit for review.
-6. Verify dev mode is off: tap the app title 5× — confirm no dev badge appears.
-7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
+The per-store manual tails of the release workflow — Apple App Store steps, Google Play steps,
+and the **data safety checklist that must be re-run before every submission** (account deletion,
+analytics opt-out, privacy-policy URL, listing URL drift):
+[.claude/reference/store-submission.md](reference/store-submission.md).
 
-## Google Play checklist
-`android-release.yml` builds and submits automatically as part of the same `release.yml` run (see above) — this checklist is what's left to do by hand:
-
-1. Confirm the CI run succeeded: check the **Android Release** workflow in GitHub Actions.
-2. In Play Console → your app → **Internal testing**: confirm the new build appears as a draft release (`releaseStatus: "draft"` in `eas.json` — this is deliberate so nothing auto-promotes before review).
-3. Add release notes (match CHANGELOG) and review the release.
-4. Roll out to Internal testing, verify on a real device, then promote through Closed/Open/Production tracks per your own rollout policy — this template does not automate promotion beyond the internal track.
-5. Verify dev mode is off on the installed build.
-6. **Data safety check** (see below) — Play rejects submissions whose Data safety answers don't match observed behaviour.
-
-## Data safety checklist (both stores)
-
-Run this before every store submission. All three items ship with the template but each
-one has to actually work in the built app, not just exist in the source:
-
-- [ ] **Account deletion works end-to-end.** Settings → Danger Zone → Delete Account, on a
-      real build against the production backend. Confirm the account is genuinely gone —
-      not just signed out. `useAuthStore.deleteAccount()` must throw on a failed backend
-      call so the UI surfaces the error rather than faking success.
-- [ ] **Analytics opt-out survives a cold start.** Toggle Analytics off, force-quit,
-      relaunch, and confirm no events are sent before touching the toggle again. The
-      preference is re-applied during `useAppStore.hydrate()` — verify it, don't assume it.
-- [ ] **Privacy policy URL resolves.** `curl -I` the URL in `src/constants.ts` and expect
-      200. It must be app-specific and its deletion section must match what deletion
-      actually does, **including anything retained**. Point Play's account-deletion URL at
-      the page's `#delete` anchor. Generate the page from the app's data practices with
-      `node scripts/gen-privacy-policy.mjs` (driven by `store-listing/privacy.config.json`)
-      and publish it to the `focalstudio.github.io` Pages repo as `privacy-<app-slug>.html` —
-      one page **per app**, never a shared policy. See [store-listing/PRIVACY.md](../store-listing/PRIVACY.md).
-      The `verify-privacy.yml` workflow automates both checks (generate + live-URL `#delete`).
-- [ ] **`store-listing/*.md` URLs match `src/constants.ts`.** These drift easily; a stale
-      URL in the listing files is a common rejection cause.
-
-First-ever Android release for a newly bootstrapped app additionally needs the one-time setup in [KEYSTORE.md](../KEYSTORE.md) (keystore generation, Play Console app entry, service account) run **before** any tag push, since CI cannot generate a keystore non-interactively.
+First-ever Android release for a newly bootstrapped app also needs the one-time setup in
+[KEYSTORE.md](../KEYSTORE.md) before any tag push.
 
 ## Git safety rules
 - Never commit directly to `main` or `dev`.
@@ -184,24 +148,12 @@ First-ever Android release for a newly bootstrapped app additionally needs the o
 
 ## Xcode Cloud CI
 
-This template ships `ios/ci_scripts/ci_post_clone.sh` — an Xcode Cloud lifecycle hook that fully prepares the Expo managed-workflow project before every cloud build.
+`ios/ci_scripts/ci_post_clone.sh` prepares the Expo managed project before every Xcode Cloud
+build (npm ci → `expo prebuild` → `pod install`). Xcode Cloud discovers it automatically.
+EAS Build is the default and needs none of this.
 
-### What the hook does
-1. Navigates to the repo root via `$CI_PRIMARY_REPOSITORY_PATH`
-2. Installs Node.js (Homebrew is available on all Xcode Cloud runners)
-3. Runs `npm ci --legacy-peer-deps` (required for the jest-expo peer conflict)
-4. Runs `npx expo prebuild --platform ios --clean` to regenerate the native `ios/` tree (`ios/` is gitignored — only `ios/ci_scripts/` is committed via a `.gitignore` exception)
-5. Patches the generated Podfile with `inhibit_all_warnings!` to keep the build log readable
-6. Runs `pod install`
-
-### Enabling Xcode Cloud
-1. Open Xcode → Product → Xcode Cloud → Create Workflow (or use App Store Connect).
-2. Set the primary repository to this repo.
-3. Xcode Cloud discovers `ios/ci_scripts/ci_post_clone.sh` automatically — no extra configuration needed.
-
-### EAS Build vs Xcode Cloud
-- **EAS Build** (default): `eas build --platform ios`. No Xcode Cloud setup needed.
-- **Xcode Cloud**: use when you need native Xcode instruments, direct TestFlight integration, or App Store Connect automation. The hook handles `expo prebuild` for you.
+What the hook does, how to enable Xcode Cloud, and EAS vs Xcode Cloud trade-offs:
+[.claude/reference/xcode-cloud.md](reference/xcode-cloud.md).
 
 ## Mobile app guidance
 Assume [APP_NAME] is intended to ship and iterate like a real product.
@@ -302,164 +254,32 @@ Examples:
 
 ## Obsidian documentation
 
-The project Obsidian vault lives at:
-```
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/
-```
+Vault: `~/Obsidian/Projects/[APP_NAME]/`. Produce or refresh
+vault docs after a full audit, when a phase is planned, when a significant feature ships, or on
+explicit request.
 
-### When to produce Obsidian docs
-Produce or update Obsidian documents whenever:
-- A full codebase analysis or audit is completed (roadmap, status review)
-- A new phase of work is planned or prioritised
-- A significant feature is shipped and the roadmap needs refreshing
-- The user explicitly asks for a doc, kanban, or dashboard
-
-### File naming convention
-Use plain `.md` extension. Keep names short and descriptive:
-- `[APP_NAME] Dashboard.md` — at-a-glance status, today's tasks, milestone dates
-- `[APP_NAME] Roadmap.md` — full narrative roadmap, phased, with branch names
-- `[APP_NAME] Kanban.md` — Kanban plugin board, one column per phase + Done column
-
-### Obsidian formatting rules
-Always use:
-- **YAML frontmatter** with `tags`, `created`, and optionally `version`
-- **Callouts** for warnings, tips, and danger notices: `> [!note]`, `> [!warning]`, `> [!danger]`, `> [!tip]`
-- **Wiki links** to cross-reference files: `[[APP_NAME Roadmap]]`
-- **Status emoji** in tables: ✅ Done · ❌ Missing · ⏳ Planned · ⚠️ Partial
-- **Priority emoji** for items: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Later · ⬜ Deferred
-- **Checkboxes** `- [ ]` for all actionable items so the Tasks plugin can track them
-- **Tags** on items using `#tag` syntax (e.g. `#critical`, `#high`, `#medium`, `#low`)
-
-### Kanban board format (requires Obsidian Kanban plugin)
-```
----
-kanban-plugin: board
----
-
-## Column Name
-
-- [ ] Card title #tag
-
-%% kanban:settings
-{"kanban-plugin":"board"}
-%%
-```
-Columns: one per phase + a `✅ Done` column pre-populated with shipped features.
-
-### After producing any Obsidian doc
-- Update `[APP_NAME] Claude Commands.md` in the same vault folder
-- Add the prompt pattern used to the relevant section so it can be reused
-- Update frontmatter `created` date if refreshing an existing file
+File naming, frontmatter, callout/emoji conventions, and the Kanban board format:
+[.claude/reference/obsidian.md](reference/obsidian.md).
 
 ## GitHub issue labels
 
-Always apply labels when creating issues. Use `gh issue create --label "..."` with comma-separated values.
+Always apply labels when creating issues: one **type** (`bug` / `enhancement` / `chore` /
+`documentation` / `question`), one **priority** (`critical` / `high` / `medium` / `low`), and
+one **milestone** (`open-beta` / `public` / `post-release`). Run
+`gh label list --repo [GITHUB_REPO]` first to confirm they exist.
 
-Before creating an issue, run `gh label list --repo [GITHUB_REPO]` to confirm labels exist and discover any new ones. Update this section if new labels appear.
-
-### Type labels (pick one)
-| Label | When to use |
-|-------|-------------|
-| `bug` | Something is broken or behaving incorrectly |
-| `enhancement` | New feature or improvement |
-| `chore` | Maintenance, dependency updates, CI, tooling |
-| `documentation` | Docs-only changes |
-| `question` | Needs clarification, not a task yet |
-
-### Priority labels (pick one)
-| Label | When to use |
-|-------|-------------|
-| `critical` | Must ship before the current stage gate / release |
-| `high` | Important, should not slip |
-| `medium` | Planned for the milestone, can slip |
-| `low` | Nice to have |
-
-### Milestone labels (pick one)
-| Label | When to use |
-|-------|-------------|
-| `open-beta` | Required for open beta launch |
-| `public` | Required for public v1 launch |
-| `post-release` | Follow-up work after a release ships |
-
-> When new version milestones are cut (e.g. v0.5), add the label and retire labels no longer relevant.
-
-### Typical combinations
-- New feature for next minor release → `enhancement`, `medium`
-- Crash / data loss → `bug`, `critical`
-- Docs update → `documentation`, `low`
-- CI / tooling fix → `chore`, `medium`
+Full tables and typical combinations: [.claude/reference/issue-labels.md](reference/issue-labels.md).
 
 ---
 
 ## ASO (App Store Optimization)
 
-### Scoring system
-- **Popularity** (1–10): estimated search volume. Higher = more searches.
-- **Difficulty** (1–10): how hard it is to rank. Lower = less competition.
-- **Opportunity** = Popularity − Difficulty. Higher is better.
-- **Sweet spot**: Pop ≥ 6, Diff ≤ 4 (Opp ≥ +2).
+Scoring system, field hierarchy, character limits, keyword tiers, and the pre-submission
+checklist all live in the [`aso-rules`](skills/aso-rules/SKILL.md) skill — load it when
+drafting or auditing listing copy. `aso-marketing` loads it automatically.
 
-Scores from Claude are estimates. Always validate with a real tool (AppASO free tier, AppFollow, or Sensor Tower) before submitting.
-
-### iOS App Store field hierarchy
-
-| Field | Chars | Weight | Rule |
-|-------|-------|--------|------|
-| App Name | 30 | Highest | Lead with primary keyword. Every word is indexed. |
-| Subtitle | 30 | High | Cover keywords NOT in the name. No redundant words. |
-| Keywords field | 100 | Medium | No spaces after commas. Never repeat words from name or subtitle. |
-
-### Google Play field hierarchy
-
-| Field | Chars | Weight |
-|-------|-------|--------|
-| Title | 30 | Highest — use most of the 30 chars, not just the brand name |
-| Short description | 80 | High — include primary keyword |
-| Full description | 4000 | Medium — repeat key terms 3–5× naturally |
-
-### Core ASO rules
-
-1. **No redundant words across fields.** If "timer" is in the name, drop it from subtitle and keyword field.
-2. **Split compound brand names.** `WildFocus` = one indexed word. `Wild Focus` = two indexed words. Split if both parts have search value.
-3. **Subtitle = second keyword field, not a tagline.** It must add new, non-overlapping keywords.
-4. **Keyword field: no spaces after commas.** `study,work,adhd` not `study, work, adhd`.
-5. **Avoid generic mega-terms as primary strategy.** "productivity", "focus", "time management" alone are Pop 9–10 / Diff 9–10 — impossible to rank for a new app.
-6. **Niche combinations beat broad terms.** "ADHD timer" (Pop 6, Diff 3, Opp +3) beats "focus" (Pop 9, Diff 10, Opp −1) for a new app.
-
-### Keyword opportunity tiers
-
-| Tier | Strategy |
-|------|----------|
-| Skip (high pop, high diff) | Only use if they appear naturally in name/subtitle |
-| Prioritise (high pop, low diff) | Target these first for the keyword field |
-| Niche differentiation (low pop, very low diff) | Use to fill the keyword field and differentiate |
-
-### Name / subtitle template
-
-```
-[Primary keyword] - [Brand Name]        ← iOS Name (≤ 30 chars)
-[Niche A], [Niche B] & [Unique hook]    ← iOS Subtitle (≤ 30 chars)
-keyword1,keyword2,keyword3,...          ← Keywords field (≤ 100 chars, no spaces)
-```
-
-### Verification
-
-```bash
-echo -n "Your Subtitle Here" | wc -c        # must be ≤ 30
-echo -n "your,keywords,here" | wc -c        # must be ≤ 100
-```
-
-### Checklist before submitting
-- [ ] No word repeated between name and subtitle
-- [ ] No word in keyword field already appears in name or subtitle
-- [ ] Brand name is split if both parts have search value
-- [ ] Google Play title uses close to 30 chars
-- [ ] Google Play short description includes the primary keyword
-
-### Store listing files
-Keep metadata version-controlled:
-- `store-listing/ios-appstore-listing.md` — iOS App Store Connect (name, subtitle, keywords, description)
-- `store-listing/play-store-listing.md` — Google Play (title, short desc, full desc)
+Store metadata is version-controlled in `store-listing/ios-appstore-listing.md` and
+`store-listing/play-store-listing.md`.
 
 ---
 
@@ -536,17 +356,22 @@ STATUS: awaiting_approval
 
 ## Multi-agent workflow
 
-All six specialist subagents live in [.claude/agents/](agents/) and ship with the template — no per-machine install. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
+All eight specialist subagents live in [.claude/agents/](agents/) and ship with the template — no per-machine install. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
 
-| Agent | Purpose | Skills loaded |
+Each agent declares its own `model` and `effort` in frontmatter, tiered by how expensive a mistake is. Do not override these per-spawn unless the brief is genuinely atypical.
+
+| Agent | Purpose | Model / effort |
 |---|---|---|
-| `ios-frontend` | React Native + Expo UI work | `frontend_design`, `ui-ux-pro-max`, `design-for-ai`, `rn-*` bundle |
-| `backend-integrator` | Third-party service integration | `expo-services`, `react-native-expert`, `typescript-pro`, `rn-data-fetching` |
-| `release-manager` | Runs the full release workflow above | `parallel-release`, `commit`, `commit-push-pr`, `review`, `verify` |
-| `aso-marketing` | Store-listing copy with hard char-limit enforcement | `aso-rules`, `ralph-copywriter`, `web-asset-generator` |
-| `qa-reviewer` | Read-only pre-PR review | `review`, `security-review`, `simplify`, `tob-*` bundle |
-| `devops-agent` | Package risk assessment + controlled installation | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults`, `react-native-expert`, `expo-services` |
-| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing | `ralph-copywriter`, `aso-rules` |
+| `ios-frontend` | React Native + Expo UI work | sonnet / medium |
+| `backend-integrator` | Third-party service integration | sonnet / high |
+| `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` | sonnet / medium |
+| `release-manager` | Runs the full release workflow above | sonnet / low |
+| `aso-marketing` | Store-listing copy with hard char-limit enforcement | haiku / low |
+| `qa-reviewer` | Read-only pre-PR review | opus / high |
+| `devops-agent` | Package risk assessment + controlled installation | opus / medium |
+| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing | sonnet / medium |
+
+Which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md).
 
 ### Bootstrap trigger
 
@@ -564,12 +389,12 @@ Pass the verbatim user message as the brief. The agent handles all Q&A and execu
 
 When a user request arrives:
 
-1. **Classify** into `bootstrap`, `frontend`, `backend`, `release`, `marketing`, `review`, `devops`, or `mixed`.
+1. **Classify** into `bootstrap`, `frontend`, `backend`, `test`, `release`, `marketing`, `review`, `devops`, or `mixed`.
 2. **Check for package needs** — if the task requires new packages, run the Dependency Gate (see above) before spawning coding agents.
 3. **For single-domain requests:** spawn the matching subagent with a *fully self-contained brief* — exact file paths, expected behavior, what to return. The orchestrator plans, the subagent executes. **Never** delegate planning ("figure out what to do") — that wastes the subagent's context re-deriving what the orchestrator already knows.
 4. **For mixed requests:** decompose into independent subtasks and spawn subagents in parallel (single message, multiple `Agent` tool calls) when there are no cross-dependencies.
 5. **Subagents return reports.** The orchestrator handles commits, `CHANGELOG.md` updates, and PR creation. Subagents must not open PRs themselves — this avoids race conditions when multiple agents touch the same branch.
-6. **Skills inside subagents.** Each subagent's `.md` declares the skills it must load. The subagent invokes them via the `Skill` tool at the start of its run; the orchestrator doesn't need to specify which skills to use.
+6. **Skills inside subagents.** Each subagent's `.md` declares which skills it loads and **under what conditions** — most are conditional, because loading a skill costs context. The subagent decides from the brief; the orchestrator doesn't specify skills. Write briefs that describe the task shape ("restyle the paywall header", "one-line spacing fix") so the subagent can match the right row.
 
 ### When NOT to delegate
 
@@ -577,7 +402,7 @@ Skip subagent delegation when the task is a single trivial edit (one-line fix, t
 
 ### Long-report handoff
 
-When a subagent's report would exceed ~80 lines (full `qa-reviewer` audit, deep backend integration write-up, design analysis), the subagent writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only:
+When a subagent's report would exceed ~50 lines (full `qa-reviewer` audit, deep backend integration write-up, design analysis), the subagent writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only:
 
 1. The file path.
 2. A 3-bullet executive summary (blockers / decisions / what changed).

@@ -59,7 +59,7 @@ focal-studio-app-template/
 └── .claude/
     ├── CLAUDE.md          ← FULL project instructions (read this!)
     ├── SKILLS.md          ← agent → skills matrix
-    ├── agents/            ← 5 specialist subagents (see below)
+    ├── agents/            ← 8 specialist subagents (see below)
     └── skills/            ← 18 vendored skill packs (ship with the template, no per-machine install)
 ```
 
@@ -84,21 +84,22 @@ focal-studio-app-template/
 
 ## Agent registry
 
-Six specialist subagents live in [.claude/agents/](.claude/agents/). The main Claude Code session (Opus) is the orchestrator — it delegates, it does not do all the work itself.
+Eight specialist subagents live in [.claude/agents/](.claude/agents/). The main Claude Code session (Opus) is the orchestrator — it delegates, it does not do all the work itself.
 
 | Subagent | Use for |
 |---|---|
 | [`app-bootstrapper`](.claude/agents/app-bootstrapper.md) | **Start here for a new app.** Q&A → IDEA.md → placeholder replacement → GitHub repo + issues → onboarding slides + store listing draft. Trigger: "bootstrap a new app" or describe your idea. |
 | [`ios-frontend`](.claude/agents/ios-frontend.md) | React Native + Expo UI work: screens, components, theming, navigation, animation |
 | [`backend-integrator`](.claude/agents/backend-integrator.md) | Wiring Supabase, RevenueCat, PostHog, expo-notifications, AsyncStorage |
+| [`test-engineer`](.claude/agents/test-engineer.md) | Jest unit + screen-render tests. Owns `src/__tests__/**` — the only agent that writes test files |
 | [`release-manager`](.claude/agents/release-manager.md) | Cut a release — runs the full release workflow from `.claude/CLAUDE.md` |
 | [`aso-marketing`](.claude/agents/aso-marketing.md) | App Store / Google Play listing copy with hard char-limit enforcement |
 | [`qa-reviewer`](.claude/agents/qa-reviewer.md) | Read-only pre-PR review — async bugs, cleanup gaps, security, supply chain |
 | [`devops-agent`](.claude/agents/devops-agent.md) | Package risk assessment + controlled installation. **Never auto-spawned** — see Dependency Gate below |
 
-Each agent declares the skills it loads — see [.claude/SKILLS.md](.claude/SKILLS.md) for the matrix.
+Each agent declares its `model` and `effort` in frontmatter (tiered by cost-of-a-mistake), and declares which skills it loads **and under what conditions** — see [.claude/SKILLS.md](.claude/SKILLS.md) for both matrices.
 
-**Long-report handoff.** If a subagent's report would exceed ~80 lines, it writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only the path plus a 3-bullet summary. Keeps the orchestrator context lean. Full convention in [.claude/CLAUDE.md](.claude/CLAUDE.md) under "Multi-agent workflow".
+**Long-report handoff.** If a subagent's report would exceed ~50 lines, it writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only the path plus a 3-bullet summary. Keeps the orchestrator context lean. Full convention in [.claude/CLAUDE.md](.claude/CLAUDE.md) under "Multi-agent workflow".
 
 ### When to delegate vs do it yourself
 
