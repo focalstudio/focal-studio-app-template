@@ -5,6 +5,7 @@ import { Screen } from "@/components/layout/Screen";
 import { Button } from "@/components/ui/Button";
 import { SocialSignInButton } from "@/components/ui/SocialSignInButton";
 import { TextInput } from "@/components/ui/TextInput";
+import { DevSeedSessionButton } from "@/components/dev/DevSeedSessionButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/store/useAuthStore";
 import { authErrorMessage } from "@/services/auth";
@@ -148,6 +149,8 @@ export default function LoginScreen() {
         {socialError !== "" && (
           <Text style={[styles.socialError, { color: colors.danger }]}>{socialError}</Text>
         )}
+
+        <DevSeedSessionButton />
 
         <Pressable onPress={() => router.push("/(auth)/signup")} style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
