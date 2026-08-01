@@ -10,6 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Release gate now reports all four post-#74 checks in one PR comment.**
+  `.github/workflows/release-review.yml`'s summary comment previously only covered
+  type-check/lint/test/version/CHANGELOG. It now adds rows for the bootstrap smoke test (#75,
+  `template-smoke-test.yml`) and backend-wiring smoke test (#76, `template-backend-smoke-test.yml`)
+  by querying `listWorkflowRuns` for the PR's head SHA — rendering ✅/❌/⏳ only when a run for
+  that exact commit actually exists, otherwise "Not run for this change" — plus a hardcoded
+  Screen tests row (#78, already covered by the job's own `npm test` step) and a Device E2E
+  (Maestro) row (#80) that reads "Not run for this release" on every normal release PR by design,
+  since `maestro-e2e.yml` only fires on `workflow_dispatch` or `release: published`, never
+  per-PR. No new workflow file — extends the existing gate only.
 - **Maestro E2E flow: launch through account deletion.** New
   [.maestro/full-journey.yaml](.maestro/full-journey.yaml) drives a real iOS Simulator build
   through the full journey — onboarding swipe-through, the #79 dev-seed-session seam past the
