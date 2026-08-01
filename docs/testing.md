@@ -65,6 +65,7 @@ Only native dependencies are mocked. Everything else runs for real.
 | `expo-notifications` | `useTheme()` → `useAppStore` imports it, so every screen pulls it in. Loads unmocked, but prints a multi-line Expo Go warning on every render. |
 | `posthog-react-native` | Same import path as above. Keeps the SDK's timers and network client out of the test process. |
 | `expo-store-review` | `src/services/ratingService.ts`, reached from settings. `isAvailableAsync` resolves `false` so no test trips the real prompt. |
+| `expo-status-bar` | `app/_layout.tsx` renders `<StatusBar>` unconditionally. Harmless in a single-screen test that never mounts the real root layout, but mounting the real layout with a `Stack.Protected`-guarded `Tabs` navigator active (any test of the auth/onboarding routing guards) makes the real component loop on every render — a synchronous loop severe enough that Jest's own `testTimeout` never gets a chance to fire. See `src/__tests__/screens/auth-guards.test.tsx`. |
 
 Deliberately **not** mocked: `expo-router` (the point of `renderRouter` is to run it for
 real), `react-native-svg`, `react-native-pager-view`, and `lucide-react-native` — all
