@@ -10,6 +10,10 @@
 #
 # Everything the script cannot do safely — creating the project, applying SQL,
 # editing app.json — is printed at the end as explicit manual steps.
+#
+# Structurally smoke-tested by .github/workflows/template-backend-smoke-test.yml
+# on every PR that touches this file. That workflow's `paths:` filter lists this
+# path first, so any change here is covered.
 
 set -euo pipefail
 
