@@ -57,8 +57,21 @@ jobs:
       - name: Install Maestro CLI (pinned)
         if: steps.bootstrap_check.outputs.skip == 'false'
         run: |
-          curl -Ls "https://get.maestro.mobile.dev" | bash
+          set -euo pipefail
+          # -f so an HTTP error page is never piped into bash, and pipefail so a
+          # failed download fails this step rather than surfacing later as a
+          # confusing "maestro: command not found".
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          # $GITHUB_PATH only applies to later steps, so extend PATH here too.
+          export PATH="$HOME/.maestro/bin:$PATH"
+          # The installer reads MAESTRO_VERSION from the environment. Assert it
+          # honoured it, so a silently-"latest" install can't pass as pinned.
+          installed="$(maestro --version 2>&1 || true)"
+          if [[ "$installed" != *"$MAESTRO_VERSION"* ]]; then
+            echo "::error::Expected Maestro $MAESTRO_VERSION, got: $installed"
+            exit 1
+          fi
 
       - name: Resolve app identifiers
         if: steps.bootstrap_check.outputs.skip == 'false'

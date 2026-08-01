@@ -24,7 +24,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
   package) with `MAESTRO_VERSION` pinned rather than "latest" — the installer performs no
   checksum verification, so an unpinned version would let a compromised or changed
   `get.maestro.mobile.dev` response silently alter what CI executes; see the new "CI / build
-  tooling" table in [VERSIONS.md](VERSIONS.md). Evaluated Maestro Cloud as an alternative
+  tooling" table in [VERSIONS.md](VERSIONS.md). The install step fails closed (`set -euo
+  pipefail` + `curl -f`, so an HTTP error page is never piped into `bash`) and asserts
+  `maestro --version` reports the pinned version, so an installer that stopped honouring
+  `MAESTRO_VERSION` would break the build rather than silently run "latest". Evaluated Maestro Cloud as an alternative
   runner for the test-execution step and rejected it: at this cadence (2-4 runs/month) the
   `macos-latest` approach costs ~$0 (well within GitHub's free monthly macOS-runner minutes),
   versus Maestro Cloud's $250/month flat subscription — which also doesn't eliminate the
