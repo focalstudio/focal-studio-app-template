@@ -70,6 +70,11 @@ npm run lint       # ESLint
 
 Tests live in `src/__tests__/`. Add tests when changing `src/utils/` or `src/services/` core logic.
 
+Screen tests render a real route from `app/` via `renderRouter`. Copy
+`src/__tests__/screens/home-screen.test.tsx` and swap the import — see
+[docs/testing.md](docs/testing.md) for what the harness mocks and the two gotchas
+(screen tests must not live under `app/`, and `renderRouter` leaves fake timers on).
+
 ---
 
 ## Code style

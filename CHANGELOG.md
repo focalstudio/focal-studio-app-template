@@ -10,6 +10,21 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **React Native screen-test harness.** `@testing-library/react-native` was installed but
+  had zero usages — nothing in the repo could render a component. Adds `setupFilesAfterEnv`,
+  native-module mocks in `jest.setup.js` for the dependencies every screen pulls in
+  transitively (`react-native-safe-area-context`, which wraps all of them via `Screen.tsx`,
+  plus `expo-haptics`, `expo-notifications`, `posthog-react-native`, `expo-store-review`),
+  and one documented reference test at `src/__tests__/screens/home-screen.test.tsx` that
+  renders `app/(tabs)/index.tsx` through `expo-router`'s `renderRouter`. All seven screens
+  in `app/` were verified to render against it with no further mocking. New
+  [docs/testing.md](docs/testing.md) documents the copyable pattern, what `jest-expo`
+  already provides (the `@/` alias and `transformIgnorePatterns` — do not re-add them), and
+  two traps: screen tests cannot live under `app/` because Expo Router would turn them into
+  routes, and `renderRouter` enables fake timers without restoring them. Also adds
+  `types/expo-router-testing-library.d.ts`, since Expo Router registers matchers like
+  `toHavePathname` at runtime but ships an empty `expect.d.ts`, so they would otherwise
+  pass `npm test` and fail `npm run type-check`.
 - **CI smoke test for `scripts/init.sh`.** New `template-smoke-test.yml` workflow runs
   `init.sh` with fixed dummy flags on its own ephemeral checkout, then asserts no
   `[APP_*]` placeholders remain and that `app.json` / `package.json` match the injected
