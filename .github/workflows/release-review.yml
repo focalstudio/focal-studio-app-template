@@ -14,6 +14,7 @@ env:
 permissions:
   pull-requests: write
   contents: read
+  actions: read
 
 jobs:
   gate:
@@ -70,8 +71,44 @@ jobs:
         with:
           script: |
             const version = '${{ steps.version_check.outputs.version }}';
+            const sha = context.payload.pull_request.head.sha;
+
+            // Looks up the latest run of a sibling workflow for this exact commit, rather than
+            // asserting green — a workflow that never ran for this SHA (path filter didn't
+            // match, or it only fires on workflow_dispatch/release) must show as not run, not
+            // as passed.
+            async function latestConclusion(workflowFile) {
+              try {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: workflowFile,
+                  head_sha: sha,
+                  per_page: 1,
+                });
+                const run = data.workflow_runs[0];
+                if (!run) return null;
+                if (run.status !== 'completed') return 'pending';
+                return run.conclusion;
+              } catch (error) {
+                core.warning(`Could not look up ${workflowFile} runs: ${error.message}`);
+                return null;
+              }
+            }
+
+            function renderRow(label, conclusion, notRunLabel) {
+              if (conclusion === 'success') return `| ${label} | ✅ Passed |`;
+              if (conclusion === 'pending') return `| ${label} | ⏳ Running |`;
+              if (conclusion === null) return `| ${label} | ⚠️ ${notRunLabel} |`;
+              return `| ${label} | ❌ Failed |`;
+            }
+
+            const bootstrapConclusion = await latestConclusion('template-smoke-test.yml');
+            const backendConclusion = await latestConclusion('template-backend-smoke-test.yml');
+            const maestroConclusion = await latestConclusion('maestro-e2e.yml');
+
             const body = [
-              '## Release Review Gate ✅',
+              '## Release Review Gate',
               '',
               `**Version:** v${version}`,
               '',
@@ -80,8 +117,12 @@ jobs:
               '| Type-check | ✅ Passed |',
               '| Lint | ✅ Passed |',
               '| Tests | ✅ Passed |',
+              '| Screen tests | ✅ Passed |',
               '| Version consistency | ✅ Passed |',
               '| CHANGELOG entry | ✅ Passed |',
+              renderRow('Bootstrap smoke test', bootstrapConclusion, 'Not run for this change'),
+              renderRow('Backend-wiring smoke test', backendConclusion, 'Not run for this change'),
+              renderRow('Device E2E (Maestro)', maestroConclusion, 'Not run for this release'),
               '',
               'This release is ready to merge to `main`.',
               '',
