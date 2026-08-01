@@ -1,0 +1,82 @@
+name: Maestro E2E
+
+# Deliberately not on every push/PR: an iOS Simulator build needs macos-latest,
+# billed at a 10x minute multiplier vs. ubuntu-latest, and `expo run:ios`'s
+# full prebuild + native compile takes ~15-25 minutes per run. See #80.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Pinned, not "latest" — the installer has no checksum/signature step, so an
+  # unpinned version lets a compromised or unexpectedly-changed
+  # get.maestro.mobile.dev response silently alter what CI executes between
+  # runs. Keep this in sync with the "Maestro CLI" row in VERSIONS.md.
+  MAESTRO_VERSION: '2.8.0'
+
+jobs:
+  e2e:
+    name: Maestro E2E (iOS Simulator)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Check if app is bootstrapped
+        id: bootstrap_check
+        run: |
+          if grep -q '\[APP_SLUG\]' app.json; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Template placeholders still present — skipping Maestro E2E run."
+            echo "Run scripts/init.sh to bootstrap a real app before this workflow can run."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Maestro CLI requires Java 17+; macos-latest doesn't guarantee one is
+      # present, so pin it explicitly rather than relying on the runner image.
+      - name: Setup Java
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Maestro CLI (pinned)
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve app identifiers
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        id: app_ids
+        run: |
+          node -e "
+            const app = require('./app.json').expo;
+            console.log('app_id=' + app.ios.bundleIdentifier);
+            console.log('app_scheme=' + app.scheme);
+          " >> "$GITHUB_OUTPUT"
+
+      - name: Build and launch iOS app in Simulator
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: npx expo run:ios
+
+      - name: Run Maestro flow
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: |
+          maestro test .maestro/full-journey.yaml \
+            -e APP_ID="${{ steps.app_ids.outputs.app_id }}" \
+            -e APP_SCHEME="${{ steps.app_ids.outputs.app_scheme }}"

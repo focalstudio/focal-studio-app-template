@@ -10,6 +10,25 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Maestro E2E flow: launch through account deletion.** New
+  [.maestro/full-journey.yaml](.maestro/full-journey.yaml) drives a real iOS Simulator build
+  through the full journey — onboarding swipe-through, the #79 dev-seed-session seam past the
+  auth wall, the paywall (reached via its deep link, since nothing in the template links to it
+  yet), the settings tab, and the two-step account-deletion confirmation — asserting the app
+  lands back on the sign-in screen once `isAuthenticated` flips false. New
+  `.github/workflows/maestro-e2e.yml` runs it on `macos-latest` via `expo run:ios`, triggered
+  only by `workflow_dispatch` and `release: published` — never per-PR, since a macOS runner
+  bills at a 10x minute multiplier and `expo run:ios`'s prebuild + native compile takes
+  ~15-25 minutes. Skips cleanly (same pattern as `eas-preview.yml`) when `app.json` still has
+  template placeholders. The Maestro CLI installs via its own shell installer (not an npm
+  package) with `MAESTRO_VERSION` pinned rather than "latest" — the installer performs no
+  checksum verification, so an unpinned version would let a compromised or changed
+  `get.maestro.mobile.dev` response silently alter what CI executes; see the new "CI / build
+  tooling" table in [VERSIONS.md](VERSIONS.md). Evaluated Maestro Cloud as an alternative
+  runner for the test-execution step and rejected it: at this cadence (2-4 runs/month) the
+  `macos-latest` approach costs ~$0 (well within GitHub's free monthly macOS-runner minutes),
+  versus Maestro Cloud's $250/month flat subscription — which also doesn't eliminate the
+  macOS build requirement, since Maestro Cloud doesn't build the app itself.
 - **`isDevBuild` — a build-time gate for dev-only affordances.** New export in
   [src/env.ts](src/env.ts): true in a dev client, and in any build cut from a branch that is not
   store-bound (`main` or `release/*`). `gitBranch` is baked into the Expo manifest by a new
