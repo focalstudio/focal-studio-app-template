@@ -9,6 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **Dev sign-in bypass button on the login screen (#39).** Once a backend is wired, every screen
+  sits behind auth and you retype credentials on every reload. Setting
+  `EXPO_PUBLIC_DEV_BYPASS_EMAIL` / `EXPO_PUBLIC_DEV_BYPASS_PASSWORD` adds a "Skip Sign-In (Dev)"
+  button that signs in through the **real** `signIn()` → `AuthProvider` path, so the app gets a
+  genuine session and JWT — a faked `isAuthenticated` flag would get past the redirect in
+  `app/index.tsx` and then fail silently on every RLS-protected query. It is the complement of
+  `DevSeedSessionButton`: that one only renders with no backend wired, this one only with one, so
+  exactly one of the two can ever appear. Gated on `isDevBuild`, as the first statement in the
+  component, per `.claude/CLAUDE.md`.
+- **`app.config.js` strips `EXPO_PUBLIC_DEV_BYPASS_*` from store-bound builds.** `isDevBuild` hides
+  the button, not the password — `EXPO_PUBLIC_*` values are inlined into the JS bundle, so a
+  credential left in a production EAS environment group would ship regardless of what renders. The
+  pair is now dropped from `extra.env` (with a build-time warning) on `main`, `release/*`, and any
+  build whose branch can't be resolved, failing closed the same way `isDevBuild` does. For the same
+  reason the two keys are deliberately absent from `readEnv()`'s `process.env` fallback in
+  `src/env.ts`: Babel would inline them there and defeat the strip.
+
 ### Fixed
 - **A network failure during session hydration silently signed users out.** `useAuthStore.hydrate()`
   caught every error from `getSession()` the same way, so a device with no connectivity looked
