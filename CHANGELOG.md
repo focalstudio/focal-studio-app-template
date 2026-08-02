@@ -9,6 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **`maestro-e2e.yml` had no working automatic trigger — it has never run in CI.** Its only
+  non-manual trigger was `release: [published]`, which can never fire: `release.yml` publishes that
+  Release with the default `GITHUB_TOKEN`, and GitHub's recursion guard suppresses workflow-triggering
+  events raised by that token. Confirmed on 0.9.0 — `release.yml` green, `v0.9.0` tagged and
+  published, and `gh run list --workflow maestro-e2e.yml` returned no runs at all. This is the same
+  trap `android-release.yml` hit with `push: tags:` (#95). Fixed the same way: `maestro-e2e.yml` now
+  exposes `workflow_call` (the dead `release:` trigger is gone, `workflow_dispatch` stays), and
+  `release.yml` calls it as a dependent job gated on the existing `tag_created` output, so a re-run
+  on an already-tagged `main` doesn't spend another 15-25 minutes of `macos-latest`. No PAT and no
+  new secret — and no `secrets: inherit` on this one, since nothing in the workflow reads a secret.
+  Runs in parallel with `android-release`, so it adds no wall-clock time to the Android path.
+- **Maestro debug artifacts are now uploaded when the E2E job fails.** `~/.maestro/tests` (view
+  hierarchies and screenshots) plus Metro's log are bundled as a `maestro-debug-output` artifact.
+  Those hierarchies identified four of the six flow defects fixed in #92, and none of those fixes has
+  ever executed in CI because of the trigger bug above — so the first genuine run, on a downstream
+  bootstrapped app, is the one most likely to fail on something a local run can't reproduce
+  (simulator selection, cold-runner Metro timing).
+- **Release gate's Device E2E row now says "Runs after merge to main"** instead of "Not run for this
+  release". The row stays ⚠️ on every release PR by design — a reusable workflow invoked via `uses:`
+  produces jobs inside the caller's run, never a `maestro-e2e.yml` run of its own for
+  `listWorkflowRuns` to resolve against the PR's head SHA — but the old wording implied the E2E was
+  skipped entirely, which is no longer true.
+
 ---
 
 ## [0.9.0] — 2026-08-01
