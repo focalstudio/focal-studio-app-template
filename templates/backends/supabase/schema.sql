@@ -25,6 +25,33 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- ---------------------------------------------------------------------------
+-- Table grants
+-- ---------------------------------------------------------------------------
+-- These are load-bearing and easy to miss, because the failure looks like an RLS
+-- bug and isn't one.
+--
+-- RLS *narrows* access that a GRANT has already allowed — it never creates it. A
+-- table created by running SQL (here, the SQL Editor or `supabase db push`) gets
+-- no data privileges for the PostgREST roles: `anon`, `authenticated` and
+-- `service_role` come out holding only REFERENCES/TRIGGER/TRUNCATE. Without the
+-- grants below every policy above is a dead letter and the first
+-- `supabase.from("profiles").select()` fails with:
+--
+--   permission denied for table profiles
+--
+-- Tables created through the dashboard's Table Editor get these grants applied
+-- for you, which is why the gap only bites people who apply schema.sql as SQL.
+--
+-- Deliberately NOT granted:
+--   • anything to `anon` — every policy above is `to authenticated`, so an
+--     anonymous caller has no policy that could ever pass;
+--   • DELETE to `authenticated` — profiles are removed by the `on delete cascade`
+--     when the auth user goes, and there is no delete policy to gate it.
+
+grant select, insert, update on public.profiles to authenticated;
+grant all on public.profiles to service_role;
+
+-- ---------------------------------------------------------------------------
 -- RLS policies
 -- ---------------------------------------------------------------------------
 -- Two non-obvious performance rules, both from Supabase's own RLS guide:

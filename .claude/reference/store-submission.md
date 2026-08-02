@@ -27,13 +27,26 @@ After `release/x.x.x` is merged to `main` and CI is green:
 
 ## Data safety checklist (both stores)
 
-Run this before every store submission. All three items ship with the template but each
+Run this before every store submission. Every item ships with the template but each
 one has to actually work in the built app, not just exist in the source:
 
 - [ ] **Account deletion works end-to-end.** Settings → Danger Zone → Delete Account, on a
       real build against the production backend. Confirm the account is genuinely gone —
       not just signed out. `useAuthStore.deleteAccount()` must throw on a failed backend
       call so the UI surfaces the error rather than faking success.
+      For Supabase, `verify-backend.yml` already covers the **backend** half in CI (the row
+      is really gone, the cascade really cascaded, a broken RPC really errors), so what this
+      manual pass is for is the **UI** half: that a failure reaches the user as a failure.
+- [ ] **Session survives a cold start.** Sign in, force-quit the app from the app switcher,
+      relaunch — you must still be signed in, with no credential re-entry and no flash of the
+      login screen. *Cannot be automated:* this exercises the `expo-sqlite/localStorage`
+      session store, which only exists on device. Headless Node calling `getSession()` would
+      prove the Supabase API works, not that our storage wiring does.
+- [ ] **Token refresh survives backgrounding.** Sign in, background the app past the access
+      token's expiry (1 h by default), foreground it, and perform an authenticated action —
+      it must succeed without a re-login. *Cannot be automated:* this exercises the
+      module-scope `AppState` listener in `src/services/auth/supabase.ts` that drives
+      `startAutoRefresh`/`stopAutoRefresh`, and `AppState` never fires headlessly.
 - [ ] **Analytics opt-out survives a cold start.** Toggle Analytics off, force-quit,
       relaunch, and confirm no events are sent before touching the toggle again. The
       preference is re-applied during `useAppStore.hydrate()` — verify it, don't assume it.

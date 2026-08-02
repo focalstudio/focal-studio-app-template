@@ -75,6 +75,7 @@ see them — tracked here instead so they're not invisible to an upgrade pass.
 | Tool | Version | Notes |
 |---|---|---|
 | Maestro CLI | `2.8.0` | Pinned via `MAESTRO_VERSION` in [.github/workflows/maestro-e2e.yml](.github/workflows/maestro-e2e.yml) — the installer performs no checksum/signature verification, so an unpinned "latest" would let a compromised or changed `get.maestro.mobile.dev` response silently alter what CI executes between runs. Bump deliberately, not automatically. |
+| Supabase CLI | `2.111.0` | Pinned via `SUPABASE_CLI_VERSION` in [.github/workflows/verify-backend.yml](.github/workflows/verify-backend.yml). It both runs the local stack the deletion contract is asserted against and generates `src/types/database.types.ts`, so an unpinned "latest" would let a CLI codegen change turn an unrelated PR red on the drift check. **When bumping, regenerate the types in the same PR.** |
 
 ---
 

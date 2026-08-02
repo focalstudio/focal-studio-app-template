@@ -1,0 +1,221 @@
+name: Verify Backend
+
+# Verifies the Supabase backend contract against a REAL Postgres + GoTrue, and keeps the
+# generated database types honest. Two jobs' worth of work in one, because both need the
+# same `supabase start`:
+#
+#   1. Account deletion (#68) — applies schema.sql to a hermetic local instance and asserts
+#      the row is genuinely gone, the cascade cascaded, anon can't reach the RPC, and — the
+#      one that matters — that a deliberately broken RPC surfaces as an error rather than a
+#      silent success. deleteAccount() is the claim the app makes on Google Play's Data
+#      safety form; "it compiles" is not good enough.
+#
+#   2. Typed database (#64) — regenerates src/types/database.types.ts from that same
+#      instance and fails when the committed file has drifted from schema.sql.
+#
+# Local instance, not a shared cloud project: hermetic (clean DB every run), free, and no
+# service_role key to keep in secrets — the one key that must never leak.
+#
+# No-ops cleanly when there is no Supabase backend to verify, the same way
+# android-release.yml no-ops until the app is bootstrapped.
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "templates/backends/**"
+      - "src/types/database.types.ts"
+      - "scripts/verify-backend-contract.mjs"
+      - ".github/workflows/verify-backend.yml"
+  # Weekly, to catch drift in Supabase itself — a GoTrue or PostgREST change that breaks the
+  # contract would otherwise only surface when someone happens to touch templates/backends/**.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Pinned deliberately — see VERSIONS.md. An unpinned "latest" would let a CLI change alter
+  # both what CI executes and the shape of the generated types between runs, turning an
+  # unrelated PR red. Bump on purpose.
+  SUPABASE_CLI_VERSION: '2.111.0'
+
+jobs:
+  verify:
+    name: Supabase contract & typed database
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Two audiences, one workflow:
+      #   • the un-bootstrapped template — proves the schema.sql we ship still works, so a
+      #     Supabase regression is caught before it reaches every app generated from it;
+      #   • a generated app wired to Supabase — proves THEIR schema still works, the
+      #     higher-value case, since cascade deletes silently stop covering new tables as a
+      #     schema grows.
+      # A generated app on firebase/none has nothing to verify, so it skips.
+      - name: Gate — is there a Supabase backend to verify?
+        id: gate
+        run: |
+          if grep -q '\[APP_SLUG\]' app.json; then
+            REASON="un-bootstrapped template — verifying the shipped schema.sql"
+          elif grep -qE '^const BACKEND = "supabase";' env.js; then
+            REASON="app is wired to Supabase — verifying its schema.sql"
+          else
+            echo "No Supabase backend wired (env.js BACKEND is not \"supabase\"). Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Configured but the artifact under test is missing: that is a broken repo, not a
+          # reason to skip. Fail loudly rather than reporting green on zero coverage.
+          if [ ! -f templates/backends/supabase/schema.sql ]; then
+            echo "::error::$REASON, but templates/backends/supabase/schema.sql does not exist."
+            exit 1
+          fi
+
+          echo "$REASON"
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Supabase CLI
+        if: steps.gate.outputs.run == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      # `supabase start` needs a config.toml. The template has no supabase/ directory (and
+      # doesn't want one — schema.sql is applied via the dashboard, not migrations), so we
+      # generate a throwaway default config here. supabase/ is gitignored.
+      - name: Start local Supabase
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          supabase init --force
+          supabase start
+
+      - name: Export local credentials
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          # API_URL / ANON_KEY / SERVICE_ROLE_KEY / DB_URL. These are the well-known local
+          # development keys baked into the CLI — not secrets, and not usable off this runner.
+          #
+          # `-o env` emits KEY="value" (shell-quoted). $GITHUB_ENV is not shell-parsed, so
+          # the quotes would be taken literally and every URL would arrive wrapped in them.
+          supabase status -o env | sed -E 's/^([A-Z0-9_]+)="(.*)"$/\1=\2/' >> "$GITHUB_ENV"
+
+      # Assertion 1: the schema we ship applies cleanly — and applies cleanly TWICE, which is
+      # the idempotency the file's header claims ("Safe to re-run"). Anyone re-running it in
+      # the SQL Editor after an edit depends on that.
+      - name: Apply schema.sql (twice — it claims to be idempotent)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f templates/backends/supabase/schema.sql
+          echo "First apply OK."
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f templates/backends/supabase/schema.sql
+          echo "Second apply OK — schema.sql is idempotent."
+
+      # PostgREST reaches public.profiles as the `authenticated` / `service_role` roles, and
+      # those need table-level GRANTs on top of RLS — RLS narrows access that a grant has
+      # already allowed, it does not create it. Print the actual ACL so a "permission denied"
+      # further down is immediately diagnosable instead of guesswork.
+      - name: Show grants on public.profiles
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          echo "--- connected as ---"
+          psql "$DB_URL" -c "select current_user, session_user;"
+          echo "--- table grants on public.profiles ---"
+          psql "$DB_URL" -c "select grantee, string_agg(privilege_type, ', ' order by privilege_type) as privileges from information_schema.role_table_grants where table_schema = 'public' and table_name = 'profiles' group by grantee order by grantee;"
+          echo "--- default privileges in schema public ---"
+          psql "$DB_URL" -c "select defaclrole::regrole as for_role, defaclobjtype as obj_type, defaclacl from pg_default_acl;"
+
+      # Not a template dependency and shouldn't become one: add-backend.sh installs it into
+      # the app only when Supabase is actually wired. Unpinned on purpose — the weekly cron
+      # exists to catch supabase-js drift, which pinning would hide.
+      - name: Install supabase-js (not saved)
+        if: steps.gate.outputs.run == 'true'
+        run: npm i --no-save --legacy-peer-deps @supabase/supabase-js
+
+      # Assertions 2-5 and 7.
+      - name: Verify the deletion contract
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/verify-backend-contract.mjs
+
+      # Assertion 6 — the one that matters. A deletion that silently no-ops looks exactly
+      # like a successful one from the app's side, so prove the failure is actually visible.
+      # Done here rather than inside the script so it is obvious to anyone reading the
+      # workflow that CI really does break the RPC on purpose.
+      - name: Break delete_own_account() deliberately
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -c 'drop function public.delete_own_account();'
+          echo "Dropped public.delete_own_account(). The client must now see an error."
+
+      - name: Verify the break surfaces as an error
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/verify-backend-contract.mjs --broken
+
+      # ---------------------------------------------------------------------------
+      # Typed database (#64)
+      # ---------------------------------------------------------------------------
+      # Generated from the local instance, so no project ref and no SUPABASE_ACCESS_TOKEN
+      # are needed and the check runs in the template too. The trade-off is that schema.sql
+      # is the source of truth: a change made only in the Supabase dashboard is caught when
+      # someone writes it back, not before. See docs/backends/supabase.md.
+      #
+      # Restore the function first — it was just dropped, and the types describe the
+      # schema.sql we ship, not the sabotaged one.
+      - name: Regenerate database types
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f templates/backends/supabase/schema.sql
+          # The banner is part of the compared bytes, so the committed file can say it is
+          # generated without failing the drift check. Keep the two in sync if you edit it.
+          {
+            echo '// Generated by `supabase gen types typescript --local` from'
+            echo '// templates/backends/supabase/schema.sql. DO NOT EDIT BY HAND —'
+            echo '// verify-backend.yml regenerates this file and fails the PR when it differs.'
+            echo '// Regenerate: see "Typed database" in docs/backends/supabase.md.'
+            echo ''
+          } > /tmp/database.types.ts
+          supabase gen types typescript --local >> /tmp/database.types.ts
+          wc -l /tmp/database.types.ts
+
+      - name: Check committed types match the schema
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -uo pipefail
+          if [ ! -f src/types/database.types.ts ]; then
+            echo "::error::src/types/database.types.ts is not committed. Download the database-types artifact from this run and commit it."
+            exit 1
+          fi
+          if ! diff -u src/types/database.types.ts /tmp/database.types.ts; then
+            echo "::error::src/types/database.types.ts has drifted from schema.sql. Regenerate it: supabase gen types typescript --local > src/types/database.types.ts (or copy the database-types artifact from this run)."
+            exit 1
+          fi
+          echo "OK: committed types match the schema."
+
+      # Always uploaded: this is how the file gets seeded the first time, and how you see
+      # what it should have been when the drift check fails.
+      - name: Upload generated types
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-types
+          path: /tmp/database.types.ts
+          if-no-files-found: ignore
+
+      - name: Stop local Supabase
+        if: always() && steps.gate.outputs.run == 'true'
+        run: supabase stop --no-backup || true

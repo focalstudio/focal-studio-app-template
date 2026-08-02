@@ -9,7 +9,51 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **`profiles` was unreadable by the app — missing table grants in `schema.sql` (found by #68).**
+  The new backend verification caught this on its first run. RLS *narrows* access that a
+  `grant` has already allowed; it never creates it. A table created by running SQL (the SQL
+  Editor, or `supabase db push`) leaves `anon`, `authenticated` and `service_role` holding only
+  `REFERENCES/TRIGGER/TRUNCATE` — no `select`, `insert`, `update` or `delete`. Every RLS policy
+  in the file was therefore a dead letter, and the first `supabase.from("profiles").select()` in
+  a generated app — including the `useProfile()` hook in our own `docs/backends/supabase.md` —
+  would have failed with `permission denied for table profiles`, an error that reads like an RLS
+  bug and isn't one. `schema.sql` now grants `select, insert, update` to `authenticated` and
+  `all` to `service_role`, and the verification asserts an authenticated user can actually read
+  their own profile so the policies are exercised rather than assumed. Nothing is granted to
+  `anon` (every policy is `to authenticated`) and `delete` is withheld from `authenticated`
+  (profiles go via the `on delete cascade`). Tables made with the dashboard's Table Editor get
+  these grants applied automatically, which is why the gap only bit the SQL path.
+
 ### Added
+- **CI verification of the Supabase account-deletion contract (#68).**
+  `.github/workflows/verify-backend.yml` starts a throwaway local Supabase, applies
+  `templates/backends/supabase/schema.sql` (twice, since the file claims to be idempotent) and
+  runs `scripts/verify-backend-contract.mjs` against a real Postgres + GoTrue. It asserts the
+  auth user is genuinely gone after `delete_own_account()` — checked with the `service_role`
+  key rather than by trusting the RPC's own return value — that the `on delete cascade` really
+  removed the profile, and that `anon` is blocked by the missing grant rather than by the
+  function's own `Not authenticated` raise (without that distinction the test would pass even
+  if the `revoke` were dropped). The assertion that earns the workflow is the last one: CI
+  **drops the RPC and calls it again**, requiring the client to see an error. A deletion that
+  silently no-ops is indistinguishable from a successful one, which is exactly what Google
+  Play's Data safety requirement exists to catch, and until now `deleteAccount()` was only ever
+  tested against a stub. Runs on PRs touching `templates/backends/**` and weekly to catch drift
+  in Supabase itself; no-ops when no Supabase backend is wired.
+- **Typed Supabase database (#64).** `src/types/database.types.ts` is generated from
+  `schema.sql` and committed, and the adapter now calls `createClient<Database>(...)`, so
+  `.from("profiles").select()` returns typed rows instead of `any` and a renamed column is a
+  build error rather than `undefined` at runtime. The same workflow regenerates the file and
+  fails the PR when it has drifted. Generated with `--local` rather than the `--linked` form
+  first proposed: it needs no project ref and no `SUPABASE_ACCESS_TOKEN` in CI, and it covers
+  this template, which has no linked project. The trade-off is that **`schema.sql` is the
+  source of truth** — a change made only in the dashboard is caught when someone writes it back
+  to the file, not before. Documented in `docs/backends/supabase.md`.
+- **Cold-start persistence and background token refresh added to the Data safety checklist**
+  in `.claude/reference/store-submission.md`, with the reason each stays manual: they exercise
+  the `expo-sqlite/localStorage` session store and the module-scope `AppState` listener, neither
+  of which exists headlessly. A green headless check would prove the Supabase API works, not
+  that our wiring does — and would stop people running the test that actually proves it.
 - **Sign in with Apple for the Firebase backend (#62).** Only the Supabase half of the recipe
   had shipped, so a Firebase app had no supported route to Apple sign-in — and **App Store
   guideline 4.8** makes it mandatory the moment the app offers any other third-party login,
