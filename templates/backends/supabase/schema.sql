@@ -150,7 +150,8 @@ begin
     raise exception 'Not authenticated';
   end if;
 
-  delete from auth.users where id = uid;
+  -- SELFTEST: deletion removed on purpose; assertion 4 must fail
+  perform 1;
 end;
 $$;
 
