@@ -57,7 +57,7 @@ Auth → Providers → Email. With "Confirm email" on (the default), `signUp()` 
 bash scripts/add-social-auth.sh
 ```
 
-That installs `expo-apple-authentication`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
+The script takes no arguments — it detects Supabase from the adapter already in `src/services/auth/`. It installs `expo-apple-authentication`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
 
 ```ts
 export const authProvider: AuthProvider = { ...supabaseAuthProvider, ...socialAuth };

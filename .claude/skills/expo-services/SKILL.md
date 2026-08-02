@@ -154,7 +154,12 @@ That installs the packages, copies the adapter from `templates/backends/<provide
 
 For any **other** backend, write an adapter implementing `AuthProvider` and change that one line. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
 
-**Sign in with Apple** is opt-in on top of a wired backend: `bash scripts/add-social-auth.sh` (Supabase only for now). It composes `socialAuth` onto the provider by spread rather than editing the adapter, so adapter methods must never rely on `this`. It adds a native module — the app stops running in Expo Go and the EAS build cache is invalidated, so surface that, never add it silently.
+**Sign in with Apple** is opt-in on top of a wired backend: `bash scripts/add-social-auth.sh`. It takes no arguments — it detects Supabase or Firebase from the adapter in `src/services/auth/` and copies the matching `templates/social/<backend>-social.ts`. It composes `socialAuth` onto the provider by spread rather than editing the adapter, so adapter methods must never rely on `this`. It adds a native module — the app stops running in Expo Go and the EAS build cache is invalidated, so surface that, never add it silently.
+
+Two Firebase-specific facts, both of which are the difference between working and a dead end:
+
+- **The nonce pairing.** Supabase's `signInWithIdToken` needs only the identity token. Firebase's `OAuthProvider("apple.com").credential()` needs a nonce, and the two sides get *different* values from the same secret: Apple's sheet gets `SHA-256(raw)` as lowercase hex, Firebase gets the **raw** nonce and hashes it itself. Swap them and you get `auth/invalid-credential` with nothing pointing at the cause. Hence the extra `expo-crypto` dependency on this path (`digestStringAsync` defaults to hex — do not ask for base64).
+- **`social.ts` imports `toAuthSession` / `toAuthError` from the adapter**, which is why `templates/backends/firebase/firebase.ts` exports them. An adapter copied from an older template lacks those exports; the script greps for them and refuses with the fix rather than patching the adapter.
 
 Three contracts the port enforces, all load-bearing:
 

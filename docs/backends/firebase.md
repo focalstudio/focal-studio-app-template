@@ -15,9 +15,12 @@ That installs the **Firebase JS SDK** path. Read the next section before running
 | Runs in Expo Go | ✅ | ❌ needs `expo-dev-client` |
 | Config plugin / prebuild | none | required |
 | Auth, Firestore, Storage | ✅ | ✅ |
+| Sign in with Apple | ✅ * | ✅ |
 | Analytics, Crashlytics, Performance, FCM | ❌ | ✅ |
 | EAS build cache | untouched | invalidated (~15 min full iOS rebuild) |
 | Current version | `firebase` 12.x | `@react-native-firebase/*` 25.x |
+
+\* **That ✅ cancels the one above it.** Sign in with Apple is supported on the JS SDK path ([section 4](#4-sign-in-with-apple-optional)), but it installs `expo-apple-authentication` — a native module with a config plugin. The moment you add it, the "runs in Expo Go" and "EAS build cache untouched" rows stop being true, and the JS SDK's remaining advantage over React Native Firebase is that it's less to configure. If Expo Go was your reason for picking this column, decide about Apple sign-in *now*, not after you've built on it.
 
 **The script installs the JS SDK** because it needs no native modules, no `app.json` edits, and doesn't invalidate the EAS cache — and this repo's rules forbid silently adding a config plugin. It covers auth, Firestore, and Storage, which is what most apps need.
 
@@ -50,7 +53,64 @@ The Firebase "API key" is not a secret — it identifies the project. **Security
 
 Authentication → Sign-in method → enable **Email/Password**.
 
-## 4. Account deletion — do not skip this
+## 4. Sign in with Apple (optional)
+
+**App Store guideline 4.8** makes Sign in with Apple mandatory the moment your app offers any other third-party login. Adding Google later without this is a rejection.
+
+```bash
+bash scripts/add-social-auth.sh
+```
+
+The script takes no arguments — it detects Firebase from the adapter already in `src/services/auth/`. It installs `expo-apple-authentication` and `expo-crypto`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
+
+```ts
+export const authProvider: AuthProvider = { ...firebaseAuthProvider, ...socialAuth };
+```
+
+It does **not** touch the adapter or `app.json`. The rest is manual:
+
+> [!warning]
+> This adds a native module with a config plugin. **The app no longer runs in Expo Go** — build a dev client (`npx expo run:ios`). It also invalidates the EAS build cache, so your next build is a cold one. On this path that costs you the JS SDK's main advantage — see [Pick a path first](#pick-a-path-first).
+
+**1. `app.json`** — add the plugin and the entitlement:
+
+```json
+"plugins": ["expo-router", "expo-system-ui", "expo-apple-authentication"],
+"ios": { "usesAppleSignIn": true }
+```
+
+Without `usesAppleSignIn` the build fails **App Store validation at upload time**, not at runtime — so you find out at the worst possible moment.
+
+**2. Apple Developer** → Certificates, Identifiers & Profiles → Identifiers → your App ID → enable **Sign In with Apple**.
+
+That is all the native iOS flow needs. A Services ID, a Key, and a Return URL are only for the web/Android flow, which this recipe doesn't ship. The entitlement change invalidates your provisioning profile — let EAS regenerate it, or re-sync in Xcode.
+
+**3. Firebase Console** → Authentication → Sign-in method → **Apple** → Enable → Save.
+
+Leave **Services ID**, **Apple team ID**, **Key ID** and **Private key** blank. Those exist for the web and Android OAuth flow. The native iOS flow verifies the identity token directly, and filling those fields in for an iOS-only app is a common way to break a setup that was working.
+
+### The nonce pairing — the one thing that costs people an afternoon
+
+Supabase's `signInWithIdToken` takes the identity token and nothing else. Firebase's Apple credential requires a nonce, and **the two sides get different values derived from the same secret**:
+
+| Party | Value it receives |
+|---|---|
+| `AppleAuthentication.signInAsync({ nonce })` | `SHA-256(rawNonce)`, lowercase hex |
+| `new OAuthProvider("apple.com").credential({ rawNonce })` | the **raw** nonce, unhashed |
+
+Apple embeds the hash it was given into the identity token's `nonce` claim. Firebase hashes the `rawNonce` you hand it and compares the two. Give either side the other's value and Firebase rejects the credential with `auth/invalid-credential` — a message that points nowhere near the cause.
+
+`expo-crypto`'s `digestStringAsync` defaults to lowercase hex, which is the encoding Firebase hashes to. Asking for `CryptoEncoding.BASE64` fails the same opaque way.
+
+### What else the module does for you
+
+Apple hands back the user's name **only on the very first authorization**, ever, for that Apple ID and app pair — every later sign-in returns nulls, and reinstalling doesn't reset it. Firebase does not populate `displayName` from an Apple credential on its own, so without this the user record stays permanently nameless. The module writes it via `updateProfile` immediately, because there is no second chance.
+
+The decision of *what* to write lives in `appleNameToPersist` (`src/services/auth/appleName.ts`), which is unit-tested — social modules are copied out of `templates/`, which CI cannot type-check or lint, so the part that must be right lives where the test run can see it.
+
+---
+
+## 5. Account deletion — do not skip this
 
 `deleteUser()` removes the **auth user only**. Firestore documents and Storage objects survive, and answering Play's Data safety form as though data is deleted when it isn't is exactly the misrepresentation the requirement targets.
 
@@ -176,6 +236,8 @@ For realtime (`onSnapshot`), prefer a `useEffect` subscription writing into
 
 ## Gotchas
 
+- **Apple returns the user's name once, ever.** `fullName` and a real `email` arrive only on the *first* authorization for that Apple ID and app pair. Reinstalling the app does not reset it — to test that path again you must revoke the app under Settings → Apple ID → Sign in with Apple.
+- **Apple's private relay.** Users can hide behind `@privaterelay.appleid.com`. If you send them mail, configure the relay domain and sender in Apple's console, or it silently bounces.
 - **Crashlytics doesn't report native crashes under `expo-dev-client`** — the custom error overlay swallows them. Only release builds validate it.
 - **`getReactNativePersistence` breaks under Webpack for web.** Branch on `Platform.OS` to `browserLocalPersistence` if you ship web.
 - **RNFirebase `functions` requires the New Architecture.** This template has it enabled, so that's fine — but don't disable it.

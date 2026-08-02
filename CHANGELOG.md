@@ -9,6 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **Sign in with Apple for the Firebase backend (#62).** Only the Supabase half of the recipe
+  had shipped, so a Firebase app had no supported route to Apple sign-in — and **App Store
+  guideline 4.8** makes it mandatory the moment the app offers any other third-party login,
+  so adding Google later was a rejection waiting to happen. `bash scripts/add-social-auth.sh`
+  now takes no argument and detects the backend from whichever adapter is in
+  `src/services/auth/`, installing `templates/social/firebase-social.ts` plus `expo-crypto`
+  on the Firebase path. The Firebase credential needs a **nonce**, and the two sides get
+  different values derived from the same secret — Apple's sheet gets `SHA-256(raw)` as
+  lowercase hex, Firebase gets the raw nonce and hashes it itself. Reverse them and you get
+  `auth/invalid-credential` with nothing pointing at the cause, so both the module and
+  `docs/backends/firebase.md` spell the pairing out. Name capture reuses the already-tested
+  `appleNameToPersist`; Firebase does not populate `displayName` from an Apple credential on
+  its own, and Apple sends the name only on the first authorization ever. Note this costs the
+  Firebase JS SDK path its Expo Go support — the *Pick a path first* table now says so.
+
 ### Fixed
 - **`maestro-e2e.yml` had no working automatic trigger — it has never run in CI.** Its only
   non-manual trigger was `release: [published]`, which can never fire: `release.yml` publishes that
