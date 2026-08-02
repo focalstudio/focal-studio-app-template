@@ -9,6 +9,36 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **Wiring a backend left 6–7 Jest suites red (#100).** `npm test` passed in the template
+  (25 suites) and in CI, but `scripts/add-backend.sh` closes by telling the developer to run
+  `npm run type-check && npm run lint && npm test` — and that last command failed on both
+  backends. Four load-time causes, each masking the next:
+  1. **Untransformed ESM.** `firebase/app` ships ESM and nothing added `firebase`/`@firebase`
+     to `transformIgnorePatterns`, so every suite whose import graph reaches
+     `src/services/auth/index.ts` aborted with "Cannot use import statement outside a module".
+     Fixed by splicing into jest-expo's negative-lookahead allowlist — appending a pattern
+     cannot work, since the option is an OR of things to *ignore*. Needed a second fix
+     underneath: the preset transforms `\.[jt]sx?$`, which excludes the genuine `.mjs` file
+     `@firebase/util` resolves to.
+  2. **Unmocked native SQLite.** `add-backend.sh supabase` installs `expo-sqlite`, whose
+     `localStorage/install` side effect runs at import and hit
+     `_ExpoSQLite.default.NativeDatabase is not a constructor`. Mocked `virtual: true`, since
+     the package is absent from the template as shipped.
+  3. **`env.js` validating on require.** `app-config.test.ts` replaced `process.env` wholesale
+     with two keys, which is a valid environment only while `BACKEND` is `"none"`, and
+     `env-schema.test.ts` still had one case hardcoded to Supabase-only variables that asserts
+     `not.toThrow()` on an environment Firebase correctly rejects.
+  4. **Partial `src/env.ts` mocks.** Three suites replaced the module with two or three keys,
+     dropping `requireEnv` — which a wired adapter calls at module load. Only visible once (1)
+     was fixed.
+  Verified green in all five configurations: un-wired, Supabase, Firebase, and both
+  backends plus `add-social-auth.sh`.
+- **`template-backend-smoke-test.yml` now runs `npm test`** in each of its four jobs. It ran
+  only `tsc` and `lint`, and neither loads a module the way Jest does — which is the whole
+  reason #100 shipped green. Jest config and the shared test fixtures are now in the
+  workflow's path filter too.
+
 ### Changed
 - **Persisted storage is validated with zod schemas (#52).** `loadJson` takes an optional third
   argument — `loadJson(key, fallback, schema)` — and returns the fallback when `safeParse` fails,

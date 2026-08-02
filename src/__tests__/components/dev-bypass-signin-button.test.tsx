@@ -14,7 +14,12 @@ import { render, fireEvent, waitFor, screen } from "@testing-library/react-nativ
 import { DevBypassSignInButton } from "../../components/dev/DevBypassSignInButton";
 import { useAuthStore } from "../../store/useAuthStore";
 
+// Spread the real module rather than replacing it: once a backend is wired, its
+// adapter calls `requireEnv(...)` at module load, and a mock that omits it takes
+// the whole suite down with "requireEnv is not a function" (#100). `env` stays
+// overridden to `{}` — this file drives the bypass credentials through it.
 jest.mock("../../env", () => ({
+  ...jest.requireActual("../../env"),
   isDevBuild: true,
   backend: "supabase",
   env: {},

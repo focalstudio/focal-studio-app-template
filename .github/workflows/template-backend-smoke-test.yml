@@ -23,6 +23,9 @@ on:
       - "templates/backends/**"
       - "templates/social/**"
       - "env.js"
+      - "jest.config.js"
+      - "jest.setup.js"
+      - "src/__tests__/support/**"
   workflow_dispatch: {}
 
 env:
@@ -69,6 +72,15 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # The step that would have caught #100. `tsc` and `lint` both pass against a
+      # wired app whose Jest suite is red: neither loads a module the way Jest
+      # does, and all three root causes were load-time — an untransformed ESM
+      # import, the native SQLite binding, and env.js validating on require.
+      # add-backend.sh closes by telling the developer to run this exact command,
+      # so CI has to run it too or the instruction is untested.
+      - name: Test
+        run: npm test
 
   supabase-plus-social:
     name: Wire Supabase Backend + Social Sign-In
@@ -119,6 +131,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # The step that would have caught #100. `tsc` and `lint` both pass against a
+      # wired app whose Jest suite is red: neither loads a module the way Jest
+      # does, and all three root causes were load-time — an untransformed ESM
+      # import, the native SQLite binding, and env.js validating on require.
+      # add-backend.sh closes by telling the developer to run this exact command,
+      # so CI has to run it too or the instruction is untested.
+      - name: Test
+        run: npm test
+
   firebase:
     name: Wire Firebase Backend
     runs-on: ubuntu-latest
@@ -161,6 +182,15 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # The step that would have caught #100. `tsc` and `lint` both pass against a
+      # wired app whose Jest suite is red: neither loads a module the way Jest
+      # does, and all three root causes were load-time — an untransformed ESM
+      # import, the native SQLite binding, and env.js validating on require.
+      # add-backend.sh closes by telling the developer to run this exact command,
+      # so CI has to run it too or the instruction is untested.
+      - name: Test
+        run: npm test
 
   firebase-plus-social:
     name: Wire Firebase Backend + Social Sign-In
@@ -214,3 +244,12 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # The step that would have caught #100. `tsc` and `lint` both pass against a
+      # wired app whose Jest suite is red: neither loads a module the way Jest
+      # does, and all three root causes were load-time — an untransformed ESM
+      # import, the native SQLite binding, and env.js validating on require.
+      # add-backend.sh closes by telling the developer to run this exact command,
+      # so CI has to run it too or the instruction is untested.
+      - name: Test
+        run: npm test

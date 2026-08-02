@@ -17,7 +17,16 @@
 import { renderRouter, screen } from "expo-router/testing-library";
 import LoginScreen from "../../../app/(auth)/login";
 
-jest.mock("../../env", () => ({ isDevBuild: true, backend: "none", env: {} }));
+// Spread the real module rather than replacing it: once a backend is wired, its
+// adapter calls `requireEnv(...)` at module load, and a mock that omits it takes
+// the whole suite down with "requireEnv is not a function" (#100). `env` stays
+// overridden to `{}` — this file drives the bypass credentials through it.
+jest.mock("../../env", () => ({
+  ...jest.requireActual("../../env"),
+  isDevBuild: true,
+  backend: "none",
+  env: {},
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockEnv = require("../../env") as {

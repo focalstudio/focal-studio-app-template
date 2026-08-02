@@ -12,6 +12,26 @@
  */
 
 import mockAsyncStorage from "@react-native-async-storage/async-storage/jest/async-storage-mock";
+import { EVERY_BACKEND_CONFIGURED } from "./src/__tests__/support/backendEnv";
+
+/**
+ * Placeholder backend configuration, so `src/env.ts` resolves under Node.
+ *
+ * `readEnv()` falls back to `process.env` when there is no Expo manifest, which
+ * is always the case in Jest. Once a backend is wired, its adapter calls
+ * `requireEnv(...)` at *module load* — so with nothing set, every suite whose
+ * import graph reaches `src/services/auth/index.ts` fails to even start with
+ * "EXPO_PUBLIC_FIREBASE_API_KEY is not set" (#100). It is the same five suites
+ * the ESM problem hits, which is why this only surfaced once that was fixed.
+ *
+ * Assigned rather than overwritten, so a real `.env.local` value (or anything
+ * CI exports) still wins. These are structurally valid but meaningless — no test
+ * should ever reach a network call with them, and the shipped adapters are
+ * faked at the `AuthProvider` port, never at the SDK. See `docs/testing.md`.
+ */
+for (const [key, value] of Object.entries(EVERY_BACKEND_CONFIGURED)) {
+  process.env[key] ??= value;
+}
 
 jest.mock("@react-native-async-storage/async-storage", () => mockAsyncStorage);
 
@@ -83,6 +103,46 @@ jest.mock("expo-store-review", () => ({
   isAvailableAsync: jest.fn().mockResolvedValue(false),
   requestReview: jest.fn().mockResolvedValue(undefined),
 }));
+
+/**
+ * The Supabase session store.
+ *
+ * `templates/backends/supabase/supabase.ts` imports
+ * `expo-sqlite/localStorage/install` for its side effect: it defines a
+ * `localStorage` global, which is what supabase-js is handed as its storage
+ * adapter. That side effect runs at import time and immediately touches the
+ * native SQLite binding, so without this mock every suite whose import graph
+ * reaches `src/services/auth/index.ts` dies with
+ * `_ExpoSQLite.default.NativeDatabase is not a constructor` as soon as the
+ * Supabase backend is wired (#100).
+ *
+ * `virtual: true` is required: `expo-sqlite` is not a dependency of the
+ * template as shipped — `scripts/add-backend.sh supabase` installs it — and a
+ * non-virtual mock of a module that cannot be resolved fails outright. Virtual
+ * makes this a no-op in the un-wired template and a real mock once it isn't.
+ *
+ * The replacement is a plain in-memory Storage. Persistence across a real app
+ * restart is not something a mock can prove anyway — that is what
+ * `.maestro/persistence.yaml` is for.
+ */
+jest.mock(
+  "expo-sqlite/localStorage/install",
+  () => {
+    const entries = new Map();
+    globalThis.localStorage = {
+      getItem: (key) => (entries.has(String(key)) ? entries.get(String(key)) : null),
+      setItem: (key, value) => void entries.set(String(key), String(value)),
+      removeItem: (key) => void entries.delete(String(key)),
+      clear: () => entries.clear(),
+      key: (index) => Array.from(entries.keys())[index] ?? null,
+      get length() {
+        return entries.size;
+      },
+    };
+    return {};
+  },
+  { virtual: true }
+);
 
 /**
  * `app/_layout.tsx` renders `<StatusBar>` unconditionally. Left unmocked, it
