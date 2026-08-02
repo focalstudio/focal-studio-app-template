@@ -12,6 +12,13 @@ type AuthState = {
   isLoading: boolean;
   /** True while a user-initiated auth action is in flight. Drives button spinners. */
   isSubmitting: boolean;
+  /**
+   * Set when `hydrate()` couldn't reach the network to verify a stored
+   * session. Distinct from signed-out: we don't know the session is invalid,
+   * only that we couldn't ask. `app/_layout.tsx` routes this to a retry
+   * screen instead of the login screen.
+   */
+  hydrationError: "network" | null;
 
   hydrate: () => Promise<void>;
   init: () => () => void;
@@ -47,6 +54,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   ...signedOut,
   isLoading: true,
   isSubmitting: false,
+  hydrationError: null,
 
   /**
    * Restores a persisted session once at boot. `app/_layout.tsx` holds the
@@ -55,11 +63,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrate: async () => {
     try {
       const session = await authProvider.getSession();
-      set({ ...applySession(session), isLoading: false });
-    } catch {
-      // A provider that cannot reach the network must not trap the user on the
-      // splash screen. Fall back to signed-out; the listener will correct us.
-      set({ ...signedOut, isLoading: false });
+      set({ ...applySession(session), isLoading: false, hydrationError: null });
+    } catch (err) {
+      if (err instanceof AuthError && err.code === "network") {
+        // Leave session/user/isAuthenticated untouched — we don't know if the
+        // stored session is still good, only that we couldn't ask. Signing the
+        // user out here is the exact bug this branch exists to avoid.
+        set({ isLoading: false, hydrationError: "network" });
+      } else {
+        // Any other failure (corrupt keychain, malformed persisted session)
+        // must not trap the user on the splash screen. Fall back to
+        // signed-out; the listener will correct us.
+        set({ ...signedOut, isLoading: false, hydrationError: null });
+      }
     }
   },
 

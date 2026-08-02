@@ -108,6 +108,58 @@ describe("useAuthStore — hydration", () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.isLoading).toBe(false);
   });
+
+  // A non-network failure (corrupt keychain, malformed persisted session)
+  // keeps the pre-existing behaviour: fall back to signed-out.
+  it("falls back to signed-out on a non-network error", async () => {
+    mockProvider.getSession = jest.fn().mockRejectedValue(new AuthError("unknown", "corrupt"));
+
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+    expect(state.hydrationError).toBeNull();
+  });
+
+  // The regression this issue exists to fix: a network failure must not be
+  // treated the same as an invalid session. A valid stored session that
+  // can't be verified because the device is offline must stay as it was,
+  // not get silently signed out.
+  it("keeps the existing session and reports hydrationError on a network failure", async () => {
+    mockProvider.getSession = jest.fn().mockResolvedValue(session);
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBe("network");
+    expect(state.isLoading).toBe(false);
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.session).toEqual(session);
+    expect(state.user).toEqual(session.user);
+  });
+
+  // Covers the retry screen's path: once the network is back, hydrate()
+  // clears hydrationError so app/_layout.tsx's guards re-route.
+  it("clears hydrationError once a retry succeeds", async () => {
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().hydrationError).toBe("network");
+
+    mockProvider.getSession = jest.fn().mockResolvedValue(session);
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBeNull();
+    expect(state.isAuthenticated).toBe(true);
+  });
 });
 
 describe("useAuthStore — submitting", () => {

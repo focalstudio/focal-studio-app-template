@@ -10,6 +10,14 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Fixed
+- **A network failure during session hydration silently signed users out.** `useAuthStore.hydrate()`
+  caught every error from `getSession()` the same way, so a device with no connectivity looked
+  identical to an actually-invalid session — a user with a perfectly valid stored session got bounced
+  to the login screen on a flaky connection. `hydrate()` now branches on `AuthError.code === "network"`:
+  the existing session state is left untouched and a new `hydrationError` flag is set instead, which
+  `app/_layout.tsx` routes to a new `app/network-error.tsx` "No Connection" retry screen rather than
+  the login screen. Non-network hydration failures (corrupt keychain, malformed persisted session)
+  keep the previous signed-out fallback. (#63)
 - **`maestro-e2e.yml` had no working automatic trigger — it has never run in CI.** Its only
   non-manual trigger was `release: [published]`, which can never fire: `release.yml` publishes that
   Release with the default `GITHUB_TOKEN`, and GitHub's recursion guard suppresses workflow-triggering
