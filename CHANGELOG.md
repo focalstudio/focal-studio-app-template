@@ -31,6 +31,18 @@ Versioning: [Semantic Versioning](https://semver.org/)
   bad field does not reset the other three — via `.catch()` on each field, and a malformed
   `user.name` is dropped rather than invalidating the whole session.
 
+### Added
+- **Maestro flow covering persistence across a force-quit — `.maestro/persistence.yaml` (#52).**
+  Jest covers the schemas against fixtures; what it can't cover is the real round trip — a value
+  written by the running app, through AsyncStorage on a device, read back by `hydrate()` on a
+  genuine cold start. The flow onboards, seeds a session, sets a non-default theme, then
+  `stopApp` + a bare `launchApp` (`clearState` defaults to false, so the second launch hydrates
+  from what the first one wrote) and asserts the app skips both onboarding and the auth wall and
+  still has the theme. `Toggle` gained an optional `testID`, forwarded to its `Switch` and used
+  by the theme rows in Settings — the label is a plain `Text` and isn't pressable, so without it
+  a `tapOn` has nothing to match. `maestro-e2e.yml` now runs the `.maestro/` directory rather
+  than naming one file, so a flow added later needs no workflow change.
+
 ### Fixed
 - **Two persisted `null` blobs crashed hydration (#52).** `useAppStore.hydrate()` and
   `usePaywallStore.hydrate()` both read a field straight off whatever `loadJson` returned, so a

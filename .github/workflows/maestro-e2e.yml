@@ -117,10 +117,14 @@ jobs:
         if: steps.bootstrap_check.outputs.skip == 'false'
         run: npx expo run:ios
 
-      - name: Run Maestro flow
+      # Runs the whole directory rather than naming one file, so a flow added
+      # later is picked up without touching this workflow. Every flow starts by
+      # clearing state, so they are order-independent; `APP_SCHEME` is consumed
+      # only by full-journey.yaml and harmlessly unused by the others.
+      - name: Run Maestro flows
         if: steps.bootstrap_check.outputs.skip == 'false'
         run: |
-          maestro test .maestro/full-journey.yaml \
+          maestro test .maestro/ \
             -e APP_ID="${{ steps.app_ids.outputs.app_id }}" \
             -e APP_SCHEME="${{ steps.app_ids.outputs.app_scheme }}"
 
