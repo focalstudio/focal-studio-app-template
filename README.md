@@ -131,7 +131,7 @@ scripts/
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
 | `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
-| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase app (adds native code) |
+| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase or Firebase app (adds native code) |
 
 ---
 
@@ -152,13 +152,14 @@ the provider's env vars required, and prints the remaining manual steps.
 
 Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple** —
 mandatory under App Store guideline 4.8 as soon as you offer any other third-party login.
-Note that it adds a native module, so the app stops running in Expo Go and needs a dev
-client. Supabase only for now; Google is tracked separately.
+It takes no arguments and works with either backend; it detects which one from the adapter
+already in `src/services/auth/`. Note that it adds a native module, so the app stops running
+in Expo Go and needs a dev client. Google is tracked separately.
 
 | Provider | Guide | Notes |
 |---|---|---|
 | Supabase | [docs/backends/supabase.md](docs/backends/supabase.md) | Recommended default. Ships a `schema.sql` with RLS policies, a signup trigger, and the `delete_own_account()` function account deletion depends on. |
-| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin. Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
+| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin (until you add Apple sign-in, which ends both). Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
 
 **Writing your own?** Implement the `AuthProvider` port in
 [`src/services/auth/types.ts`](src/services/auth/types.ts) and change one export line.

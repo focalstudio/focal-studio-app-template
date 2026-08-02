@@ -161,3 +161,56 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  firebase-plus-social:
+    name: Wire Firebase Backend + Sign in with Apple
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_FIREBASE_API_KEY: placeholder-key
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: placeholder-project
+      EXPO_PUBLIC_FIREBASE_APP_ID: 1:000000000000:web:placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # add-social-auth.sh takes no arguments — it detects the backend from
+      # whichever adapter add-backend.sh left in src/services/auth/, so it must
+      # run after add-backend.sh firebase, in the same job.
+      - name: Run add-backend.sh firebase
+        run: bash scripts/add-backend.sh firebase
+
+      - name: Run add-social-auth.sh
+        run: bash scripts/add-social-auth.sh
+
+      - name: Assert structural changes
+        run: |
+          set -e
+          [ -f "src/services/auth/firebase.ts" ] || { echo "::error::src/services/auth/firebase.ts was not created"; exit 1; }
+          [ -f "src/services/auth/social.ts" ] || { echo "::error::src/services/auth/social.ts was not created"; exit 1; }
+          grep -q "firebaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with firebaseAuthProvider"; exit 1; }
+          grep -q "socialAuth" src/services/auth/index.ts || { echo "::error::index.ts was not composed with socialAuth"; exit 1; }
+          grep -q 'const BACKEND = "firebase";' env.js || { echo "::error::env.js BACKEND was not set to firebase"; exit 1; }
+          # social.ts reuses the adapter's mapping — the export guard in
+          # add-social-auth.sh is only as good as the adapter still exporting
+          # both of the helpers social.ts imports.
+          grep -q "export async function toAuthSession" src/services/auth/firebase.ts || { echo "::error::firebase.ts no longer exports toAuthSession, which social.ts imports"; exit 1; }
+          grep -q "export function toAuthError" src/services/auth/firebase.ts || { echo "::error::firebase.ts no longer exports toAuthError, which social.ts imports"; exit 1; }
+          echo "Firebase backend + Sign in with Apple wired correctly."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
