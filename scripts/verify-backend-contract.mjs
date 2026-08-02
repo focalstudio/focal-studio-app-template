@@ -135,6 +135,33 @@ async function verifyIntact() {
     "No profile row. The on_auth_user_created trigger did not fire, or the insert was swallowed."
   );
 
+  // The app reads profiles through PostgREST as the `authenticated` role, which needs a
+  // table GRANT on top of RLS — RLS narrows access a grant has already allowed, it never
+  // creates it. Without this assertion the policies in schema.sql are never exercised at
+  // all, and a missing grant surfaces to users as a "permission denied for table profiles"
+  // that reads like an RLS bug.
+  const { data: ownProfile, error: readError } = await client
+    .from("profiles")
+    .select("id")
+    .eq("id", uid);
+  assert(
+    readError === null && ownProfile?.length === 1,
+    "the authenticated user can read their own profile through PostgREST",
+    readError
+      ? `${readError.code ?? "?"}: ${readError.message}`
+      : "Query succeeded but returned no row — the RLS select policy did not match."
+  );
+
+  // anon holds no grant and no policy could match it. Belt and braces on the read path.
+  const { data: anonRead } = await createClient(API_URL, ANON_KEY, CLIENT_OPTS)
+    .from("profiles")
+    .select("id");
+  assert(
+    !anonRead || anonRead.length === 0,
+    "anon cannot read profiles",
+    "An unauthenticated caller read rows out of public.profiles."
+  );
+
   // 3. The authenticated user can call the RPC.
   const { error: rpcError } = await client.rpc("delete_own_account");
   assert(

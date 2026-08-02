@@ -9,6 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **`profiles` was unreadable by the app — missing table grants in `schema.sql` (found by #68).**
+  The new backend verification caught this on its first run. RLS *narrows* access that a
+  `grant` has already allowed; it never creates it. A table created by running SQL (the SQL
+  Editor, or `supabase db push`) leaves `anon`, `authenticated` and `service_role` holding only
+  `REFERENCES/TRIGGER/TRUNCATE` — no `select`, `insert`, `update` or `delete`. Every RLS policy
+  in the file was therefore a dead letter, and the first `supabase.from("profiles").select()` in
+  a generated app — including the `useProfile()` hook in our own `docs/backends/supabase.md` —
+  would have failed with `permission denied for table profiles`, an error that reads like an RLS
+  bug and isn't one. `schema.sql` now grants `select, insert, update` to `authenticated` and
+  `all` to `service_role`, and the verification asserts an authenticated user can actually read
+  their own profile so the policies are exercised rather than assumed. Nothing is granted to
+  `anon` (every policy is `to authenticated`) and `delete` is withheld from `authenticated`
+  (profiles go via the `on delete cascade`). Tables made with the dashboard's Table Editor get
+  these grants applied automatically, which is why the gap only bit the SQL path.
+
 ### Added
 - **CI verification of the Supabase account-deletion contract (#68).**
   `.github/workflows/verify-backend.yml` starts a throwaway local Supabase, applies
