@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { userSchema } from "../../types/schemas";
 import type { User } from "../../types";
 
 /**
@@ -6,15 +8,24 @@ import type { User } from "../../types";
  * This is deliberately provider-neutral: Supabase, Firebase, and a custom API
  * all expose these four facts in some shape, and nothing above this layer
  * should have to know which one is in use.
+ *
+ * The schema is the source of truth — it doubles as the validator for the
+ * persisted blob, so the type and the guard can't drift apart. It lives here
+ * rather than in `types/schemas.ts` because it is auth-domain.
+ *
+ * `.nullable()` and not `.optional()` on both nullable fields: a session with
+ * either key absent is malformed, not a session with a default.
  */
-export type AuthSession = {
-  accessToken: string;
+export const authSessionSchema = z.object({
+  accessToken: z.string(),
   /** Null when the provider issues no refresh token (e.g. the local scaffold). */
-  refreshToken: string | null;
+  refreshToken: z.string().nullable(),
   /** Epoch **seconds**, matching JWT `exp`. Null means "never expires". */
-  expiresAt: number | null;
-  user: User;
-};
+  expiresAt: z.number().nullable(),
+  user: userSchema,
+});
+
+export type AuthSession = z.infer<typeof authSessionSchema>;
 
 export type AuthErrorCode =
   /** No backend is wired yet — the local scaffold throws this for every remote call. */
@@ -136,18 +147,15 @@ export function isSessionExpired(session: AuthSession | null): boolean {
 /**
  * Validates a session read back from storage. Persisted blobs are untrusted
  * input — a partial write or an older app version can leave a malformed shape.
+ *
+ * `local.ts` reads through `loadJson(key, fallback, schema)` and doesn't need
+ * these; they stay because they are exported from the barrel and a downstream
+ * app may already import them.
  */
 export function isValidSession(value: unknown): value is AuthSession {
-  if (typeof value !== "object" || value === null) return false;
-  const s = value as Partial<AuthSession>;
-  if (typeof s.accessToken !== "string") return false;
-  if (s.refreshToken !== null && typeof s.refreshToken !== "string") return false;
-  if (s.expiresAt !== null && typeof s.expiresAt !== "number") return false;
-  return isValidUser(s.user);
+  return authSessionSchema.safeParse(value).success;
 }
 
 export function isValidUser(value: unknown): value is User {
-  if (typeof value !== "object" || value === null) return false;
-  const u = value as Partial<User>;
-  return typeof u.id === "string" && typeof u.email === "string";
+  return userSchema.safeParse(value).success;
 }

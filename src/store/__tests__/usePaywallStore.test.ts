@@ -54,6 +54,18 @@ describe("usePaywallStore", () => {
     }
   );
 
+  // Regression: the allow-list check this replaced read `data.tier` off whatever
+  // came back, so a literal `null` threw out of hydrate() — and because the throw
+  // escaped, isLoading stayed true forever behind a stuck spinner.
+  it("hydrate survives a persisted null container and clears isLoading", async () => {
+    await AsyncStorage.setItem(PAYWALL_KEY, "null");
+    await expect(usePaywallStore.getState().hydrate()).resolves.toBeUndefined();
+    const state = usePaywallStore.getState();
+    expect(state.tier).toBe("free");
+    expect(state.isPro).toBe(false);
+    expect(state.isLoading).toBe(false);
+  });
+
   it("hydrate with no stored key defaults to free and clears isLoading", async () => {
     await usePaywallStore.getState().hydrate();
     const state = usePaywallStore.getState();

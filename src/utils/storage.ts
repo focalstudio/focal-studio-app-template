@@ -1,10 +1,30 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { ZodType } from "zod";
 
-export async function loadJson<T>(key: string, fallback: T): Promise<T> {
+/**
+ * Reads a persisted JSON blob.
+ *
+ * Pass a zod schema to validate what comes back. Persisted blobs are untrusted
+ * input — a downgrade, a partial write, or a schema change between app versions
+ * all produce JSON that no longer matches the type it is cast to. With a schema
+ * the fallback is returned on a shape mismatch instead of the mismatch reaching
+ * the caller as a lie; without one the cast is unchecked, so prefer the schema
+ * form for anything beyond a throwaway value. Schemas live in
+ * `src/types/schemas.ts`.
+ *
+ * The `import type` above is deliberate: zod arrives as an argument, so this
+ * module pulls none of it into the bundle on its own.
+ */
+export async function loadJson<T>(key: string, fallback: T): Promise<T>;
+export async function loadJson<T, F>(key: string, fallback: F, schema: ZodType<T>): Promise<T | F>;
+export async function loadJson(key: string, fallback: unknown, schema?: ZodType): Promise<unknown> {
   try {
     const raw = await AsyncStorage.getItem(key);
     if (raw === null) return fallback;
-    return JSON.parse(raw) as T;
+    const parsed: unknown = JSON.parse(raw);
+    if (schema === undefined) return parsed;
+    const result = schema.safeParse(parsed);
+    return result.success ? result.data : fallback;
   } catch {
     return fallback;
   }

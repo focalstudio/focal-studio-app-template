@@ -137,6 +137,7 @@ export default function SettingsScreen() {
           {THEMES.map((t, i) => (
             <View key={t.value}>
               <Toggle
+                testID={`theme-${t.value}`}
                 label={t.label}
                 value={theme === t.value}
                 onValueChange={() => handleTheme(t.value)}

@@ -1,0 +1,81 @@
+appId: ${APP_ID}
+---
+# Persistence across a force-quit: does what the app wrote survive being read
+# back through the zod schemas in `src/types/schemas.ts`? (#52)
+#
+# Jest covers the schemas against fixtures. What it cannot cover is the real
+# round trip — a value written by the running app, through AsyncStorage on a
+# device, read back by `hydrate()` on a genuine cold start. That is what this
+# flow is for, and it is why `stopApp` + a bare `launchApp` matter: `stopApp`
+# force-quits without clearing data, and `clearState` defaults to false, so the
+# second launch hydrates from the storage the first one left behind.
+#
+# Covers the two persisted shapes the template has UI to drive:
+#   - the auth session → loadJson(SESSION_KEY, null, authSessionSchema)
+#   - the theme        → themeSchema.catch("device").parse(...)
+#
+# Notification prefs and the subscription tier go through the same changed code
+# path, but the template ships no affordance that writes either, so they stay
+# covered by Jest (`src/__tests__/schemas.test.ts`) until one exists.
+#
+# `APP_ID` is passed in via `maestro test -e` from .github/workflows/maestro-e2e.yml.
+# Same whole-label regex matching rule as full-journey.yaml — read its header
+# before editing a selector here.
+
+- launchApp:
+    clearState: true
+
+# Onboarding. Only the slide count matters here, so it skips the per-slide
+# assertions full-journey.yaml makes — that flow owns onboarding coverage.
+- extendedWaitUntil:
+    visible: "Welcome to.*"
+    timeout: 60000
+- swipe:
+    direction: LEFT
+- swipe:
+    direction: LEFT
+- tapOn: "Get Started"
+
+# Auth wall — bypassed with the dev-only seed-session seam, which writes a real
+# session blob through saveJson. Present only because BACKEND=none; if a
+# backend is wired this button is absent and the flow fails loudly here.
+- assertVisible: "Sign In"
+- tapOn:
+    id: "dev-seed-session"
+- extendedWaitUntil:
+    visible: "Welcome"
+    timeout: 10000
+
+# Write a non-default theme. "device" is the default, so tapping Dark is a
+# change that must be readable back as a change — picking Light or System
+# would leave a pass that a broken read could still produce by falling back.
+- tapOn: "Settings, tab.*"
+- assertVisible: "Settings.*"
+- tapOn:
+    id: "theme-dark"
+- assertVisible:
+    id: "theme-dark"
+    checked: true
+
+# Force-quit, then cold-start against what the app just wrote.
+- stopApp
+- launchApp
+
+# Landing anywhere other than the signed-in app means a persisted blob failed
+# to read back: onboarding means the onboarding flag was lost, the auth wall
+# means the session was. Both are exactly what the schemas are there to keep
+# from happening silently.
+- extendedWaitUntil:
+    visible: "Welcome"
+    timeout: 60000
+- assertNotVisible: "Welcome to.*"
+- assertNotVisible: "Sign In"
+
+# ...and the theme survived the round trip rather than falling back to "device".
+- tapOn: "Settings, tab.*"
+- assertVisible:
+    id: "theme-dark"
+    checked: true
+- assertVisible:
+    id: "theme-device"
+    checked: false
