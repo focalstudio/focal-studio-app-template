@@ -1,5 +1,5 @@
 /**
- * Sign in with Apple, composed onto the Firebase AuthProvider.
+ * Social sign-in (Apple + Google), composed onto the Firebase AuthProvider.
  *
  * Installed by `bash scripts/add-social-auth.sh`, which copies this file to
  * src/services/auth/social.ts — the relative imports below assume that
@@ -11,19 +11,32 @@
  *     };
  *
  * It lives beside the adapter rather than inside it so the ~215-line adapter is
- * never rewritten by a script, and so an app that doesn't want Apple sign-in
- * never pulls in a native module it has no use for.
+ * never rewritten by a script, and so an app that doesn't want social sign-in
+ * never pulls in native modules it has no use for.
  *
- * See docs/backends/firebase.md for the Apple Developer and Firebase Console
- * setup this cannot do for you.
+ * The two providers share almost nothing. Apple is a native sheet that returns
+ * an identity token; Google is a browser round-trip with a redirect URI, PKCE,
+ * and a token exchange. Read them as two recipes that happen to live in one
+ * file, not as variations on one.
+ *
+ * See docs/backends/firebase.md for the Apple Developer, Google Cloud, and
+ * Firebase Console setup this cannot do for you.
  */
 
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as AuthSessionApi from "expo-auth-session";
 import * as Crypto from "expo-crypto";
-import { OAuthProvider, signInWithCredential, updateProfile } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithCredential,
+  updateProfile,
+} from "firebase/auth";
 import { auth, toAuthSession, toAuthError } from "./firebase";
 import { appleNameToPersist } from "./appleName";
+import { googleReversedClientId } from "./oauthCallback";
+import { requireEnv } from "../../env";
 import { AuthError } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
 
@@ -85,11 +98,26 @@ async function generateNonce(): Promise<{ raw: string; hashed: string }> {
 }
 
 /**
+ * Google's OAuth endpoints, written out rather than discovered.
+ *
+ * `AuthSession.useAutoDiscovery()` would fetch these, but it is a React hook and
+ * cannot be called from a plain module. They are stable, and hard-coding them
+ * also removes a network round-trip from the start of every sign-in.
+ */
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+  tokenEndpoint: "https://oauth2.googleapis.com/token",
+  revocationEndpoint: "https://oauth2.googleapis.com/revoke",
+};
+
+/**
  * `Required<Pick<...>>` rather than `Pick<...>`: both social members are
  * optional on AuthProvider, so a plain Pick would let this module implement
- * nothing at all and still typecheck. Widen the union when Google lands.
+ * nothing at all and still typecheck.
  */
-export const socialAuth: Required<Pick<AuthProvider, "signInWithApple">> = {
+export const socialAuth: Required<
+  Pick<AuthProvider, "signInWithApple" | "signInWithGoogle">
+> = {
   async signInWithApple(): Promise<AuthSession> {
     if (!(await appleAvailable())) {
       throw new AuthError(
@@ -135,6 +163,105 @@ export const socialAuth: Required<Pick<AuthProvider, "signInWithApple">> = {
     if (!session) throw new AuthError("unknown", "Apple sign-in returned no session.");
 
     return await captureAppleName(session, credential);
+  },
+
+  /**
+   * Google, via `expo-auth-session` — not `signInWithPopup` / `signInWithRedirect`.
+   *
+   * Every Firebase web tutorial reaches for those two, and **neither works in
+   * React Native**: both need a `window` to navigate. There is no shim for this.
+   * The supported route is to run the OAuth flow yourself, then hand the
+   * resulting ID token to `signInWithCredential`.
+   *
+   * It has to be the **authorization-code flow with PKCE**, not implicit —
+   * Google refuses to issue an `id_token` directly to an installed app. And it
+   * has to be the imperative `AuthRequest` API: `expo-auth-session/providers/google`
+   * is a React hook, and this is a plain module the port calls as a function.
+   *
+   * iOS only, deliberately. See the guard below.
+   */
+  async signInWithGoogle(): Promise<AuthSession> {
+    // Android needs its own OAuth client, keyed to the package name and the
+    // signing certificate's SHA-1 — which differs between a local build, EAS,
+    // and Play App Signing. Sending the iOS client ID from Android fails with an
+    // opaque `redirect_uri_mismatch`, so refuse with something actionable
+    // instead. docs/backends/firebase.md covers the upgrade path.
+    if (Platform.OS !== "ios") {
+      throw new AuthError(
+        "not_wired",
+        "Google sign-in is wired for iOS only on the Firebase JS SDK path. Android " +
+          "needs its own OAuth client and SHA-1 fingerprint — see docs/backends/firebase.md."
+      );
+    }
+
+    // Read inside the method, never at module scope: an app that wants Apple
+    // sign-in and not Google would otherwise fail at import time, taking the
+    // whole auth provider down with it.
+    const clientId = requireEnv("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID");
+
+    // Google's iOS clients accept exactly this redirect shape — one slash, not
+    // two. The same reversed string must be a CFBundleURLSchemes entry in
+    // app.json, or the browser opens and never comes back.
+    const redirectUri = `${googleReversedClientId(clientId)}:/oauthredirect`;
+
+    const request = new AuthSessionApi.AuthRequest({
+      clientId,
+      redirectUri,
+      scopes: ["openid", "profile", "email"],
+      responseType: AuthSessionApi.ResponseType.Code,
+      usePKCE: true,
+    });
+
+    const result = await request.promptAsync(GOOGLE_DISCOVERY);
+
+    // expo-auth-session has already parsed the callback for us here, which is
+    // why `parseOAuthCallback` is not used on this path — it exists for the
+    // Supabase recipe, which gets a raw URL back from WebBrowser.
+    if (result.type === "cancel" || result.type === "dismiss") throw cancelled();
+    if (result.type !== "success") {
+      throw new AuthError(
+        "unknown",
+        result.type === "error"
+          ? (result.error?.message ?? "Google sign-in failed.")
+          : `Google sign-in did not complete (${result.type}).`
+      );
+    }
+
+    let session: AuthSession | null;
+    try {
+      const tokens = await AuthSessionApi.exchangeCodeAsync(
+        {
+          clientId,
+          redirectUri,
+          code: result.params.code,
+          // The verifier half of PKCE. `AuthRequest` generated it and sent only
+          // its hash to Google; the exchange proves we are the same client.
+          // Omitting it fails with `invalid_grant`.
+          extraParams: { code_verifier: request.codeVerifier ?? "" },
+        },
+        GOOGLE_DISCOVERY
+      );
+
+      if (!tokens.idToken) {
+        throw new AuthError("unknown", "Google returned no ID token.");
+      }
+
+      // Firebase verifies the ID token; the access token is passed along so the
+      // credential can also be used against Google APIs if you add scopes later.
+      const result_ = await signInWithCredential(
+        auth,
+        GoogleAuthProvider.credential(tokens.idToken, tokens.accessToken)
+      );
+      session = await toAuthSession(result_.user);
+    } catch (err) {
+      // `auth/invalid-credential` here almost always means the Firebase project
+      // has no iOS app registered, so the token's audience — your bundle ID — is
+      // one Firebase doesn't recognise. docs/backends/firebase.md, section 5.
+      throw err instanceof AuthError ? err : toAuthError(err);
+    }
+
+    if (!session) throw new AuthError("unknown", "Google sign-in returned no session.");
+    return session;
   },
 };
 

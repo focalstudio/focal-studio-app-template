@@ -10,6 +10,42 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Sign in with Google for both backends (#70).** The login screen has rendered a Google
+  button since the social module landed; it reported "not configured" because no adapter
+  implemented it. Now `bash scripts/add-social-auth.sh` installs Apple **and** Google
+  together — deliberately, since **App Store guideline 4.8** makes Apple mandatory the
+  moment any other third-party login is offered. The two backends need genuinely different
+  implementations and share almost nothing. **Supabase** uses `signInWithOAuth` +
+  `expo-web-browser`, with Google's client ID and secret staying in the Supabase dashboard,
+  so nothing enters the app and it works on iOS and Android alike. **Firebase (JS SDK)**
+  cannot use `signInWithPopup` / `signInWithRedirect` at all — both need a `window`, which
+  React Native does not have, and that is what every Firebase tutorial reaches for. It
+  instead runs `expo-auth-session` code+PKCE (Google refuses implicit `id_token` for
+  installed apps) via the imperative `AuthRequest` API, because
+  `expo-auth-session/providers/google` is a React hook and `social.ts` is a plain module.
+  Firebase + Google is **iOS-only**: Android needs its own OAuth client keyed to a signing
+  SHA-1, so the module throws `not_wired` with an explanation rather than producing an
+  opaque `redirect_uri_mismatch`. Brings `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` (Firebase path
+  only, optional — social sign-in is opt-in, so it is enforced at the point of use).
+- **`flowType: "pkce"` on the Supabase client (#70).** It previously set none, so supabase-js
+  defaulted to the *implicit* flow: no code verifier is stored, and `exchangeCodeForSession()`
+  fails with "code verifier should be non-empty". PKCE is also the only one of the two that is
+  safe on a device, since implicit puts the access token in a URL. The social module reads
+  **both** callback shapes, so an app wired before this change keeps working without editing
+  an adapter the install script promises never to touch. Sign in with Apple is unaffected —
+  native sheet, no browser round-trip.
+- **`parseOAuthCallback()` and `googleReversedClientId()` in `src/services/auth/oauthCallback.ts`,
+  with unit tests (#70).** Callback parsing is the likeliest part of an OAuth flow to be
+  subtly wrong — query vs fragment, PKCE vs implicit, an error where a token was expected —
+  and it fails as a browser that closes with nothing happening, which is indistinguishable
+  from a dead button. Social modules are copied out of `templates/`, which this repo's CI
+  cannot import, type-check, or lint, so both helpers live where the test run can see them,
+  next to `appleNameToPersist` and for the same reason. Covered: `?code=`, `#access_token=`
+  with and without a refresh token, `error_description` in query *and* fragment, Google's
+  `access_denied` mapped to `cancelled` so the store swallows it, malformed percent escapes,
+  and a callback carrying nothing at all. Deriving the reversed client ID rather than taking
+  a second env var means `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and the `app.json` URL scheme
+  cannot drift apart silently.
 - **Sign in with Apple for the Firebase backend (#62).** Only the Supabase half of the recipe
   had shipped, so a Firebase app had no supported route to Apple sign-in — and **App Store
   guideline 4.8** makes it mandatory the moment the app offers any other third-party login,

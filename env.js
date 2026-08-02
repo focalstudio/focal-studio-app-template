@@ -36,6 +36,23 @@ const schema = z
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1).optional(),
     EXPO_PUBLIC_FIREBASE_APP_ID: z.string().min(1).optional(),
 
+    // Google sign-in, Firebase path only. Stays optional even when
+    // BACKEND === "firebase": social sign-in is opt-in
+    // (`scripts/add-social-auth.sh`), and requiring this would break every
+    // Firebase app that only wants email or Apple. `social.ts` calls
+    // requireEnv() at the point of use instead, so the failure is a clear
+    // message on the button that needs it rather than a build that won't start.
+    //
+    // Not needed on Supabase — there the Google client ID and secret live in the
+    // Supabase dashboard and never enter the app.
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: z
+      .string()
+      .regex(
+        /\.apps\.googleusercontent\.com$/,
+        'must end in ".apps.googleusercontent.com" — this is the iOS client ID, not the reversed URL scheme'
+      )
+      .optional(),
+
     // Dev-only sign-in bypass credentials — see
     // src/components/dev/DevBypassSignInButton.tsx. A throwaway test account,
     // never a real user's. Never set these for a production EAS environment

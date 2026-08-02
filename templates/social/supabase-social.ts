@@ -1,5 +1,5 @@
 /**
- * Sign in with Apple, composed onto the Supabase AuthProvider.
+ * Social sign-in (Apple + Google), composed onto the Supabase AuthProvider.
  *
  * Installed by `bash scripts/add-social-auth.sh`, which copies this file to
  * src/services/auth/social.ts — the relative imports below assume that
@@ -11,17 +11,27 @@
  *     };
  *
  * It lives beside the adapter rather than inside it so the ~190-line adapter is
- * never rewritten by a script, and so an app that doesn't want Apple sign-in
- * never pulls in a native module it has no use for.
+ * never rewritten by a script, and so an app that doesn't want social sign-in
+ * never pulls in native modules it has no use for.
  *
- * See docs/backends/supabase.md for the Apple Developer and Supabase dashboard
- * setup this cannot do for you.
+ * The two providers share almost nothing. Apple is a native sheet that returns
+ * an identity token; Google is a browser round-trip with a redirect URI, PKCE,
+ * and a callback to parse. Read them as two recipes that happen to live in one
+ * file, not as variations on one.
+ *
+ * Neither Google's client ID nor its secret enters the app on this backend —
+ * both live in the Supabase dashboard, and Supabase performs the token
+ * exchange. See docs/backends/supabase.md for the dashboard setup this cannot
+ * do for you.
  */
 
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { supabase, toAuthSession, toAuthError } from "./supabase";
 import { appleNameToPersist } from "./appleName";
+import { parseOAuthCallback } from "./oauthCallback";
 import { AuthError } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
 
@@ -51,11 +61,28 @@ async function appleAvailable(): Promise<boolean> {
 }
 
 /**
+ * The path the browser is sent back to, and the one Supabase is told to
+ * redirect to. It must be **the same string in both places, byte for byte**, or
+ * `openAuthSessionAsync` never recognises the return and the browser sits there
+ * until the user gives up.
+ *
+ * `Linking.createURL` resolves it per build: `exp://…/--/auth/callback` in Expo
+ * Go, `<scheme>://auth/callback` in a dev client or standalone. Every form your
+ * team runs has to be in Supabase's Redirect URLs allowlist — this is why OAuth
+ * "works in Expo Go and breaks in TestFlight".
+ */
+function googleRedirectTo(): string {
+  return Linking.createURL("auth/callback");
+}
+
+/**
  * `Required<Pick<...>>` rather than `Pick<...>`: both social members are
  * optional on AuthProvider, so a plain Pick would let this module implement
- * nothing at all and still typecheck. Widen the union when Google lands.
+ * nothing at all and still typecheck.
  */
-export const socialAuth: Required<Pick<AuthProvider, "signInWithApple">> = {
+export const socialAuth: Required<
+  Pick<AuthProvider, "signInWithApple" | "signInWithGoogle">
+> = {
   async signInWithApple(): Promise<AuthSession> {
     if (!(await appleAvailable())) {
       throw new AuthError(
@@ -92,7 +119,81 @@ export const socialAuth: Required<Pick<AuthProvider, "signInWithApple">> = {
 
     return await captureAppleName(session, credential);
   },
+
+  /**
+   * Google, via a browser round-trip. No native module and no client secret in
+   * the app — Supabase holds both halves of the Google credential and does the
+   * token exchange.
+   *
+   * Works on iOS and Android alike, which Apple's native-sheet recipe does not.
+   */
+  async signInWithGoogle(): Promise<AuthSession> {
+    const redirectTo = googleRedirectTo();
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        // Mandatory on Expo, and the failure is baffling without it: supabase-js
+        // otherwise tries to navigate `window.location`, which does not exist
+        // here, so you get no navigation *and* no `data.url` to hand to
+        // WebBrowser. The call appears to succeed and nothing happens.
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) throw toAuthError(error);
+    if (!data?.url) {
+      throw new AuthError("unknown", "Supabase returned no authorization URL for Google.");
+    }
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+    // "cancel" is the user dismissing the sheet, "dismiss" is iOS closing it.
+    // Neither is a failure, and the store swallows `cancelled` so nothing is
+    // shown for a tap the user took back.
+    if (result.type !== "success") throw cancelled();
+
+    const callback = parseOAuthCallback(result.url);
+
+    switch (callback.kind) {
+      // The PKCE shape, which `flowType: "pkce"` in supabase.ts produces.
+      case "code": {
+        const exchanged = await supabase.auth.exchangeCodeForSession(callback.code);
+        if (exchanged.error) throw toAuthError(exchanged.error);
+        return requireSession(toAuthSession(exchanged.data.session));
+      }
+
+      // The implicit shape. Only reachable on an app whose adapter predates
+      // `flowType: "pkce"` — handled so that upgrading the template does not
+      // require editing an adapter the install script promises not to touch.
+      case "tokens": {
+        if (!callback.refreshToken) {
+          throw new AuthError(
+            "unknown",
+            "Google sign-in returned an access token with no refresh token, so the " +
+              'session could not be stored. Set `flowType: "pkce"` in your Supabase ' +
+              "client — see docs/backends/supabase.md."
+          );
+        }
+        const restored = await supabase.auth.setSession({
+          access_token: callback.accessToken,
+          refresh_token: callback.refreshToken,
+        });
+        if (restored.error) throw toAuthError(restored.error);
+        return requireSession(toAuthSession(restored.data.session));
+      }
+
+      case "error":
+        throw new AuthError(callback.code, callback.message);
+    }
+  },
 };
+
+/** Both Google branches end the same way, and a null here is never expected. */
+function requireSession(session: AuthSession | null): AuthSession {
+  if (!session) throw new AuthError("unknown", "Google sign-in returned no session.");
+  return session;
+}
 
 /**
  * Persists the name Apple gives us, once.

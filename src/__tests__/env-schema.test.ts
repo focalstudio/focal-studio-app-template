@@ -135,6 +135,34 @@ describe("env.js schema", () => {
     ).toThrow(/EXPO_PUBLIC_DEV_BYPASS_EMAIL/);
   });
 
+  // Optional even on the Firebase backend: social sign-in is opt-in, so
+  // requiring it would break every Firebase app that only wants email or Apple.
+  // `social.ts` calls requireEnv() at the point of use instead.
+  it("accepts a Firebase environment with no Google client ID", () => {
+    expect(() => loadEnv(EVERY_BACKEND_CONFIGURED)).not.toThrow();
+  });
+
+  it("accepts a well-formed Google iOS client ID", () => {
+    expect(() =>
+      loadEnv({
+        ...EVERY_BACKEND_CONFIGURED,
+        EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: "123-abc.apps.googleusercontent.com",
+      })
+    ).not.toThrow();
+  });
+
+  // The reversed form is what goes in app.json's CFBundleURLSchemes, and the two
+  // are easy to mix up. Pasting it here yields a browser that opens and never
+  // returns — worth catching at build time rather than on a device.
+  it.each([
+    ["the reversed URL scheme", "com.googleusercontent.apps.123-abc"],
+    ["a bare ID", "123-abc"],
+  ])("rejects %s in place of the Google iOS client ID", (_label, value) => {
+    expect(() =>
+      loadEnv({ ...EVERY_BACKEND_CONFIGURED, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: value })
+    ).toThrow(/EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/);
+  });
+
   it("names every offending variable in one message", () => {
     expect(() =>
       loadEnv({

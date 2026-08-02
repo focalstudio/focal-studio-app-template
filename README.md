@@ -131,7 +131,7 @@ scripts/
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
 | `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
-| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase or Firebase app (adds native code) |
+| `bash scripts/add-social-auth.sh` | Add Apple + Google sign-in to a Supabase or Firebase app (adds native code) |
 
 ---
 
@@ -150,11 +150,12 @@ bash scripts/add-backend.sh supabase   # or: firebase
 It installs the packages, drops the adapter into `src/services/auth/`, activates it, makes
 the provider's env vars required, and prints the remaining manual steps.
 
-Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple** —
-mandatory under App Store guideline 4.8 as soon as you offer any other third-party login.
-It takes no arguments and works with either backend; it detects which one from the adapter
-already in `src/services/auth/`. Note that it adds a native module, so the app stops running
-in Expo Go and needs a dev client. Google is tracked separately.
+Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple and
+Sign in with Google**. Both together, deliberately: Apple is mandatory under App Store
+guideline 4.8 as soon as you offer any other third-party login. The script takes no
+arguments and works with either backend; it detects which one from the adapter already in
+`src/services/auth/`. Note that it adds a native module, so the app stops running in Expo
+Go and needs a dev client. On the Firebase JS SDK path, Google is iOS-only — see its guide.
 
 | Provider | Guide | Notes |
 |---|---|---|
