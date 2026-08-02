@@ -101,6 +101,40 @@ describe("env.js schema", () => {
     ).toThrow(/EXPO_PUBLIC_SUPABASE_URL/);
   });
 
+  // Same half-configured trap as Supabase above, with a quieter failure: the
+  // bypass button's gate requires both, so one alone leaves it permanently
+  // hidden with nothing to explain why.
+  it("accepts both dev bypass credentials together", () => {
+    expect(() =>
+      loadEnv({
+        ...EVERY_BACKEND_CONFIGURED,
+        EXPO_PUBLIC_DEV_BYPASS_EMAIL: "dev@example.test",
+        EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2",
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects a dev bypass email without a password", () => {
+    expect(() =>
+      loadEnv({ EXPO_PUBLIC_DEV_BYPASS_EMAIL: "dev@example.test" })
+    ).toThrow(/EXPO_PUBLIC_DEV_BYPASS_PASSWORD/);
+  });
+
+  it("rejects a dev bypass password without an email", () => {
+    expect(() => loadEnv({ EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2" })).toThrow(
+      /EXPO_PUBLIC_DEV_BYPASS_EMAIL/
+    );
+  });
+
+  it("rejects a malformed dev bypass email", () => {
+    expect(() =>
+      loadEnv({
+        EXPO_PUBLIC_DEV_BYPASS_EMAIL: "not-an-email",
+        EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2",
+      })
+    ).toThrow(/EXPO_PUBLIC_DEV_BYPASS_EMAIL/);
+  });
+
   it("names every offending variable in one message", () => {
     expect(() =>
       loadEnv({

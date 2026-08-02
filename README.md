@@ -181,6 +181,8 @@ cp .env.example .env.local
 | `EXPO_PUBLIC_SUPABASE_URL` | Only if using Supabase | Project URL from the Supabase dashboard |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only if using Supabase | Publishable key (`sb_publishable_…`; older docs call it the anon key) |
 | `EXPO_PUBLIC_FIREBASE_*` | Only if using the Firebase JS SDK | API key, auth domain, project ID, app ID — see `.env.example` |
+| `EXPO_PUBLIC_DEV_BYPASS_EMAIL` | No | Dev sign-in bypass account — **never set in production** |
+| `EXPO_PUBLIC_DEV_BYPASS_PASSWORD` | No | Password for that account — **never set in production** |
 
 The template ships with **no backend wired** — auth is local-only until you add one. The
 backend variables above are commented out in `.env.example`; uncomment the block for the
@@ -200,6 +202,14 @@ import { env, requireEnv } from "@/env";
 env.EXPO_PUBLIC_POSTHOG_KEY        // string | undefined, already validated
 requireEnv("EXPO_PUBLIC_SUPABASE_URL")  // throws rather than yielding undefined
 ```
+
+> **The bypass pair is a credential, not a config value.** Setting it adds a "Skip Sign-In
+> (Dev)" button to the login screen so you don't retype credentials on every reload once a
+> backend is wired. `isDevBuild` hides that button in a store build, but `EXPO_PUBLIC_*`
+> values are inlined into the JS bundle — hiding the control does not hide the password. So
+> [`app.config.js`](app.config.js) also strips the pair from any build cut off `main` or
+> `release/*` (or an unresolvable branch), and prints a warning when it does. Use a throwaway
+> test account regardless, and keep these out of the production EAS environment group.
 
 > The React Native Firebase path does not use `EXPO_PUBLIC_FIREBASE_*`. It reads
 > `google-services.json` / `GoogleService-Info.plist`, which are gitignored. EAS only
