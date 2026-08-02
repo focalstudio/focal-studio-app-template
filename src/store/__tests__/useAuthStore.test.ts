@@ -108,6 +108,97 @@ describe("useAuthStore — hydration", () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.isLoading).toBe(false);
   });
+
+  // A non-network failure (corrupt keychain, malformed persisted session)
+  // keeps the pre-existing behaviour: fall back to signed-out.
+  it("falls back to signed-out on a non-network error", async () => {
+    mockProvider.getSession = jest.fn().mockRejectedValue(new AuthError("unknown", "corrupt"));
+
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+    expect(state.hydrationError).toBeNull();
+  });
+
+  // A provider that honours the getSession() contract in services/auth/types.ts
+  // answers from storage before touching the network, so a fresh install with
+  // no connectivity resolves null rather than throwing. That must read as an
+  // ordinary signed-out boot — no hydrationError, so routing proceeds to
+  // onboarding instead of the blocking retry screen.
+  it("leaves hydrationError null when an offline provider resolves null", async () => {
+    mockProvider.getSession = jest.fn().mockResolvedValue(null);
+
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+  });
+
+  // The other half of that contract, and the case with no in-memory signal:
+  // a `network` throw on a cold boot, before any session has been loaded.
+  //
+  // It still sets hydrationError. The store cannot tell "nothing persisted"
+  // from "a session is persisted but unverifiable" — both look like
+  // `session === null` here — so it trusts the contract, under which a throw
+  // can only mean the latter. Falling back to signed-out instead would send a
+  // returning user with a valid stored session to the login screen the moment
+  // their connection dropped, which is issue #63 itself.
+  it("reports hydrationError on a network failure with no session in memory", async () => {
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBe("network");
+    expect(state.isLoading).toBe(false);
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.session).toBeNull();
+  });
+
+  // The regression this issue exists to fix: a network failure must not be
+  // treated the same as an invalid session. A valid stored session that
+  // can't be verified because the device is offline must stay as it was,
+  // not get silently signed out.
+  it("keeps the existing session and reports hydrationError on a network failure", async () => {
+    mockProvider.getSession = jest.fn().mockResolvedValue(session);
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBe("network");
+    expect(state.isLoading).toBe(false);
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.session).toEqual(session);
+    expect(state.user).toEqual(session.user);
+  });
+
+  // Covers the retry screen's path: once the network is back, hydrate()
+  // clears hydrationError so app/_layout.tsx's guards re-route.
+  it("clears hydrationError once a retry succeeds", async () => {
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().hydrationError).toBe("network");
+
+    mockProvider.getSession = jest.fn().mockResolvedValue(session);
+    await useAuthStore.getState().hydrate();
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBeNull();
+    expect(state.isAuthenticated).toBe(true);
+  });
 });
 
 describe("useAuthStore — submitting", () => {
@@ -211,6 +302,21 @@ describe("useAuthStore — signOut", () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
+
+  // Signing out is a definite answer about the user's auth state, so the
+  // "we couldn't ask" flag must not outlive it and strand them behind the
+  // retry screen.
+  it("clears hydrationError", async () => {
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().hydrationError).toBe("network");
+
+    await useAuthStore.getState().signOut();
+
+    expect(useAuthStore.getState().hydrationError).toBeNull();
+  });
 });
 
 describe("useAuthStore — deleteAccount contract", () => {
@@ -313,5 +419,31 @@ describe("useAuthStore — init", () => {
 
     emit?.(null);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  // The user is sitting on the network-error screen when connectivity returns
+  // and a background token refresh succeeds. The session arrives out of band,
+  // so nothing calls hydrate() — if applySession() didn't clear
+  // hydrationError, _layout.tsx's `authError === "network"` guard would keep
+  // them pinned on the retry screen holding a perfectly valid session.
+  it("clears a stale hydrationError when a session arrives out of band", async () => {
+    mockProvider.getSession = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "offline"));
+    await useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().hydrationError).toBe("network");
+
+    let emit: ((s: AuthSession | null) => void) | undefined;
+    mockProvider.subscribe = jest.fn((onChange) => {
+      emit = onChange;
+      return () => {};
+    });
+
+    useAuthStore.getState().init();
+    emit?.(session);
+
+    const state = useAuthStore.getState();
+    expect(state.hydrationError).toBeNull();
+    expect(state.isAuthenticated).toBe(true);
   });
 });

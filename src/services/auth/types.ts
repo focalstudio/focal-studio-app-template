@@ -55,6 +55,9 @@ export class AuthError extends Error {
  *   state on failure. Signing a user out while their account still exists looks
  *   identical to a successful deletion, and is exactly what Google Play's
  *   "Data safety" account-deletion requirement exists to prevent.
+ * - `getSession()` must answer from persisted state before it touches the
+ *   network — see its own doc below. `useAuthStore.hydrate()` reads a thrown
+ *   `AuthError("network")` as "a session exists but I couldn't verify it".
  * - `subscribe()` must return its own unsubscribe function.
  * - Throw `AuthError("cancelled")` when the user dismisses a native sheet or an
  *   OAuth browser. The store swallows it, so nothing is shown for a tap the
@@ -66,7 +69,28 @@ export type AuthProvider = {
   /** Identifies the active backend in logs and dev tooling. */
   readonly name: string;
 
-  /** Restore a persisted session at boot. Returns null when signed out. */
+  /**
+   * Restore a persisted session at boot. Returns null when signed out.
+   *
+   * Two rules, both load-bearing for offline behaviour:
+   *
+   * 1. **Answer from storage first.** With nothing persisted, resolve null
+   *    without a network round-trip. Never throw because the device happens to
+   *    be offline while signed out.
+   * 2. **Throw `AuthError("network")` only while validating or refreshing a
+   *    session that exists.** A `network` throw is read one level up as "there
+   *    is a session here I could not verify", and `useAuthStore.hydrate()`
+   *    blocks on a retry screen rather than guessing.
+   *
+   * The store cannot make this distinction itself: at the first hydrate() an
+   * unverifiable stored session and a fresh install look identical in memory
+   * (both have `session === null`). Break rule 1 and a fresh install with no
+   * connectivity is stranded on the retry screen instead of seeing onboarding.
+   *
+   * Supabase and Firebase both satisfy this as shipped — they read local
+   * persistence first and only reach the network to refresh an existing
+   * session. `local.ts` is a pure AsyncStorage read and never throws `network`.
+   */
   getSession(): Promise<AuthSession | null>;
 
   signIn(email: string, password: string): Promise<AuthSession>;

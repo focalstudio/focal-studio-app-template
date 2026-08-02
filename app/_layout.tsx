@@ -20,6 +20,7 @@ export default function RootLayout() {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authLoading = useAuthStore((s) => s.isLoading);
+  const authError = useAuthStore((s) => s.hydrationError);
   const onboardingComplete = useOnboardingStore((s) => s.isComplete);
   const onboardingLoading = useOnboardingStore((s) => s.isLoading);
 
@@ -48,15 +49,26 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
 
-        <Stack.Protected guard={booted && !onboardingComplete}>
+        {/*
+          Network failure wins over onboarding/auth routing: we couldn't
+          verify anything, so neither "show login" nor "show the app" is
+          safe. Blocks behind a retry screen instead of guessing.
+        */}
+        <Stack.Protected guard={booted && authError === "network"}>
+          <Stack.Screen name="network-error" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={booted && authError !== "network" && !onboardingComplete}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
 
-        <Stack.Protected guard={booted && onboardingComplete && !isAuthenticated}>
+        <Stack.Protected
+          guard={booted && authError !== "network" && onboardingComplete && !isAuthenticated}
+        >
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
 
-        <Stack.Protected guard={booted && isAuthenticated}>
+        <Stack.Protected guard={booted && authError !== "network" && isAuthenticated}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
         </Stack.Protected>
