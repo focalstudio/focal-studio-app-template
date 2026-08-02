@@ -35,6 +35,15 @@ const schema = z
     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1).optional(),
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1).optional(),
     EXPO_PUBLIC_FIREBASE_APP_ID: z.string().min(1).optional(),
+
+    // Dev-only sign-in bypass credentials — see
+    // src/components/dev/DevBypassSignInButton.tsx. A throwaway test account,
+    // never a real user's. Never set these for a production EAS environment
+    // group: EXPO_PUBLIC_* values are inlined into the bundle, so the password
+    // ships wherever it is set. app.config.js strips the pair on store-bound
+    // branches as a backstop, but not setting them is the safe default.
+    EXPO_PUBLIC_DEV_BYPASS_EMAIL: z.email().optional(),
+    EXPO_PUBLIC_DEV_BYPASS_PASSWORD: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     const require = (key) => {
@@ -58,25 +67,30 @@ const schema = z
       require("EXPO_PUBLIC_FIREBASE_APP_ID");
     }
 
-    // A half-configured backend is the common failure: one variable gets
-    // copied, the other is forgotten, and the client silently builds a broken
-    // request. Catch it whichever provider is nominally selected.
-    const supabase = [
-      "EXPO_PUBLIC_SUPABASE_URL",
-      "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    ];
-    const setCount = supabase.filter((k) => env[k]).length;
-    if (setCount > 0 && setCount < supabase.length) {
-      supabase
+    // A half-configured pair is the common failure: one variable gets copied,
+    // the other is forgotten, and the result fails silently at runtime.
+    const requireTogether = (keys, hint) => {
+      const setCount = keys.filter((k) => env[k]).length;
+      if (setCount === 0 || setCount === keys.length) return;
+      keys
         .filter((k) => !env[k])
         .forEach((k) =>
-          ctx.addIssue({
-            code: "custom",
-            path: [k],
-            message: `${k} is missing. Supabase needs both the URL and the publishable key.`,
-          })
+          ctx.addIssue({ code: "custom", path: [k], message: `${k} is missing. ${hint}` })
         );
-    }
+    };
+
+    // Catch a half-configured backend whichever provider is nominally selected.
+    requireTogether(
+      ["EXPO_PUBLIC_SUPABASE_URL", "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
+      "Supabase needs both the URL and the publishable key."
+    );
+
+    // Half-set bypass credentials would leave the button permanently hidden with
+    // no explanation — its gate requires both.
+    requireTogether(
+      ["EXPO_PUBLIC_DEV_BYPASS_EMAIL", "EXPO_PUBLIC_DEV_BYPASS_PASSWORD"],
+      "The dev sign-in bypass needs both the email and the password."
+    );
   });
 
 const parsed = schema.safeParse(process.env);

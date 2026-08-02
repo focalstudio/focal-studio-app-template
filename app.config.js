@@ -27,6 +27,11 @@
 //
 // Baked in here so `isDevBuild` (src/env.ts) reads a build-time constant rather
 // than anything that can be flipped on a device. See resolveGitBranch below.
+//
+// 4. Stripping EXPO_PUBLIC_DEV_BYPASS_* on store-bound branches
+//
+// The dev sign-in bypass button is hidden by `isDevBuild`, but that gate hides
+// the control, not the credential — see stripDevBypass below.
 const { execSync } = require("child_process");
 
 const { env, BACKEND } = require("./env");
@@ -71,16 +76,53 @@ function resolveGitBranch() {
   }
 }
 
-module.exports = ({ config }) => ({
-  ...config,
-  ios: {
-    ...config.ios,
-    buildNumber: process.env.CI_BUILD_NUMBER ?? config.ios?.buildNumber,
-  },
-  extra: {
-    ...config.extra,
-    env,
-    backend: BACKEND,
-    gitBranch: resolveGitBranch(),
-  },
-});
+/**
+ * Removes the dev sign-in bypass credentials from a store-bound build.
+ *
+ * `isDevBuild` keeps the button off the screen, but the password is a plain
+ * string in `extra.env` — a determined reader of the bundle would still find a
+ * working account. So the credential is dropped at the point it would enter the
+ * manifest, not merely gated at the point it would be used.
+ *
+ * Fails closed on an unresolvable branch, the same rule `isDevBuild` applies:
+ * the cost of a wrong strip is a missing dev convenience, the cost of a wrong
+ * keep is a live credential in the App Store.
+ *
+ * Returns a copy — `env` is env.js's module export, shared with anything else
+ * that requires it.
+ */
+function stripDevBypass(values, branch) {
+  const storeBound =
+    branch === null || branch === "main" || branch.startsWith("release/");
+  if (!storeBound || !values.EXPO_PUBLIC_DEV_BYPASS_EMAIL) return values;
+
+  console.warn(
+    `⚠️  EXPO_PUBLIC_DEV_BYPASS_* is set, but this build is store-bound ` +
+      `(${branch ?? "branch could not be resolved"}). Stripping it from the ` +
+      `manifest so the credential does not ship. Remove it from this ` +
+      `environment — the bypass is for feature branches only.`
+  );
+
+  const stripped = { ...values };
+  delete stripped.EXPO_PUBLIC_DEV_BYPASS_EMAIL;
+  delete stripped.EXPO_PUBLIC_DEV_BYPASS_PASSWORD;
+  return stripped;
+}
+
+module.exports = ({ config }) => {
+  const gitBranch = resolveGitBranch();
+
+  return {
+    ...config,
+    ios: {
+      ...config.ios,
+      buildNumber: process.env.CI_BUILD_NUMBER ?? config.ios?.buildNumber,
+    },
+    extra: {
+      ...config.extra,
+      env: stripDevBypass(env, gitBranch),
+      backend: BACKEND,
+      gitBranch,
+    },
+  };
+};
