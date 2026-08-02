@@ -123,6 +123,21 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f templates/backends/supabase/schema.sql
           echo "Second apply OK — schema.sql is idempotent."
 
+      # PostgREST reaches public.profiles as the `authenticated` / `service_role` roles, and
+      # those need table-level GRANTs on top of RLS — RLS narrows access that a grant has
+      # already allowed, it does not create it. Print the actual ACL so a "permission denied"
+      # further down is immediately diagnosable instead of guesswork.
+      - name: Show grants on public.profiles
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          echo "--- connected as ---"
+          psql "$DB_URL" -c "select current_user, session_user;"
+          echo "--- table grants on public.profiles ---"
+          psql "$DB_URL" -c "select grantee, string_agg(privilege_type, ', ' order by privilege_type) as privileges from information_schema.role_table_grants where table_schema = 'public' and table_name = 'profiles' group by grantee order by grantee;"
+          echo "--- default privileges in schema public ---"
+          psql "$DB_URL" -c "select defaclrole::regrole as for_role, defaclobjtype as obj_type, defaclacl from pg_default_acl;"
+
       # Not a template dependency and shouldn't become one: add-backend.sh installs it into
       # the app only when Supabase is actually wired. Unpinned on purpose — the weekly cron
       # exists to catch supabase-js drift, which pinning would hide.
