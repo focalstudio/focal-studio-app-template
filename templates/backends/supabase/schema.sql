@@ -19,8 +19,7 @@ create table if not exists public.profiles (
   email       text,
   name        text,
   avatar_url  text,
-  updated_at  timestamptz default now(),
-  selftest_col text
+  updated_at  timestamptz default now()
 );
 
 alter table public.profiles enable row level security;
