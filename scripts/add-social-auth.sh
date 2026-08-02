@@ -82,11 +82,20 @@ fi
 # export them — and the failure would otherwise be a type error in a file this
 # repo's CI cannot even see. Refuse now, with the fix, instead of patching an
 # adapter the script has always promised not to touch.
-if [ "$BACKEND" = "firebase" ] && ! grep -q "export async function toAuthSession" "$ADAPTER"; then
-  echo "Error: $ADAPTER predates the Apple sign-in recipe."
+#
+# Both are checked, not just the first: the message below asks for two edits,
+# so an adapter with one of them applied is a realistic state to arrive in, and
+# it would otherwise pass this guard and fail at type-check instead.
+if [ "$BACKEND" = "firebase" ] && {
+  ! grep -q "export async function toAuthSession" "$ADAPTER" ||
+    ! grep -q "export function toAuthError" "$ADAPTER"
+}; then
+  echo "Error: $ADAPTER is missing an export social.ts needs."
   echo
-  echo "social.ts imports the adapter's session and error mapping. Add the"
-  echo "missing 'export' keyword to both of these, then re-run:"
+  echo "social.ts imports the adapter's session and error mapping, which an"
+  echo "adapter copied out of an older template keeps module-private. Both of"
+  echo "these must carry the 'export' keyword — add whichever is missing, then"
+  echo "re-run:"
   echo "    async function toAuthSession(  ->  export async function toAuthSession("
   echo "    function toAuthError(          ->  export function toAuthError("
   exit 1

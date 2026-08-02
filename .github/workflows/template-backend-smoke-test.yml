@@ -200,8 +200,10 @@ jobs:
           grep -q "socialAuth" src/services/auth/index.ts || { echo "::error::index.ts was not composed with socialAuth"; exit 1; }
           grep -q 'const BACKEND = "firebase";' env.js || { echo "::error::env.js BACKEND was not set to firebase"; exit 1; }
           # social.ts reuses the adapter's mapping — the export guard in
-          # add-social-auth.sh is only as good as the adapter still exporting it.
+          # add-social-auth.sh is only as good as the adapter still exporting
+          # both of the helpers social.ts imports.
           grep -q "export async function toAuthSession" src/services/auth/firebase.ts || { echo "::error::firebase.ts no longer exports toAuthSession, which social.ts imports"; exit 1; }
+          grep -q "export function toAuthError" src/services/auth/firebase.ts || { echo "::error::firebase.ts no longer exports toAuthError, which social.ts imports"; exit 1; }
           echo "Firebase backend + Sign in with Apple wired correctly."
 
       - name: Expo doctor
