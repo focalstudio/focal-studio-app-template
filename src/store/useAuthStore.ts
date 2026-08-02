@@ -33,12 +33,30 @@ type AuthState = {
   deleteAccount: () => Promise<void>;
 };
 
-const signedOut = { session: null, user: null, isAuthenticated: false } as const;
+/**
+ * `hydrationError` is deliberately part of this constant, not set alongside it.
+ * Every transition to a *known* auth state — sign-out, account deletion, a
+ * non-network hydration failure — is by definition an answer, so the "we
+ * couldn't ask" flag must not survive it. Folding it in here means every
+ * `set({ ...signedOut })` call site clears it for free, rather than each one
+ * having to remember.
+ */
+const signedOut = {
+  session: null,
+  user: null,
+  isAuthenticated: false,
+  hydrationError: null,
+} as const;
 
+/**
+ * Same reasoning as `signedOut`: a session in hand is an answer, so it clears
+ * `hydrationError`. This is what lets a background token refresh arriving
+ * through `init()` release a user stranded on the network-error screen.
+ */
 function applySession(session: AuthSession | null) {
   return session === null
     ? signedOut
-    : { session, user: session.user, isAuthenticated: true };
+    : { session, user: session.user, isAuthenticated: true, hydrationError: null };
 }
 
 /**
@@ -54,7 +72,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   ...signedOut,
   isLoading: true,
   isSubmitting: false,
-  hydrationError: null,
 
   /**
    * Restores a persisted session once at boot. `app/_layout.tsx` holds the
@@ -63,18 +80,29 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrate: async () => {
     try {
       const session = await authProvider.getSession();
-      set({ ...applySession(session), isLoading: false, hydrationError: null });
+      set({ ...applySession(session), isLoading: false });
     } catch (err) {
       if (err instanceof AuthError && err.code === "network") {
         // Leave session/user/isAuthenticated untouched — we don't know if the
         // stored session is still good, only that we couldn't ask. Signing the
         // user out here is the exact bug this branch exists to avoid.
+        //
+        // Set unconditionally, including on a cold boot where `session` is
+        // still null in memory. At the first hydrate() there is no in-memory
+        // signal separating "nothing persisted" from "a session is persisted
+        // but unverifiable" — only the provider knows, and `getSession()`'s
+        // contract in services/auth/types.ts makes it say so: it resolves null
+        // from storage when nothing is stored, and throws `network` only while
+        // validating or refreshing a session that exists. So a throw landing
+        // here already means there is something worth protecting. Gating on
+        // `session !== null` instead would send a returning offline user to
+        // the login screen — issue #63, reintroduced.
         set({ isLoading: false, hydrationError: "network" });
       } else {
         // Any other failure (corrupt keychain, malformed persisted session)
         // must not trap the user on the splash screen. Fall back to
         // signed-out; the listener will correct us.
-        set({ ...signedOut, isLoading: false, hydrationError: null });
+        set({ ...signedOut, isLoading: false });
       }
     }
   },
