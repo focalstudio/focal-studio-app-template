@@ -23,9 +23,10 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { act, renderRouter, screen } from "expo-router/testing-library";
+import { act, fireEvent, renderRouter, screen } from "expo-router/testing-library";
 
 import { APP_NAME, STORAGE_PREFIX } from "../../constants";
+import { AuthError } from "../../services/auth/types";
 import type { AuthProvider, AuthSession } from "../../services/auth/types";
 
 // Mounting the real root layout with `(tabs)` active pulls in a full Tabs
@@ -125,6 +126,7 @@ const routes = {
   "(tabs)/index": require("../../../app/(tabs)/index").default,
   "(tabs)/settings": require("../../../app/(tabs)/settings").default,
   paywall: require("../../../app/paywall").default,
+  "network-error": require("../../../app/network-error").default,
 };
 
 describe("Stack.Protected auth guards", () => {
@@ -217,5 +219,37 @@ describe("Stack.Protected auth guards", () => {
     // current navigation state still points at the (tabs) group.
     const stateString = JSON.stringify(result.getRouterState());
     expect(stateString).not.toContain("(tabs)");
+  });
+});
+
+// Issue #63: a network failure during hydration must route to a retry
+// screen, never silently to (auth) — that would look identical to an
+// actually-invalid session and force a needless re-login.
+describe("Stack.Protected network-error guard", () => {
+  it("a network failure during hydration lands on network-error, not (auth)", async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+    mockProvider.getSession = jest.fn().mockRejectedValue(new AuthError("network", "offline"));
+
+    renderRouter(routes, { initialUrl: "/" });
+
+    await screen.findByText("No Connection");
+    expect(screen).toHavePathname("/network-error");
+    expect(screen.queryByText("Sign In")).toBeNull();
+  });
+
+  it("retrying after the network recovers lands in (tabs) with the restored session", async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+    mockProvider.getSession = jest.fn().mockRejectedValue(new AuthError("network", "offline"));
+
+    renderRouter(routes, { initialUrl: "/" });
+    await screen.findByText("No Connection");
+
+    mockProvider.getSession = jest.fn().mockResolvedValue(session);
+    await act(async () => {
+      fireEvent.press(screen.getByText("Retry"));
+    });
+
+    await screen.findByText("Welcome");
+    expect(screen).toHaveSegments(["(tabs)"]);
   });
 });
