@@ -4,9 +4,16 @@ name: Maestro E2E
 # billed at a 10x minute multiplier vs. ubuntu-latest, and `expo run:ios`'s
 # full prebuild + native compile takes ~15-25 minutes per run. See #80.
 on:
-  workflow_dispatch:
-  release:
-    types: [published]
+  # Invoked by release.yml as a reusable workflow, in the same run, right after it
+  # creates the vX.Y.Z tag.
+  #
+  # Deliberately NOT `release: [published]`. release.yml publishes that Release using
+  # the default GITHUB_TOKEN, and GitHub never fires workflows from events created by
+  # that token (its recursion guard), so the release trigger was dead code — it
+  # silently never ran. Same trap android-release.yml hit with `push: tags:`. See #95.
+  workflow_call: {}
+  # Manual rerun path (e.g. re-running the flow after a simulator-specific fix).
+  workflow_dispatch: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -116,3 +123,30 @@ jobs:
           maestro test .maestro/full-journey.yaml \
             -e APP_ID="${{ steps.app_ids.outputs.app_id }}" \
             -e APP_SCHEME="${{ steps.app_ids.outputs.app_scheme }}"
+
+      # Maestro's view hierarchies are the only practical way to diagnose a CI-only
+      # failure — they are what identified four of the six flow defects fixed in #92.
+      # Metro's log rides along in the same bundle because a cold-runner bundler
+      # timeout is the other likely first-run failure mode. Copied out of $HOME
+      # first: upload-artifact does not reliably expand `~` in `path:`.
+      #
+      # `maestro test` writes these to ~/.maestro/tests/<run> by default. Not using
+      # `--debug-output`: that flag carries only maestro.log, while the screenshots
+      # and hierarchies still land in the default directory.
+      - name: Collect Maestro debug output
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/maestro-debug"
+          cp -R "$HOME/.maestro/tests" "$RUNNER_TEMP/maestro-debug/tests" 2>/dev/null || true
+          cp "$RUNNER_TEMP/metro.log" "$RUNNER_TEMP/maestro-debug/metro.log" 2>/dev/null || true
+
+      - name: Upload Maestro debug output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-debug-output
+          path: ${{ runner.temp }}/maestro-debug
+          retention-days: 14
+          # An early failure (npm ci, Java setup) leaves neither path behind. Warn
+          # rather than fail — the job has already failed for its own reason.
+          if-no-files-found: warn
