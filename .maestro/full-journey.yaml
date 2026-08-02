@@ -1,0 +1,99 @@
+appId: ${APP_ID}
+---
+# End-to-end journey: launch → onboarding → dev-seed-session → paywall → tabs
+# → settings → two-step account deletion → back to auth.
+#
+# `APP_ID` and `APP_SCHEME` are passed in via `maestro test -e` from the
+# calling workflow (.github/workflows/maestro-e2e.yml), resolved at run time
+# from app.json so this flow works whatever the bootstrapped app is named.
+#
+# Text assertions use fixed literal strings rather than app.json's APP_NAME, so
+# the flow needs no extra env var to stay app-name-agnostic.
+#
+# Matching rule, verified against Maestro 2.8.0 on an iOS Simulator: a selector
+# is a regex that must match the element's WHOLE accessibility label — it is not
+# a substring match. `"Welcome to"` therefore does NOT match "Welcome to MyApp";
+# it needs `"Welcome to.*"`. Bare titles are kept wherever the label is exactly
+# that title, and `.*` is added only where iOS decorates the label:
+#   - tab bar items       → "Settings, tab, 2 of 2"
+#   - settings rows       → "Delete Account, ›"  (trailing chevron)
+#   - app-name interpolation → "Welcome to MyApp"
+# Getting this wrong fails loudly on assertions, but a `tapOn` against an
+# unmatched-but-present element can report COMPLETED while tapping nothing.
+
+- launchApp:
+    clearState: true
+
+# Onboarding — swipe through all three slides, then complete on the last one.
+#
+# The first assertion after launch gets a generous explicit wait rather than
+# bare `assertVisible`: cold start has to mount the native runtime, load the JS
+# bundle, and settle both store hydrations before anything renders. Maestro's
+# default assertion timeout is far too short for that, so a bare assertVisible
+# here fails against an app that is merely still booting.
+- extendedWaitUntil:
+    visible: "Welcome to.*"
+    timeout: 60000
+- swipe:
+    direction: LEFT
+- assertVisible: "Your Key Feature"
+- swipe:
+    direction: LEFT
+- assertVisible: "Start Today"
+- tapOn: "Get Started"
+
+# Auth wall — bypass with the dev-only seed-session seam (#79). Only present
+# because BACKEND=none in an unbootstrapped/no-backend build; if a real
+# backend is wired this button won't exist and the flow should fail loudly
+# here rather than silently skip the rest of the journey.
+- assertVisible: "Sign In"
+- tapOn:
+    id: "dev-seed-session"
+- extendedWaitUntil:
+    visible: "Welcome"
+    timeout: 10000
+
+# Paywall — not linked from any in-app affordance in the template yet, so
+# it's reached via its deep link rather than a tap path.
+- openLink: "${APP_SCHEME}://paywall"
+# iOS routes a scheme URL through the system opener, which puts up a native
+# "Open in <App>?" confirmation before handing off. It is not part of the app,
+# so it has to be dismissed explicitly — and it is conditional, because the
+# prompt does not appear when the link is opened from within the app itself.
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+- extendedWaitUntil:
+    visible: "Start Free Trial"
+    timeout: 15000
+- tapOn: "Close"
+
+# Settings — two-step account deletion. Both native confirmation alerts must
+# be walked; a single confirmation must not delete the account.
+# iOS labels a tab bar item "<title>, tab, N of M", so the bare title cannot
+# match it — see the regex note in the header comment.
+- tapOn: "Settings, tab.*"
+- assertVisible: "Settings.*"
+# DANGER ZONE sits below the fold, and an off-screen row is still in the
+# accessibility tree — so a bare tapOn reports COMPLETED while landing on
+# nothing. Scroll it into view first, or the two-step deletion below silently
+# never starts.
+- scrollUntilVisible:
+    element:
+      text: "Delete Account.*"
+    direction: DOWN
+# The settings row renders a trailing chevron inside its accessible label
+# ("Delete Account, ›"), so it needs the wildcard. The two alert buttons below
+# are exact — matching them loosely would risk re-tapping the row behind the
+# alert instead of the button in it.
+- tapOn: "Delete Account.*"
+- tapOn: "Continue"
+- tapOn: "Delete Account"
+
+# Back to auth — Stack.Protected in app/_layout.tsx redirects here on its own
+# once isAuthenticated flips false; no manual navigation to assert against.
+- extendedWaitUntil:
+    visible: "Sign In"
+    timeout: 10000

@@ -9,11 +9,174 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.9.0] — 2026-08-01
+
+### Fixed
+- **The Maestro E2E flow could never have passed — validated it against a real simulator and
+  fixed six defects.** `.maestro/full-journey.yaml` and `.github/workflows/maestro-e2e.yml` (#80)
+  shipped without ever executing anywhere; the workflow only fires on `workflow_dispatch` or
+  `release: published`, and manual dispatch needs the file on the default branch, so nothing had
+  exercised them. Running the flow locally against a bootstrapped app on an iOS Simulator
+  (Maestro 2.8.0) surfaced:
+  1. **The flow did not parse.** `assertVisible` takes no `timeout` property in Maestro 2.8.0 —
+     the run aborted with `Unknown Property: timeout` before executing a single step. Waiting with
+     a deadline is `extendedWaitUntil` (`visible:` + `timeout:`).
+  2. **Selectors are whole-label regexes, not substrings** — the opposite of what the flow's own
+     header comment asserted. `"Welcome to"` cannot match "Welcome to MyApp"; it needs
+     `"Welcome to.*"`. The comment is corrected in place, since it was the source of the error.
+  3. **iOS decorates accessibility labels.** A tab bar item is `"Settings, tab, 2 of 2"` and a
+     settings row is `"Delete Account, ›"` (trailing chevron), so neither bare title matched.
+  4. **The account-deletion row is below the fold**, and an off-screen row is still in the
+     accessibility tree — so `tapOn` reported COMPLETED while tapping nothing, and the two-step
+     deletion silently never started. Now scrolled into view with `scrollUntilVisible` first.
+  5. **The paywall deep link raises a native "Open in <App>?" confirmation** that the flow never
+     dismissed, so it never reached the paywall. Handled with a conditional `runFlow`, since the
+     prompt does not appear when the link is opened from inside the app.
+  6. **CI would have run the app with no JS bundle.** GitHub Actions sets `CI=1`, under which
+     `npx expo run:ios` exits once the app launches and takes Metro with it; a Debug build embeds
+     no bundle, so the app came up on a red "No script URL provided" screen. `maestro-e2e.yml`
+     now starts Metro as its own background process and waits for `packager-status:running`
+     before building, failing fast with the Metro log if it never comes up.
+
+  The flow now completes all 21 steps green, twice consecutively — including the two-step
+  account-deletion confirmation and the `Stack.Protected` redirect back to the sign-in screen once
+  `isAuthenticated` flips false.
+
 ### Added
-- 
+- **Screen tests for the `Stack.Protected` auth guards (#65).** New
+  [src/__tests__/screens/auth-guards.test.tsx](src/__tests__/screens/auth-guards.test.tsx) covers
+  all four guard combinations in [app/_layout.tsx](app/_layout.tsx) — signed out, signed in,
+  onboarding-incomplete (asserted against *both* auth states, so it proves onboarding takes
+  precedence rather than merely coinciding with the signed-out case), and hydration still in
+  flight — plus the #58 regression: when auth flips false mid-session, `Stack.Protected` removes
+  the `(tabs)` screens from the navigator's state rather than just navigating away from them, so
+  no history entry survives to back-swipe into. Built on the #77 harness; it registers the real
+  `_layout.tsx` and real nested paths with `renderRouter` rather than the single-screen
+  `{ index: Component }` shortcut, and controls hydration's *inputs* (the provider's
+  `getSession()` and the onboarding AsyncStorage key) because the layout's mount effect
+  re-hydrates every store and would overwrite state seeded with `setState`. `app/_layout.tsx`
+  itself is unchanged — the guard logic was already correct.
+- **Release gate now reports all four post-#74 checks in one PR comment.**
+  `.github/workflows/release-review.yml`'s summary comment previously only covered
+  type-check/lint/test/version/CHANGELOG. It now adds rows for the bootstrap smoke test (#75,
+  `template-smoke-test.yml`) and backend-wiring smoke test (#76, `template-backend-smoke-test.yml`)
+  by querying `listWorkflowRuns` for the PR's head SHA — rendering ✅/❌/⏳ only when a run for
+  that exact commit actually exists, otherwise "Not run for this change" — plus a hardcoded
+  Screen tests row (#78, already covered by the job's own `npm test` step) and a Device E2E
+  (Maestro) row (#80) that reads "Not run for this release" on every normal release PR by design,
+  since `maestro-e2e.yml` only fires on `workflow_dispatch` or `release: published`, never
+  per-PR. No new workflow file — extends the existing gate only.
+- **Maestro E2E flow: launch through account deletion.** New
+  [.maestro/full-journey.yaml](.maestro/full-journey.yaml) drives a real iOS Simulator build
+  through the full journey — onboarding swipe-through, the #79 dev-seed-session seam past the
+  auth wall, the paywall (reached via its deep link, since nothing in the template links to it
+  yet), the settings tab, and the two-step account-deletion confirmation — asserting the app
+  lands back on the sign-in screen once `isAuthenticated` flips false. New
+  `.github/workflows/maestro-e2e.yml` runs it on `macos-latest` via `expo run:ios`, triggered
+  only by `workflow_dispatch` and `release: published` — never per-PR, since a macOS runner
+  bills at a 10x minute multiplier and `expo run:ios`'s prebuild + native compile takes
+  ~15-25 minutes. Skips cleanly (same pattern as `eas-preview.yml`) when `app.json` still has
+  template placeholders. The Maestro CLI installs via its own shell installer (not an npm
+  package) with `MAESTRO_VERSION` pinned rather than "latest" — the installer performs no
+  checksum verification, so an unpinned version would let a compromised or changed
+  `get.maestro.mobile.dev` response silently alter what CI executes; see the new "CI / build
+  tooling" table in [VERSIONS.md](VERSIONS.md). The install step fails closed (`set -euo
+  pipefail` + `curl -f`, so an HTTP error page is never piped into `bash`) and asserts
+  `maestro --version` reports the pinned version, so an installer that stopped honouring
+  `MAESTRO_VERSION` would break the build rather than silently run "latest". Evaluated Maestro Cloud as an alternative
+  runner for the test-execution step and rejected it: at this cadence (2-4 runs/month) the
+  `macos-latest` approach costs ~$0 (well within GitHub's free monthly macOS-runner minutes),
+  versus Maestro Cloud's $250/month flat subscription — which also doesn't eliminate the
+  macOS build requirement, since Maestro Cloud doesn't build the app itself.
+- **`test-engineer` subagent** ([.claude/agents/test-engineer.md](.claude/agents/test-engineer.md)) —
+  owns `src/__tests__/**` and is the only agent that writes test files. Nothing previously owned
+  testing: no agent's workflow ran `npm test`, and `ios-frontend` verified with `type-check` alone.
+  Reads [docs/testing.md](docs/testing.md) rather than loading a skill. Hard rule: never weaken an
+  assertion to make a test pass — report the bug instead.
+- **`model` and `effort` declared per agent.** Every agent was previously `model: sonnet` with no
+  `effort` set, so a mechanical release-branch script and a security review got identical
+  reasoning budget. Now tiered by cost-of-a-mistake: `qa-reviewer` and `devops-agent` on opus,
+  `aso-marketing` on haiku, the rest on sonnet, with effort from `low` to `high`. Matrix in
+  [.claude/SKILLS.md](.claude/SKILLS.md).
+- **`isDevBuild` — a build-time gate for dev-only affordances.** New export in
+  [src/env.ts](src/env.ts): true in a dev client, and in any build cut from a branch that is not
+  store-bound (`main` or `release/*`). `gitBranch` is baked into the Expo manifest by a new
+  `resolveGitBranch()` in [app.config.js](app.config.js) (`GITHUB_REF_NAME` → `CI_BRANCH` →
+  `git rev-parse`). This did not previously exist despite being referenced as existing —
+  `__DEV__` alone would delete dev affordances from production-profile builds off feature
+  branches, which `.claude/CLAUDE.md` explicitly requires them to survive. `release/*` counts as
+  production because Xcode Cloud sets `CI_BRANCH` from a real checkout, so archiving off a
+  release branch would otherwise ship dev affordances to TestFlight. An unresolvable branch
+  resolves to `null` and also counts as production: fail closed. Note that a *remote* EAS build
+  has neither CI variable and no `.git`, so dev affordances are absent there — use a
+  development-profile build or `eas build --local`.
+- **Dev-only seed-session button on the sign-in screen.** With the shipped default
+  `BACKEND="none"`, `localAuthProvider.signIn()` and `signUp()` both throw `not_wired`
+  deliberately, so the app could not be walked end to end and a UI driver like Maestro had no
+  tappable path past the auth wall. `seedLocalSession()` existed as the escape hatch but only a
+  Jest test could reach it. New `src/components/dev/DevSeedSessionButton.tsx` calls it with a
+  fixed fake session, then re-hydrates through the real `authProvider.getSession()` path so
+  `Stack.Protected` moves to `(tabs)` on its own. Gated on `isDevBuild && backend === "none"` —
+  unreachable in a store build, and hidden once a real provider is wired, since seeding writes a
+  key that provider never reads.
+- **React Native screen-test harness.** `@testing-library/react-native` was installed but
+  had zero usages — nothing in the repo could render a component. Adds `setupFilesAfterEnv`,
+  native-module mocks in `jest.setup.js` for the dependencies every screen pulls in
+  transitively (`react-native-safe-area-context`, which wraps all of them via `Screen.tsx`,
+  plus `expo-haptics`, `expo-notifications`, `posthog-react-native`, `expo-store-review`),
+  and one documented reference test at `src/__tests__/screens/home-screen.test.tsx` that
+  renders `app/(tabs)/index.tsx` through `expo-router`'s `renderRouter`. All seven screens
+  in `app/` were verified to render against it with no further mocking. New
+  [docs/testing.md](docs/testing.md) documents the copyable pattern, what `jest-expo`
+  already provides (the `@/` alias and `transformIgnorePatterns` — do not re-add them), and
+  two traps: screen tests cannot live under `app/` because Expo Router would turn them into
+  routes, and `renderRouter` enables fake timers without restoring them. Also adds
+  `types/expo-router-testing-library.d.ts`, since Expo Router registers matchers like
+  `toHavePathname` at runtime but ships an empty `expect.d.ts`, so they would otherwise
+  pass `npm test` and fail `npm run type-check`.
+- **Screen render tests for every remaining production screen.** Onboarding, sign up,
+  forgot password, paywall, and settings now each have a `src/__tests__/screens/*.tsx` test
+  following the harness pattern above; `login.tsx` already had render coverage from its
+  dev-seed-gate test. `settings-screen.test.tsx` also proves the two-step delete-account
+  confirmation in `app/(tabs)/settings.tsx` can't be short-circuited by a single confirm —
+  `Alert.alert` is spied, its button config captured, and callbacks invoked manually to walk
+  both alerts, since a native alert renders nothing queryable. The auth provider is mocked
+  with the same stable-object convention as `useAuthStore.test.ts`; note the screen there is
+  `require`d after `jest.mock` runs, not statically imported, because a static import gets
+  hoisted above the mock's backing `const` and would read it as `undefined`.
+- **CI smoke test for `scripts/init.sh`.** New `template-smoke-test.yml` workflow runs
+  `init.sh` with fixed dummy flags on its own ephemeral checkout, then asserts no
+  `[APP_*]` placeholders remain and that `app.json` / `package.json` match the injected
+  values — `init.sh`'s own verification block never exits non-zero, so this catches a
+  broken substitution that it would silently miss. Runs `tsc`, lint, tests, and
+  `expo-doctor` against the bootstrapped result. Triggers on `release: published`, PRs
+  touching `scripts/init.sh` / `IDEA.md` / `app.json` / `package.json`, and manual
+  dispatch.
+- **CI smoke test for `scripts/add-backend.sh` and `scripts/add-social-auth.sh`.** New
+  `template-backend-smoke-test.yml` workflow runs three independent jobs on fresh
+  checkouts — Supabase, Supabase + Sign in with Apple, and Firebase — and asserts the
+  adapter file, `src/services/auth/index.ts` activation, `env.js`'s `BACKEND` constant,
+  and the uncommented `.env.example` lines all landed correctly, then runs `expo-doctor`,
+  `tsc`, and lint against the wired-up tree. Each job sets its own job-level placeholder
+  `env:` block, since `add-backend.sh` rewrites `BACKEND` in `env.js` and every
+  subsequent Expo-touching step needs matching vars or `env.js` throws. Triggers on PRs
+  touching the backend/social scripts or templates, and manual dispatch.
 
 ### Changed
-- 
+- **Skills load conditionally instead of on every run.** `ios-frontend` loaded 7 skills before
+  writing a line and `qa-reviewer` loaded 6 before reading the diff, so a spacing fix cost the same
+  context as a new screen. Each agent now routes on task shape — a trivial `ios-frontend` brief
+  loads none, and `qa-reviewer` pulls the Trail of Bits stack only when the diff earns it.
+- **`.claude/CLAUDE.md` trimmed from 605 to ~430 lines.** It is injected into the orchestrator *and*
+  every subagent spawn, so its length is paid on every delegation. Xcode Cloud, Obsidian
+  conventions, issue-label tables, and the store-submission checklists moved to
+  `.claude/reference/*.md` behind one-line pointers; the ASO section was deleted as a duplicate of
+  the [`aso-rules`](.claude/skills/aso-rules/SKILL.md) skill. No guidance was lost.
+- **Long-report handoff threshold lowered from ~80 to ~50 lines**, so subagent reports round-trip
+  through `.claude/scratch/` rather than through orchestrator context.
+- `aso-marketing` no longer requests the `WebFetch` tool — its workflow never fetched a URL.
 
 ### Fixed
 - 

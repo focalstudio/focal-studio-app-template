@@ -103,10 +103,12 @@ replace() {
 
   [[ -z "$FILES" ]] && return 0
 
+  # Loop instead of xargs: the Obsidian template filenames contain spaces
+  # (e.g. "[APP_NAME] Dashboard.md"), which xargs would split into separate args.
   if [[ "$(uname)" == "Darwin" ]]; then
-    echo "$FILES" | xargs sed -i '' "s/${PATTERN}/${ESC}/g"
+    while IFS= read -r f; do sed -i '' "s/${PATTERN}/${ESC}/g" "$f"; done <<< "$FILES"
   else
-    echo "$FILES" | xargs sed -i  "s/${PATTERN}/${ESC}/g"
+    while IFS= read -r f; do sed -i  "s/${PATTERN}/${ESC}/g" "$f"; done <<< "$FILES"
   fi
 }
 
@@ -125,6 +127,11 @@ replace "\[APP_SLUG\]" "$APP_SLUG"
 
 echo "  Replacing [APP_NAME]..."
 replace "\[APP_NAME\]" "$APP_NAME"
+
+# Obsidian wikilinks (e.g. [[APP_NAME Dashboard]]) don't have an immediate closing
+# bracket after APP_NAME, so the replacement above doesn't catch them.
+echo "  Replacing [[APP_NAME wikilinks..."
+replace "\[\[APP_NAME " "[[$APP_NAME "
 
 echo "  Replacing [APP_ID]..."
 replace "\[APP_ID\]" "$APP_ID"

@@ -22,7 +22,54 @@
 // malformed variable fails the build here rather than surfacing as `undefined` at
 // runtime on a user's device. The validated values are published into the manifest
 // under `extra.env`, which is what src/env.ts reads.
+//
+// 3. extra.gitBranch
+//
+// Baked in here so `isDevBuild` (src/env.ts) reads a build-time constant rather
+// than anything that can be flipped on a device. See resolveGitBranch below.
+const { execSync } = require("child_process");
+
 const { env, BACKEND } = require("./env");
+
+/**
+ * The branch this build was cut from, or null when it cannot be determined.
+ *
+ * Precedence — CI first, because a CI checkout is often detached at a commit and
+ * would otherwise report "HEAD":
+ *
+ * - GITHUB_REF_NAME — GitHub Actions. On a `pull_request` event this is a merge
+ *                     ref ("123/merge"), not a branch. Harmless today because no
+ *                     workflow builds a distributable artifact on that trigger —
+ *                     if you add one, gate it here rather than relying on that.
+ * - CI_BRANCH       — Xcode Cloud.
+ * - `git rev-parse` — local `expo start` / `expo prebuild` / `eas build --local`.
+ *
+ * Anything unresolvable returns null, and `isDevBuild` treats null as production.
+ * Failing closed is deliberate: the cost of a wrong `null` is that a dev-only
+ * affordance is missing from a build where it would have been convenient; the
+ * cost of a wrong branch name is shipping that affordance to the App Store.
+ *
+ * Known limitation: a *remote* EAS build has neither of the CI variables nor a
+ * `.git` directory (the CLI uploads a tarball built from git, not the repo
+ * itself), so this returns null there and dev-only affordances are absent. Use a
+ * development-profile build, or `eas build --local` from CI, when you need them.
+ */
+function resolveGitBranch() {
+  const fromCI = process.env.GITHUB_REF_NAME || process.env.CI_BRANCH;
+  if (fromCI) return fromCI;
+
+  try {
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    // Detached HEAD reports the literal "HEAD" — not a branch, so not a signal.
+    return branch && branch !== "HEAD" ? branch : null;
+  } catch {
+    return null;
+  }
+}
 
 module.exports = ({ config }) => ({
   ...config,
@@ -34,5 +81,6 @@ module.exports = ({ config }) => ({
     ...config.extra,
     env,
     backend: BACKEND,
+    gitBranch: resolveGitBranch(),
   },
 });

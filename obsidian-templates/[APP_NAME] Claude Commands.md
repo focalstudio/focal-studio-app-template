@@ -26,7 +26,7 @@ A living reference of prompts and patterns for generating useful documents with 
 ```
 Based on the current app and knowing that we're in [closed/open] beta on [Google Play / App Store],
 what is missing? Could you make a roadmap and write it as Obsidian documents in
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/?
+~/Obsidian/Projects/[APP_NAME]/?
 Produce: a Dashboard, a full Roadmap, and a Kanban board.
 ```
 
@@ -44,7 +44,7 @@ Produce: a Dashboard, a full Roadmap, and a Kanban board.
 **Prompt pattern:**
 ```
 Update the [APP_NAME] Kanban board at
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/[APP_NAME] Kanban.md
+~/Obsidian/Projects/[APP_NAME]/[APP_NAME] Kanban.md
 to reflect current progress. Move [item name] from [Phase X] to Done.
 Add [new item] to [Phase Y] with tag #[priority].
 ```
@@ -55,7 +55,7 @@ Add [new item] to [Phase Y] with tag #[priority].
 **Prompt pattern:**
 ```
 Update the [APP_NAME] Dashboard at
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/[APP_NAME] Dashboard.md
+~/Obsidian/Projects/[APP_NAME]/[APP_NAME] Dashboard.md
 to reflect the current version [X.X.X] and milestone dates. The [feature] is now [done/in progress/blocked].
 ```
 
@@ -99,7 +99,7 @@ data model, and a manual test checklist.
 **Prompt pattern:**
 ```
 Write an Obsidian feature spec for [feature name] and save it to
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/[Feature Name].md.
+~/Obsidian/Projects/[APP_NAME]/[Feature Name].md.
 Include: goal, user story, acceptance criteria, files to change, branch name, and test steps.
 Use Obsidian callout formatting and checkboxes for all tasks.
 ```
@@ -113,7 +113,7 @@ Use Obsidian callout formatting and checkboxes for all tasks.
 ```
 We're about to cut release [X.X.X]. Read the CHANGELOG unreleased section and the codebase,
 then write a pre-release checklist as an Obsidian note at
-/Users/fperezmartinez/Desktop/Obsidian_Felipe/Projects/[APP_NAME]/Release [X.X.X] Checklist.md.
+~/Obsidian/Projects/[APP_NAME]/Release [X.X.X] Checklist.md.
 Include: code tasks, store asset tasks, QA steps, and post-launch monitoring.
 ```
 
