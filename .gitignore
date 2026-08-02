@@ -25,6 +25,11 @@ store-listing/privacy-*.html
 
 # Per-app privacy config is committed; the example is the shared template.
 
+# Local Supabase stack. verify-backend.yml runs `supabase init` to get a throwaway
+# config.toml for `supabase start`; schema.sql is applied directly, so there are no
+# migrations here worth committing.
+supabase/
+
 # OS
 .DS_Store
 *.sw?

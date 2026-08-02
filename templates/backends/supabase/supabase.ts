@@ -26,8 +26,12 @@ import type { Session, AuthError as SupabaseAuthError } from "@supabase/supabase
 import { requireEnv } from "../../env";
 import { AuthError } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
+// Generated from schema.sql — see docs/backends/supabase.md. Passing it to createClient is
+// what makes `.from("profiles").select()` return typed rows instead of `any`, so a column
+// rename fails at build time rather than silently at runtime.
+import type { Database } from "../../types/database.types";
 
-export const supabase = createClient(
+export const supabase = createClient<Database>(
   requireEnv("EXPO_PUBLIC_SUPABASE_URL"),
   requireEnv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
   {

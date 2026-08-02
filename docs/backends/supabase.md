@@ -176,6 +176,58 @@ Step 3 is the one people skip. `deleteAccount()` throwing on failure is the cont
 
 ---
 
+## Typed database
+
+`src/types/database.types.ts` is generated from `schema.sql` and committed. The adapter passes
+it to `createClient<Database>(...)`, which is what makes `.from("profiles").select()` return
+typed rows instead of `any` — a renamed column becomes a build error instead of `undefined` at
+runtime.
+
+Regenerate it whenever you change `schema.sql`:
+
+```bash
+supabase start                 # needs Docker
+psql "$(supabase status -o env | grep '^DB_URL=' | cut -d'"' -f2)" \
+  -f templates/backends/supabase/schema.sql
+supabase gen types typescript --local > src/types/database.types.ts
+```
+
+`verify-backend.yml` regenerates the same file in CI and fails the PR when the committed copy
+has drifted. If you don't have Docker, push the change and copy the `database-types` artifact
+from the failed run.
+
+**Generated `--local`, not `--linked`, on purpose.** Reading from the local instance needs no
+project ref and no `SUPABASE_ACCESS_TOKEN` — the access token is the one credential worth not
+putting in CI — and it means the check also covers this template, which has no linked project.
+The trade-off is the one named in Gotchas: **apply schema changes by editing `schema.sql` and
+re-running it**, not by editing tables in the dashboard. A dashboard-only change is caught when
+someone writes it back to the file, not before.
+
+---
+
+## Backend verification in CI
+
+`.github/workflows/verify-backend.yml` applies `schema.sql` to a throwaway local Supabase and
+asserts the account-deletion contract end to end — the auth user is really gone (checked with
+the `service_role` key, not by trusting the RPC's return value), the `on delete cascade` really
+removed the profile, and `anon` cannot reach the function.
+
+The assertion that earns the workflow: it **drops `delete_own_account()` and re-runs the call**,
+requiring the client to see an error. A deletion that silently no-ops is indistinguishable from
+a successful one, which is exactly what Google Play's Data safety requirement exists to catch.
+
+It runs on PRs touching `templates/backends/**` and weekly, to catch drift in Supabase itself.
+It no-ops when `BACKEND` in `env.js` isn't `"supabase"`.
+
+**Two things it deliberately does not test**: cold-start session persistence and background
+token refresh. Those exercise the `expo-sqlite/localStorage` adapter and the module-scope
+`AppState` listener, neither of which exists in headless Node — a green check there would prove
+the Supabase API works, not that our wiring does, and would stop people running the real test.
+They are manual pre-submission items in
+[`.claude/reference/store-submission.md`](../../.claude/reference/store-submission.md).
+
+---
+
 ## Gotchas
 
 - **Offline `getSession()` throws, it doesn't silently sign out.** `toAuthError` (see above) classifies offline/DNS failures as `AuthError("network")`, and `useAuthStore.hydrate()` branches on that code: a network failure leaves the existing session/user state untouched and sets `hydrationError: "network"` instead of forcing the user to signed-out. `app/_layout.tsx` routes that state to `app/network-error.tsx`, a blocking "No Connection" retry screen, rather than the login screen — so a flaky connection never looks like a silent sign-out, and the app never runs a request against a session it couldn't verify (which is what used to produce a confusing **406 that looks like an RLS bug** but is actually `auth.uid()` resolving to NULL on an unverified session). This relies on the `getSession()` contract in `src/services/auth/types.ts`: answer from storage first, and throw `network` only when refreshing a session that exists. Supabase satisfies it as shipped — `auth.getSession()` reads local persistence and only hits the network to refresh an expired session, so a signed-out device offline gets `null`, not a throw. Preserve that if you wrap it.
@@ -184,7 +236,7 @@ Step 3 is the one people skip. `deleteAccount()` throwing on failure is the cont
 - **The redirect URI resolves differently per build type.** `Linking.createURL()` (and `makeRedirectUri()`) return `exp://…/--/auth/callback` in Expo Go and `<scheme>://auth/callback` in a dev client or standalone build. Two rules follow, and breaking either produces the same symptom — a browser that opens and never hands control back. **First**, every form your team runs has to be in Supabase's *URL Configuration → Redirect URLs* allowlist. **Second**, the string passed as `redirectTo` and the string passed to `openAuthSessionAsync` must be byte-identical; `social.ts` calls one helper for both so they cannot drift. This is why OAuth "works in Expo Go and breaks in TestFlight" — the values differ, and only one of them was ever allowlisted.
 - **PKCE on React Native**: the adapter sets `flowType: 'pkce'`, so the callback carries `?code=` and the session comes from `exchangeCodeForSession(code)` — not from reading `access_token` out of the URL, which is what Supabase's deep-linking guide shows. That code is **single-use**, has a **~5-minute TTL**, and works on **that device only**: the code verifier lives in the client's own storage, so a code cannot be relayed from a browser or a machine elsewhere. Supabase's docs never mention this. (Sign in with Apple is unaffected — it uses a native sheet and an identity token, with no browser round-trip.)
 - **`skipBrowserRedirect: true` is mandatory on Expo.** Without it supabase-js tries to navigate `window.location`, which does not exist in React Native, so you get no navigation *and* no `data.url` to hand to `WebBrowser`. `signInWithOAuth` appears to succeed and nothing at all happens.
-- **Typed database**: run `supabase gen types typescript --linked > src/types/database.types.ts` and use `createClient<Database>(...)`. Tracked as a separate issue.
+- **`schema.sql` is the source of truth, not the dashboard.** See [Typed database](#typed-database) — CI generates the types from `schema.sql`, so a change made only in the SQL Editor is invisible to it until you write the change back into the file.
 
 ---
 
