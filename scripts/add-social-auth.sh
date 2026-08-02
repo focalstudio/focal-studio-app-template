@@ -1,11 +1,17 @@
 #!/bin/bash
 # Usage: bash scripts/add-social-auth.sh
 #
-# Adds Sign in with Apple to an app that already has a backend wired:
+# Adds Sign in with Apple and Sign in with Google to an app that already has a
+# backend wired:
 #   1. Detects which backend is active (Supabase or Firebase)
-#   2. Installs that backend's Apple sign-in packages
+#   2. Installs that backend's social sign-in packages
 #   3. Copies the matching social module into src/services/auth/social.ts
 #   4. Composes it onto the active provider in src/services/auth/index.ts
+#
+# Both providers, not a choice: App Store guideline 4.8 makes Sign in with Apple
+# mandatory as soon as an app offers any other third-party login, so shipping
+# Google without Apple is a rejection. The login screen already renders both
+# buttons — until this runs they report "not configured".
 #
 # It deliberately does NOT touch the adapter (src/services/auth/<backend>.ts) —
 # that file is yours to edit, and a script that regex-patches a file you may
@@ -45,12 +51,17 @@ if [ -f "$SUPABASE_ADAPTER" ] && [ -f "$FIREBASE_ADAPTER" ]; then
 elif [ -f "$SUPABASE_ADAPTER" ]; then
   BACKEND="supabase"
   ADAPTER="$SUPABASE_ADAPTER"
-  PACKAGES="expo-apple-authentication"
+  # expo-web-browser runs Google's OAuth round-trip. expo-linking builds the
+  # redirect URI and is already a direct dependency of the template.
+  PACKAGES="expo-apple-authentication expo-web-browser"
 elif [ -f "$FIREBASE_ADAPTER" ]; then
   BACKEND="firebase"
   ADAPTER="$FIREBASE_ADAPTER"
   # expo-crypto generates the nonce Firebase's Apple credential requires.
-  PACKAGES="expo-apple-authentication expo-crypto"
+  # expo-auth-session runs Google's code+PKCE flow: signInWithPopup and
+  # signInWithRedirect need a `window` and simply do not work in React Native,
+  # and Google refuses to issue an id_token directly to an installed app.
+  PACKAGES="expo-apple-authentication expo-crypto expo-auth-session expo-web-browser"
 else
   echo "Error: no auth adapter found in src/services/auth/."
   echo
@@ -101,7 +112,7 @@ if [ "$BACKEND" = "firebase" ] && {
   exit 1
 fi
 
-echo "==> Adding Sign in with Apple ($BACKEND)"
+echo "==> Adding social sign-in — Apple + Google ($BACKEND)"
 echo
 
 # ---------------------------------------------------------------------------
@@ -239,6 +250,12 @@ if [ "$BACKEND" = "firebase" ]; then
   Firebase. Adding Apple sign-in spends that advantage. If you were staying on
   the JS SDK for Expo Go alone, re-read the comparison in
   docs/backends/firebase.md before you continue.
+
+  Also note that Google sign-in on this path is iOS ONLY. Android needs its own
+  OAuth client keyed to the package name and signing-certificate SHA-1; the
+  module refuses there with a clear message rather than failing opaquely. If you
+  need Android, that is the moment to move to React Native Firebase with
+  @react-native-google-signin/google-signin.
 EOF
 fi
 
@@ -284,6 +301,28 @@ if [ "$BACKEND" = "supabase" ]; then
 
    This is the step everyone misses. Without it signInWithIdToken fails with
    "Unacceptable audience in id_token" and it is not obvious why.
+
+4. Google Cloud console -> APIs & Services -> configure the OAuth consent
+   screen, then Credentials -> Create credentials -> OAuth client ID ->
+   *Web application* (NOT iOS — Supabase performs the exchange server-side, so
+   it needs a client that has a secret).
+
+   Authorised redirect URI:
+       https://<ref>.supabase.co/auth/v1/callback
+
+   Then Supabase -> Authentication -> Providers -> Google -> enable, and paste
+   the client ID and client secret. Nothing goes in .env.local: on this backend
+   neither value ever enters the app.
+
+5. Supabase -> Authentication -> URL Configuration -> Redirect URLs. Add every
+   form your team actually runs:
+
+       <scheme>://auth/callback            # dev client and standalone builds
+       exp://127.0.0.1:8081/--/auth/callback   # Expo Go, if you use it
+
+   Linking.createURL() resolves differently per build type, and a value that is
+   not on this list produces a browser that opens and never comes back. This is
+   why OAuth "works in Expo Go and breaks in TestFlight".
 EOF
 else
   cat <<'EOF'
@@ -295,18 +334,57 @@ else
    only for the web/Android OAuth flow. The native iOS flow this recipe ships
    verifies the identity token directly, and filling them in for iOS-only is a
    common way to break a working setup.
+
+4. Firebase Console -> Authentication -> Sign-in method -> Google -> Enable.
+
+   Then Project settings -> Your apps -> Add app -> iOS, using the bundle
+   identifier from app.json.
+
+   Do not skip the iOS app. Without it Firebase has no OAuth client whose
+   audience matches your bundle ID, and it rejects the token with
+   auth/invalid-credential — an error that points nowhere near the cause.
+   Adding the iOS app is also what creates the iOS OAuth client you need next.
+
+5. .env.local — copy the iOS client ID from that app you just added:
+
+       EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<id>.apps.googleusercontent.com
+
+   The Web client ID is NOT used here. It is only needed if you later move to
+   @react-native-google-signin/google-signin.
+
+6. app.json — register the reversed client ID as a URL scheme, so the browser
+   can hand control back:
+
+     "ios": {
+       ...
+       "infoPlist": {
+         ...
+         "CFBundleURLTypes": [
+           { "CFBundleURLSchemes": ["com.googleusercontent.apps.<id>"] }
+         ]
+       }
+     }
+
+   Same <id> as above, reversed. The module derives the redirect URI from
+   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID at runtime, so this is the one place the
+   two can drift apart — get it wrong and the browser opens and never returns.
 EOF
 fi
 
 cat <<'EOF'
 
-4. Verify:
+Finally, verify:
      npm run type-check && npm run lint && npm test
      npx expo run:ios
 
-   Then on a real device or simulator: tap "Continue with Apple", complete the
-   sheet, and confirm you land in the app. Cancel the sheet and confirm NO
-   error appears — that is the intended behaviour.
+   Then on a real device or simulator:
+
+     - Tap "Continue with Apple", complete the sheet, and confirm you land in
+       the app. Cancel the sheet and confirm NO error appears — that is the
+       intended behaviour.
+     - Tap "Continue with Google", complete the consent screen, and confirm the
+       browser closes and you land in the app. Cancel the browser and confirm
+       NO error appears either.
 EOF
 
 echo

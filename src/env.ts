@@ -20,6 +20,7 @@ export type AppEnv = {
   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?: string;
   EXPO_PUBLIC_FIREBASE_PROJECT_ID?: string;
   EXPO_PUBLIC_FIREBASE_APP_ID?: string;
+  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?: string;
   EXPO_PUBLIC_DEV_BYPASS_EMAIL?: string;
   EXPO_PUBLIC_DEV_BYPASS_PASSWORD?: string;
 };
@@ -45,6 +46,7 @@ function readEnv(): AppEnv {
     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
     EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     // EXPO_PUBLIC_DEV_BYPASS_* is deliberately absent, and must stay absent.
     // Babel inlines every `process.env.EXPO_PUBLIC_*` expression it sees into
     // the bundle at build time, so listing the bypass password here would bake

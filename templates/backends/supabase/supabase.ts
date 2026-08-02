@@ -45,6 +45,18 @@ export const supabase = createClient<Database>(
       // Mandatory on native. There is no URL to parse a session out of, and
       // leaving it true causes spurious session churn.
       detectSessionInUrl: false,
+      // Required for the OAuth flow in `social.ts`. supabase-js defaults to
+      // `implicit`, which stores no code verifier — so the browser comes back
+      // with `?code=` and `exchangeCodeForSession()` fails with "code verifier
+      // should be non-empty". PKCE is also the only one of the two that is safe
+      // on a device: the implicit flow puts the access token in a URL, where the
+      // OS and any handler in the redirect chain can see it.
+      //
+      // Sign in with Apple is unaffected either way — it uses a native sheet and
+      // an identity token, with no browser round-trip. Changing this does not
+      // invalidate existing sessions, and `social.ts` reads both callback
+      // shapes, so an app whose adapter predates this line keeps working.
+      flowType: "pkce",
     },
   }
 );

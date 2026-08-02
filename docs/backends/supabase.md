@@ -49,15 +49,15 @@ select relname, relrowsecurity from pg_class where relname = 'profiles';
 
 Auth → Providers → Email. With "Confirm email" on (the default), `signUp()` returns a user but **no session**. The adapter returns `null` for that case and the signup screen tells the user to check their inbox — that path is already handled, but test it, because it's the difference between "signup worked" and "signup looks broken".
 
-## 5. Sign in with Apple (optional)
+## 5. Social sign-in — Apple and Google (optional)
 
-**App Store guideline 4.8** makes Sign in with Apple mandatory the moment your app offers any other third-party login. Adding Google later without this is a rejection.
+One script adds both, and that is deliberate: **App Store guideline 4.8** makes Sign in with Apple mandatory the moment your app offers any other third-party login, so shipping Google alone is a rejection.
 
 ```bash
 bash scripts/add-social-auth.sh
 ```
 
-The script takes no arguments — it detects Supabase from the adapter already in `src/services/auth/`. It installs `expo-apple-authentication`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
+The script takes no arguments — it detects Supabase from the adapter already in `src/services/auth/`. It installs `expo-apple-authentication` and `expo-web-browser`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
 
 ```ts
 export const authProvider: AuthProvider = { ...supabaseAuthProvider, ...socialAuth };
@@ -67,6 +67,8 @@ It does **not** touch the adapter or `app.json`. The rest is manual:
 
 > [!warning]
 > This adds a native module with a config plugin. **The app no longer runs in Expo Go** — build a dev client (`npx expo run:ios`). It also invalidates the EAS build cache, so your next build is a cold one.
+
+### Apple
 
 **1. `app.json`** — add the plugin and the entitlement:
 
@@ -85,11 +87,42 @@ That is all the native iOS flow needs. A Services ID, a Key, and a Return URL ar
 
 This is the step everyone misses. Without it `signInWithIdToken` fails with `Unacceptable audience in id_token` and nothing points at the cause.
 
-### What the module does for you
+#### What the Apple module does for you
 
 Apple hands back the user's name **only on the very first authorization**, ever, for that Apple ID and app pair — every later sign-in returns nulls, and reinstalling doesn't reset it. The module writes it to `user_metadata` immediately via `updateUser`, because there is no second chance.
 
 One consequence to know about: `handle_new_user()` in `schema.sql` populates `profiles.name` from the metadata present **at signup**, which for an Apple user is empty at that instant. If you display `profiles.name` rather than the session's user metadata, upsert it after an Apple sign-in.
+
+### Google
+
+Nothing enters the app on this backend. Supabase holds Google's client ID **and** its secret and performs the token exchange server-side, so there is no `.env.local` entry and no `app.json` change — which also means the recipe works on iOS and Android alike, unlike Apple's native sheet.
+
+**4. Google Cloud console** → *APIs & Services*. Configure the **OAuth consent screen** first (external, with your app name and support email), then *Credentials* → *Create credentials* → *OAuth client ID* → **Web application**.
+
+Web application, **not iOS** — this is the counter-intuitive part. Supabase does the exchange from its own servers, so it needs a client type that has a secret. An iOS client has none and won't work here.
+
+Authorised redirect URI, exactly:
+
+```
+https://<ref>.supabase.co/auth/v1/callback
+```
+
+**5. Supabase** → Authentication → Providers → **Google** → enable, then paste the client ID and client secret.
+
+**6. Supabase** → Authentication → **URL Configuration** → *Redirect URLs*. Add every form your team actually runs:
+
+```
+<scheme>://auth/callback                  # dev client and standalone builds
+exp://127.0.0.1:8081/--/auth/callback     # Expo Go, if you still use it
+```
+
+`<scheme>` is the `scheme` field in `app.json`. A value that isn't on this list produces a browser that opens and never comes back — see the redirect-URI gotcha below, which is the single most common way this recipe fails.
+
+#### How the Google flow works
+
+`signInWithOAuth({ provider: "google", skipBrowserRedirect: true })` returns a URL rather than navigating; `WebBrowser.openAuthSessionAsync` opens it and resolves when the redirect fires; `parseOAuthCallback` reads the result; `exchangeCodeForSession` turns the code into a session.
+
+That parsing step lives in [`src/services/auth/oauthCallback.ts`](../../src/services/auth/oauthCallback.ts), not in `social.ts`, and it is unit-tested. Social modules are copied out of `templates/`, which CI cannot type-check or lint — so the part most likely to be subtly wrong (query vs fragment, PKCE vs implicit, an error where a token was expected) lives where the test run can see it. It reads **both** callback shapes, so an app whose adapter predates `flowType: "pkce"` keeps working without editing the adapter.
 
 ---
 
@@ -200,8 +233,9 @@ They are manual pre-submission items in
 - **Offline `getSession()` throws, it doesn't silently sign out.** `toAuthError` (see above) classifies offline/DNS failures as `AuthError("network")`, and `useAuthStore.hydrate()` branches on that code: a network failure leaves the existing session/user state untouched and sets `hydrationError: "network"` instead of forcing the user to signed-out. `app/_layout.tsx` routes that state to `app/network-error.tsx`, a blocking "No Connection" retry screen, rather than the login screen — so a flaky connection never looks like a silent sign-out, and the app never runs a request against a session it couldn't verify (which is what used to produce a confusing **406 that looks like an RLS bug** but is actually `auth.uid()` resolving to NULL on an unverified session). This relies on the `getSession()` contract in `src/services/auth/types.ts`: answer from storage first, and throw `network` only when refreshing a session that exists. Supabase satisfies it as shipped — `auth.getSession()` reads local persistence and only hits the network to refresh an expired session, so a signed-out device offline gets `null`, not a throw. Preserve that if you wrap it.
 - **Apple returns the user's name once, ever.** `fullName` and a real `email` arrive only on the *first* authorization for that Apple ID and app pair. Reinstalling the app does not reset it — to test that path again you must revoke the app under Settings → Apple ID → Sign in with Apple. Capture the name on first sign-in or it is gone for good.
 - **Apple's private relay.** Users can hide behind `@privaterelay.appleid.com`. If you send them mail, configure the relay domain and sender in Apple's console, or it silently bounces.
-- **`makeRedirectUri()` resolves differently** in Expo Go (`exp://`), a dev client, and a standalone build. Always test OAuth on a real build. Applies to Google sign-in, which is tracked as a separate issue.
-- **PKCE on React Native**: Supabase's deep-linking guide shows the *implicit* flow (reading `access_token` from the URL). If you set `flowType: 'pkce'`, the callback carries `?code=` and you must call `exchangeCodeForSession(code)` — single-use, 5-minute TTL, same device. The docs don't cover this; see the Google sign-in issue. (Sign in with Apple is unaffected — it uses a native sheet and an identity token, with no browser round-trip.)
+- **The redirect URI resolves differently per build type.** `Linking.createURL()` (and `makeRedirectUri()`) return `exp://…/--/auth/callback` in Expo Go and `<scheme>://auth/callback` in a dev client or standalone build. Two rules follow, and breaking either produces the same symptom — a browser that opens and never hands control back. **First**, every form your team runs has to be in Supabase's *URL Configuration → Redirect URLs* allowlist. **Second**, the string passed as `redirectTo` and the string passed to `openAuthSessionAsync` must be byte-identical; `social.ts` calls one helper for both so they cannot drift. This is why OAuth "works in Expo Go and breaks in TestFlight" — the values differ, and only one of them was ever allowlisted.
+- **PKCE on React Native**: the adapter sets `flowType: 'pkce'`, so the callback carries `?code=` and the session comes from `exchangeCodeForSession(code)` — not from reading `access_token` out of the URL, which is what Supabase's deep-linking guide shows. That code is **single-use**, has a **~5-minute TTL**, and works on **that device only**: the code verifier lives in the client's own storage, so a code cannot be relayed from a browser or a machine elsewhere. Supabase's docs never mention this. (Sign in with Apple is unaffected — it uses a native sheet and an identity token, with no browser round-trip.)
+- **`skipBrowserRedirect: true` is mandatory on Expo.** Without it supabase-js tries to navigate `window.location`, which does not exist in React Native, so you get no navigation *and* no `data.url` to hand to `WebBrowser`. `signInWithOAuth` appears to succeed and nothing at all happens.
 - **`schema.sql` is the source of truth, not the dashboard.** See [Typed database](#typed-database) — CI generates the types from `schema.sql`, so a change made only in the SQL Editor is invisible to it until you write the change back into the file.
 
 ---
