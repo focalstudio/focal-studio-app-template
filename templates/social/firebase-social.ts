@@ -227,17 +227,41 @@ export const socialAuth: Required<
       );
     }
 
+    // Both halves of the exchange are checked here rather than passed through,
+    // because Google answers a missing or empty one with the same generic
+    // `invalid_grant` it uses for a genuinely wrong verifier — an error that
+    // sends you looking at your PKCE implementation when the real problem is a
+    // parameter that never arrived.
+    //
+    // `result.params` is typed as a plain string map, so `code` is only
+    // *conventionally* present on a success; `codeVerifier` is populated by
+    // AuthRequest whenever `usePKCE` is true, so an empty one means the request
+    // was never prepared.
+    const code = result.params.code;
+    if (!code) {
+      throw new AuthError(
+        "unknown",
+        "Google reported success but returned no authorization code."
+      );
+    }
+    if (!request.codeVerifier) {
+      throw new AuthError(
+        "unknown",
+        "The PKCE code verifier is missing, so the token exchange would be rejected. " +
+          "The Google auth request was not prepared correctly."
+      );
+    }
+
     let session: AuthSession | null;
     try {
       const tokens = await AuthSessionApi.exchangeCodeAsync(
         {
           clientId,
           redirectUri,
-          code: result.params.code,
+          code,
           // The verifier half of PKCE. `AuthRequest` generated it and sent only
           // its hash to Google; the exchange proves we are the same client.
-          // Omitting it fails with `invalid_grant`.
-          extraParams: { code_verifier: request.codeVerifier ?? "" },
+          extraParams: { code_verifier: request.codeVerifier },
         },
         GOOGLE_DISCOVERY
       );
