@@ -9,7 +9,36 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Changed
+- **Persisted storage is validated with zod schemas (#52).** `loadJson` takes an optional third
+  argument — `loadJson(key, fallback, schema)` — and returns the fallback when `safeParse` fails,
+  so a shape mismatch can no longer reach a caller disguised as the type it was cast to. The
+  two-argument form is unchanged, so no existing call site breaks. Schemas live in the new
+  `src/types/schemas.ts` and are now the source of truth: `Theme`, `NotificationPrefs`, `User`
+  and `SubscriptionTier` are derived from them with `z.infer`, and `AuthSession` from
+  `authSessionSchema` in `src/services/auth/types.ts`. That retires three different hand-rolled
+  guard styles — the nested `typeof` chain in `isValidSession`, the four per-field checks in
+  `useAppStore`, and the `validTiers`/`validThemes` allow-lists with their casts. `isValidSession`
+  and `isValidUser` remain exported from `src/services/auth/` — they are template surface a
+  downstream app may import — but are now one-line `safeParse` calls over the same schema rather
+  than a second implementation that could drift.
+
+  Two knock-on tightenings worth knowing about: reminder times are now checked against `HH:MM`
+  at the storage boundary instead of only inside `parseTime` (a malformed time resets to its
+  default at hydration, and zero-padding is required, so `"9:00"` no longer round-trips), and
+  `z.object` strips keys the schema doesn't declare, so stale fields from an older app version
+  are dropped rather than passed through. Notification prefs keep their per-field fallback — one
+  bad field does not reset the other three — via `.catch()` on each field, and a malformed
+  `user.name` is dropped rather than invalidating the whole session.
+
 ### Fixed
+- **Two persisted `null` blobs crashed hydration (#52).** `useAppStore.hydrate()` and
+  `usePaywallStore.hydrate()` both read a field straight off whatever `loadJson` returned, so a
+  literal `null` at `<prefix>notification_prefs` or `<prefix>subscription` threw a `TypeError`
+  instead of falling back. In the paywall store the throw escaped `hydrate()`, which left
+  `isLoading` stuck at `true` — a spinner the user could never get past. Schema validation makes
+  the container shape part of the check, so both now fall back cleanly. Regression tests cover
+  each.
 - **`profiles` was unreadable by the app — missing table grants in `schema.sql` (found by #68).**
   The new backend verification caught this on its first run. RLS *narrows* access that a
   `grant` has already allowed; it never creates it. A table created by running SQL (the SQL
