@@ -94,6 +94,56 @@ module.exports = {
   /**
    * Jest's default `testMatch` treats *every* file under `__tests__/` as a
    * suite, so shared fixtures need somewhere to live that isn't one.
+   *
+   * `/templates/` is excluded for a different reason: the adapter tests that
+   * live beside each adapter there import SDKs (`@supabase/supabase-js`,
+   * `firebase`) that are deliberately NOT dependencies of the template as
+   * shipped. `add-backend.sh` copies each one into
+   * `src/services/auth/__tests__/` alongside its adapter, which is where it is
+   * meant to run — and where `template-backend-smoke-test.yml`'s existing
+   * `npm test` step picks it up. Running them here would fail on the missing
+   * package every time.
    */
-  testPathIgnorePatterns: ["/node_modules/", "/__tests__/support/"],
+  testPathIgnorePatterns: ["/node_modules/", "/__tests__/support/", "/templates/"],
+
+  /**
+   * Without this, Jest only reports on files some test happened to import, so
+   * an entirely untested module is absent from the report rather than counted
+   * as 0% — which inflates the totals and lets `coverageThreshold` below pass
+   * on coverage the repo does not have.
+   *
+   * `database.types.ts` is excluded because it is generated (see
+   * verify-backend.yml) and type-only, so it contributes nothing executable.
+   */
+  collectCoverageFrom: [
+    "src/**/*.{ts,tsx}",
+    "app/**/*.{ts,tsx}",
+    "!**/__tests__/**",
+    "!src/types/database.types.ts",
+  ],
+
+  /**
+   * A ratchet, not a target. These sit a few points under the real numbers at
+   * the time of writing, so ordinary work has headroom while a genuine
+   * regression fails the build. Enforced by `--coverage`, which `ci.yml` passes
+   * — without that flag Jest collects nothing and these are inert.
+   *
+   * `src/services/` gets its own floor because a global figure alone does not
+   * protect it: the service layer sat at 19% statements while the global
+   * average stayed in the mid-70s, carried by well-tested screens and stores.
+   * A single number can only ever hide that.
+   *
+   * **Jest subtracts path-keyed files from the global pool**, so `global` below
+   * describes everything *except* `src/services/` — which is why it is lower
+   * than the headline figure `npm run test:coverage` prints. Re-derive both
+   * from a real run when raising them; do not reason about them in the abstract.
+   *
+   * Measured on the commit that introduced this block:
+   *   global (excl. services)  79.69 / 64.58 / 79.49 / 80.88
+   *   src/services/            99.39 / 96.12 / 100 / 100
+   */
+  coverageThreshold: {
+    global: { statements: 77, branches: 62, functions: 77, lines: 78 },
+    "./src/services/": { statements: 95, branches: 90, functions: 95, lines: 95 },
+  },
 };

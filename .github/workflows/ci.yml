@@ -35,5 +35,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # `--coverage` is what enforces `coverageThreshold` in jest.config.js.
+      # Without it Jest collects nothing and the thresholds are inert, so this
+      # flag is load-bearing rather than reporting sugar.
       - name: Test
-        run: npm test -- --passWithNoTests=false
+        run: npm test -- --passWithNoTests=false --coverage

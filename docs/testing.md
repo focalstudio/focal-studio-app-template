@@ -191,10 +191,102 @@ rather than inventing a second convention. Its three load-bearing details:
 
 ---
 
+## Two levels of mocking, and when each applies
+
+Almost everything here fakes the **port** — `AuthProvider` — and never the SDK underneath
+it. That is deliberate: a store or screen test cares that `signIn()` resolved or threw
+`AuthError("invalid_credentials")`, not how supabase-js spelled it.
+
+The one exception is an **adapter contract test**, where the mapping *is* the thing under
+test. Faking the port there would leave nothing to assert, so those mock the SDK directly
+(`@supabase/supabase-js`, `firebase/auth`).
+
+| Level | Use for | Example |
+|---|---|---|
+| Port (`AuthProvider`) | stores, screens, anything above the adapter | [`useAuthStore.test.ts`](../src/store/__tests__/useAuthStore.test.ts) |
+| SDK | adapter contract tests only | [`supabase.test.ts`](../templates/backends/supabase/supabase.test.ts) |
+
+### Adapter contract tests live in `templates/` and run somewhere else
+
+`templates/backends/<provider>/<provider>.test.ts` sits beside its adapter but is **written
+against its destination** — `../<provider>` and `../types` only resolve once
+`scripts/add-backend.sh` has copied both into `src/services/auth/`. The script copies the
+test to `src/services/auth/__tests__/` in the same step it installs the adapter.
+
+Three consequences worth knowing:
+
+- `jest.config.js` lists `/templates/` in `testPathIgnorePatterns`, so the un-wired template
+  never tries to run them against SDKs it deliberately does not install.
+- No workflow change was needed to run them:
+  [`template-backend-smoke-test.yml`](../.github/workflows/template-backend-smoke-test.yml)
+  already runs `npm test` after `add-backend.sh` in all four jobs.
+- **The generated app inherits them.** That is the point — the app's auth depends on this
+  mapping, and it is the one part of `templates/` that otherwise gets no CI checking at all
+  (both `tsconfig.json` and `eslint.config.js` exclude `templates/**`, because those files
+  cannot resolve until they are copied).
+
+These complement rather than duplicate
+[`verify-backend.yml`](../.github/workflows/verify-backend.yml), which proves the *database*
+contract against a real Postgres + GoTrue. The contract tests prove the *client* contract and
+never touch a database.
+
+---
+
+## Coverage
+
+```bash
+npm run test:coverage
+```
+
+`jest.config.js` sets `collectCoverageFrom`, so a module no test imports counts as 0% rather
+than vanishing from the report — without it the totals flatter the repo by several points.
+
+`coverageThreshold` is a **ratchet, not a target**: the figures sit a few points under the
+real ones so ordinary work has headroom while a regression fails the build. `ci.yml` passes
+`--coverage`, which is what enforces them — without that flag Jest collects nothing and the
+thresholds are inert.
+
+`src/services/` carries its own floor on top of the global one. A single global number cannot
+protect a layer: the service layer sat at 19% statements while the global average stayed in
+the mid-70s, carried by well-tested screens and stores.
+
+> When raising a threshold, re-derive it from a real run. Jest **subtracts** path-keyed files
+> from the global pool, so the `global` block describes everything *except* `src/services/`
+> and reads lower than the headline figure.
+
+---
+
+## End-to-end (Maestro)
+
+Two flows in [`.maestro/`](../.maestro/) drive a real iOS Simulator:
+`full-journey.yaml` (onboarding → paywall → tabs → account deletion) and `persistence.yaml`
+(does what the app wrote survive a force-quit and read back through the zod schemas?).
+
+Run them locally — it costs nothing and is far tighter than waiting on CI:
+
+```bash
+brew install maestro          # or: curl -fsSL https://get.maestro.mobile.dev | bash
+npx expo run:ios              # build + install once; leave Metro running
+npm run e2e                   # in a second terminal
+```
+
+`npm run e2e` resolves `APP_ID` and `APP_SCHEME` out of `app.json` the same way
+[`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does, so the two cannot drift.
+Pin the CLI to the version in `VERSIONS.md`.
+
+A `--debug-output` directory with screenshots and view hierarchies is written to
+`~/.maestro/tests/<run>` — that is what to read first when a flow fails, because a `tapOn`
+against an unmatched-but-present element reports COMPLETED while tapping nothing.
+
+In CI these run post-release only, via `workflow_call` from `release.yml`.
+
+---
+
 ## Other checks
 
 ```bash
-npm test           # Jest
-npm run type-check # TypeScript — tsconfig already declares "types": ["jest"]
-npm run lint       # ESLint
+npm test            # Jest
+npm run test:coverage # Jest + coverage thresholds (what CI enforces)
+npm run type-check  # TypeScript — tsconfig already declares "types": ["jest"]
+npm run lint        # ESLint
 ```
