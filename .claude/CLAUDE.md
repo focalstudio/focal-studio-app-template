@@ -237,7 +237,7 @@ isDevBuild = __DEV__ || (gitBranch !== null && !isStoreBranch(gitBranch))
 - Keep the gate as the first thing in the component (`if (!isDevBuild) return null;`) so there is exactly one place to audit. `src/components/dev/DevSeedSessionButton.tsx` is the reference.
 
 ## UI/UX design rules
-- Invoke the `frontend_design` and `ui-ux-pro-max` skills whenever making UI/UX or frontend changes.
+- Skill selection for UI/UX or frontend work is conditional, not automatic — see the `ios-frontend` row of the routing matrix in [.claude/SKILLS.md](SKILLS.md) for which of `frontend_design`, `ui-ux-pro-max`, and `design-for-ai` to load for a given task shape.
 - Use design tokens from `src/theme/` — never hardcode colours, spacing, or typography values.
 - Match iOS platform conventions (system font sizes, safe area insets, tab bar heights).
 - Use `lucide-react-native` for all icons. Always pass `color` from `useTheme()` — never hardcode icon colors or sizes.
@@ -394,18 +394,18 @@ All eight specialist subagents live in [.claude/agents/](agents/) and ship with 
 
 Each agent declares its own `model` and `effort` in frontmatter, tiered by how expensive a mistake is. Do not override these per-spawn unless the brief is genuinely atypical.
 
-| Agent | Purpose | Model / effort |
-|---|---|---|
-| `ios-frontend` | React Native + Expo UI work | sonnet / medium |
-| `backend-integrator` | Third-party service integration | sonnet / high |
-| `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` | sonnet / medium |
-| `release-manager` | Runs the full release workflow above | sonnet / low |
-| `aso-marketing` | Store-listing copy with hard char-limit enforcement | haiku / low |
-| `qa-reviewer` | Read-only pre-PR review | opus / high |
-| `devops-agent` | Package risk assessment + controlled installation | opus / medium |
-| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing | sonnet / medium |
+| Agent | Purpose |
+|---|---|
+| `ios-frontend` | React Native + Expo UI work |
+| `backend-integrator` | Third-party service integration |
+| `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` |
+| `release-manager` | Runs the full release workflow above |
+| `aso-marketing` | Store-listing copy with hard char-limit enforcement |
+| `qa-reviewer` | Read-only pre-PR review |
+| `devops-agent` | Package risk assessment + controlled installation |
+| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing |
 
-Which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md).
+Model/effort per agent and which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md), the single source of truth for both. Do not duplicate that data here.
 
 ### Bootstrap trigger
 

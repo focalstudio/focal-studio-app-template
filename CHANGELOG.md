@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Changed
+- **Simplified the Claude Code tooling layer.** `.claude/SKILLS.md` is now the single source of
+  truth for agent model/effort and skill-loading rules — `.claude/CLAUDE.md`'s agent table no
+  longer duplicates model/effort data, and its "UI/UX design rules" no longer contradicts
+  `SKILLS.md` by mandating `frontend_design`/`ui-ux-pro-max` unconditionally. Added explicit
+  pick-order guidance in `SKILLS.md` for the three overlapping RN-performance skills
+  (`rn-react-native`, `rn-react-best-practices`, `react-native-expert`) and the three overlapping
+  UI-design skills (`ui-ux-pro-max`, `frontend_design`, `design-for-ai`). Tightened
+  `.claude/settings.json`'s allowlist by removing unconditional `mkdir`/`chmod`/`cp`/`mv` (these
+  now prompt for confirmation, matching the documented "neither allow nor deny" behavior).
+  Removed a stale cross-repo scratch file.
+
 ---
 
 ## [0.10.0] — 2026-08-03
