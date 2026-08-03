@@ -9,6 +9,49 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **Coverage is now gated in CI.** `jest.config.js` gained `collectCoverageFrom` and
+  `coverageThreshold`, and `ci.yml` runs `npm test -- --coverage` (the flag is what enforces the
+  thresholds — without it Jest collects nothing). `collectCoverageFrom` matters on its own: an
+  untested module used to be absent from the report rather than counted as 0%, flattering the
+  totals by ~1 point. `src/services/` carries a floor of its own on top of the global one,
+  because a single global number cannot protect a layer — the service layer sat at **19%
+  statements** while the global average stayed in the mid-70s, carried by well-tested screens
+  and stores. New `npm run test:coverage` script.
+- **Unit tests for the service layer** (`src/services/__tests__/`): `analytics`, `notifications`,
+  `ratingService`, `haptics` — 58 tests taking `src/services/` from 19% to 100% statements.
+  Beyond line coverage they pin the behaviours that fail silently on a device: the analytics
+  init/hydrate ordering re-apply, `parseTime()` rejecting malformed persisted times instead of
+  scheduling at `NaN:NaN`, the rating prompt not burning its once-per-version flag when
+  StoreKit was unavailable or the request threw, and the Android channel without which Android
+  drops every notification.
+- **Tests for the auth port's own validators** (`src/services/auth/__tests__/types.test.ts`):
+  `isValidSession` / `isValidUser` against malformed persisted blobs, and `isSessionExpired`
+  boundaries including the seconds-vs-milliseconds unit that silently signs everyone out if
+  misread.
+- **Adapter contract tests for both backends** —
+  `templates/backends/{supabase,firebase}/<provider>.test.ts`, 44 and 46 tests. They cover the
+  `AuthProvider` mapping (session shape, the full error-code table, `getSession()`'s offline
+  rules, and `deleteAccount()` throwing without clearing local state — the claim the app makes
+  on Google Play's Data safety form). `scripts/add-backend.sh` copies each one into
+  `src/services/auth/__tests__/` alongside its adapter, so **the generated app inherits them**
+  and `template-backend-smoke-test.yml`'s existing `npm test` step picks them up with no
+  workflow change. This is the first CI checking `templates/**` has ever had — both
+  `tsconfig.json` and `eslint.config.js` exclude it, since those files cannot resolve until
+  they are copied.
+- **`npm run e2e`** runs the Maestro flows against a local iOS Simulator, resolving `APP_ID` and
+  `APP_SCHEME` from `app.json` exactly as `maestro-e2e.yml` does so the two cannot drift. Local
+  E2E costs nothing and is a far tighter loop than the post-release CI run. Documented in
+  `docs/testing.md`.
+
+### Fixed
+- **`.gitignore` silently ignored every new file under `templates/backends/supabase/`.** The
+  entry was `supabase/`, unanchored — which matches a directory of that name at *any* depth, not
+  just the throwaway `supabase/` that `verify-backend.yml` creates via `supabase init`. The
+  existing adapter and `schema.sql` were unaffected only because git keeps tracking files it
+  already tracks; anything added there afterwards was invisible to `git status`. Now anchored as
+  `/supabase/`.
+
 ### Changed
 - **Simplified the Claude Code tooling layer.** `.claude/SKILLS.md` is now the single source of
   truth for agent model/effort and skill-loading rules — `.claude/CLAUDE.md`'s agent table no

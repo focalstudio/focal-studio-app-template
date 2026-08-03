@@ -26,8 +26,10 @@ import { EVERY_BACKEND_CONFIGURED } from "./src/__tests__/support/backendEnv";
  *
  * Assigned rather than overwritten, so a real `.env.local` value (or anything
  * CI exports) still wins. These are structurally valid but meaningless — no test
- * should ever reach a network call with them, and the shipped adapters are
- * faked at the `AuthProvider` port, never at the SDK. See `docs/testing.md`.
+ * should ever reach a network call with them: the shipped adapters are faked at
+ * the `AuthProvider` port everywhere except their own contract tests, which mock
+ * the SDK itself because the mapping is what they exist to check. Both levels,
+ * and when each applies, are in `docs/testing.md`.
  */
 for (const [key, value] of Object.entries(EVERY_BACKEND_CONFIGURED)) {
   process.env[key] ??= value;

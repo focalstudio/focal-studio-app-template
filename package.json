@@ -14,6 +14,8 @@
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "submit:android": "eas submit --platform android --profile production --latest",
     "test": "jest --watchAll=false",
+    "test:coverage": "jest --watchAll=false --coverage",
+    "e2e": "maestro test .maestro/ -e APP_ID=$(node -p \"require('./app.json').expo.ios.bundleIdentifier\") -e APP_SCHEME=$(node -p \"require('./app.json').expo.scheme\")",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "bump-version": "bash scripts/bump-version.sh"
