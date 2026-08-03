@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { SocialSignInButton } from "@/components/ui/SocialSignInButton";
 import { TextInput } from "@/components/ui/TextInput";
 import { DevSeedSessionButton } from "@/components/dev/DevSeedSessionButton";
+import { DevBypassSignInButton } from "@/components/dev/DevBypassSignInButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/store/useAuthStore";
 import { authErrorMessage } from "@/services/auth";
@@ -150,7 +151,14 @@ export default function LoginScreen() {
           <Text style={[styles.socialError, { color: colors.danger }]}>{socialError}</Text>
         )}
 
+        {/*
+          Both gate themselves and are mutually exclusive — the seed button only
+          renders with no backend wired, the bypass button only with one. Kept
+          adjacent so there is a single place to audit what a dev build adds to
+          this screen.
+        */}
         <DevSeedSessionButton />
+        <DevBypassSignInButton />
 
         <Pressable onPress={() => router.push("/(auth)/signup")} style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>

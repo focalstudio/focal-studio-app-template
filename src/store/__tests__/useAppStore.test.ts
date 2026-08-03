@@ -100,6 +100,31 @@ describe("useAppStore", () => {
       expect(useAppStore.getState().notificationPrefs.dailyReminderTime).toBe("09:00");
     });
 
+    it("rejects a time that isn't 24-hour HH:MM", async () => {
+      await AsyncStorage.setItem(
+        NOTIF_KEY,
+        JSON.stringify({ dailyReminderTime: "25:00", reengagementTime: "9:00" })
+      );
+      await useAppStore.getState().hydrate();
+      const prefs = useAppStore.getState().notificationPrefs;
+      expect(prefs.dailyReminderTime).toBe("09:00");
+      expect(prefs.reengagementTime).toBe("18:00");
+    });
+
+    // Regression: the per-field `typeof` chain this replaced assumed the stored
+    // container was an object, so a literal `null` threw a TypeError out of
+    // hydrate() and took the rest of the hydration with it.
+    it("survives a persisted null at the prefs key", async () => {
+      await AsyncStorage.setItem(NOTIF_KEY, "null");
+      await expect(useAppStore.getState().hydrate()).resolves.toBeUndefined();
+      expect(useAppStore.getState().notificationPrefs).toEqual({
+        dailyReminderEnabled: false,
+        dailyReminderTime: "09:00",
+        reengagementEnabled: false,
+        reengagementTime: "18:00",
+      });
+    });
+
     it("analyticsEnabled defaults to true and is off only for the exact string 'false'", async () => {
       await useAppStore.getState().hydrate();
       expect(useAppStore.getState().analyticsEnabled).toBe(true);

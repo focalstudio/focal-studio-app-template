@@ -11,6 +11,230 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.10.0] — 2026-08-03
+
+### Fixed
+- **Wiring a backend left 6–7 Jest suites red (#100).** `npm test` passed in the template
+  (25 suites) and in CI, but `scripts/add-backend.sh` closes by telling the developer to run
+  `npm run type-check && npm run lint && npm test` — and that last command failed on both
+  backends. Four load-time causes, each masking the next:
+  1. **Untransformed ESM.** `firebase/app` ships ESM and nothing added `firebase`/`@firebase`
+     to `transformIgnorePatterns`, so every suite whose import graph reaches
+     `src/services/auth/index.ts` aborted with "Cannot use import statement outside a module".
+     Fixed by splicing into jest-expo's negative-lookahead allowlist — appending a pattern
+     cannot work, since the option is an OR of things to *ignore*. Needed a second fix
+     underneath: the preset transforms `\.[jt]sx?$`, which excludes the genuine `.mjs` file
+     `@firebase/util` resolves to.
+  2. **Unmocked native SQLite.** `add-backend.sh supabase` installs `expo-sqlite`, whose
+     `localStorage/install` side effect runs at import and hit
+     `_ExpoSQLite.default.NativeDatabase is not a constructor`. Mocked `virtual: true`, since
+     the package is absent from the template as shipped.
+  3. **`env.js` validating on require.** `app-config.test.ts` replaced `process.env` wholesale
+     with two keys, which is a valid environment only while `BACKEND` is `"none"`, and
+     `env-schema.test.ts` still had one case hardcoded to Supabase-only variables that asserts
+     `not.toThrow()` on an environment Firebase correctly rejects.
+  4. **Partial `src/env.ts` mocks.** Three suites replaced the module with two or three keys,
+     dropping `requireEnv` — which a wired adapter calls at module load. Only visible once (1)
+     was fixed.
+  Verified green in all five configurations: un-wired, Supabase, Firebase, and both
+  backends plus `add-social-auth.sh`.
+- **`template-backend-smoke-test.yml` now runs `npm test`** in each of its four jobs. It ran
+  only `tsc` and `lint`, and neither loads a module the way Jest does — which is the whole
+  reason #100 shipped green. Jest config and the shared test fixtures are now in the
+  workflow's path filter too.
+
+### Changed
+- **Persisted storage is validated with zod schemas (#52).** `loadJson` takes an optional third
+  argument — `loadJson(key, fallback, schema)` — and returns the fallback when `safeParse` fails,
+  so a shape mismatch can no longer reach a caller disguised as the type it was cast to. The
+  two-argument form is unchanged, so no existing call site breaks. Schemas live in the new
+  `src/types/schemas.ts` and are now the source of truth: `Theme`, `NotificationPrefs`, `User`
+  and `SubscriptionTier` are derived from them with `z.infer`, and `AuthSession` from
+  `authSessionSchema` in `src/services/auth/types.ts`. That retires three different hand-rolled
+  guard styles — the nested `typeof` chain in `isValidSession`, the four per-field checks in
+  `useAppStore`, and the `validTiers`/`validThemes` allow-lists with their casts. `isValidSession`
+  and `isValidUser` remain exported from `src/services/auth/` — they are template surface a
+  downstream app may import — but are now one-line `safeParse` calls over the same schema rather
+  than a second implementation that could drift.
+
+  Two knock-on tightenings worth knowing about: reminder times are now checked against `HH:MM`
+  at the storage boundary instead of only inside `parseTime` (a malformed time resets to its
+  default at hydration, and zero-padding is required, so `"9:00"` no longer round-trips), and
+  `z.object` strips keys the schema doesn't declare, so stale fields from an older app version
+  are dropped rather than passed through. Notification prefs keep their per-field fallback — one
+  bad field does not reset the other three — via `.catch()` on each field, and a malformed
+  `user.name` is dropped rather than invalidating the whole session.
+
+### Added
+- **Maestro flow covering persistence across a force-quit — `.maestro/persistence.yaml` (#52).**
+  Jest covers the schemas against fixtures; what it can't cover is the real round trip — a value
+  written by the running app, through AsyncStorage on a device, read back by `hydrate()` on a
+  genuine cold start. The flow onboards, seeds a session, sets a non-default theme, then
+  `stopApp` + a bare `launchApp` (`clearState` defaults to false, so the second launch hydrates
+  from what the first one wrote) and asserts the app skips both onboarding and the auth wall and
+  still has the theme. `Toggle` gained an optional `testID`, forwarded to its `Switch` and used
+  by the theme rows in Settings — the label is a plain `Text` and isn't pressable, so without it
+  a `tapOn` has nothing to match. `maestro-e2e.yml` now runs the `.maestro/` directory rather
+  than naming one file, so a flow added later needs no workflow change.
+
+### Fixed
+- **Two persisted `null` blobs crashed hydration (#52).** `useAppStore.hydrate()` and
+  `usePaywallStore.hydrate()` both read a field straight off whatever `loadJson` returned, so a
+  literal `null` at `<prefix>notification_prefs` or `<prefix>subscription` threw a `TypeError`
+  instead of falling back. In the paywall store the throw escaped `hydrate()`, which left
+  `isLoading` stuck at `true` — a spinner the user could never get past. Schema validation makes
+  the container shape part of the check, so both now fall back cleanly. Regression tests cover
+  each.
+- **`profiles` was unreadable by the app — missing table grants in `schema.sql` (found by #68).**
+  The new backend verification caught this on its first run. RLS *narrows* access that a
+  `grant` has already allowed; it never creates it. A table created by running SQL (the SQL
+  Editor, or `supabase db push`) leaves `anon`, `authenticated` and `service_role` holding only
+  `REFERENCES/TRIGGER/TRUNCATE` — no `select`, `insert`, `update` or `delete`. Every RLS policy
+  in the file was therefore a dead letter, and the first `supabase.from("profiles").select()` in
+  a generated app — including the `useProfile()` hook in our own `docs/backends/supabase.md` —
+  would have failed with `permission denied for table profiles`, an error that reads like an RLS
+  bug and isn't one. `schema.sql` now grants `select, insert, update` to `authenticated` and
+  `all` to `service_role`, and the verification asserts an authenticated user can actually read
+  their own profile so the policies are exercised rather than assumed. Nothing is granted to
+  `anon` (every policy is `to authenticated`) and `delete` is withheld from `authenticated`
+  (profiles go via the `on delete cascade`). Tables made with the dashboard's Table Editor get
+  these grants applied automatically, which is why the gap only bit the SQL path.
+
+### Added
+- **Sign in with Google for both backends (#70).** The login screen has rendered a Google
+  button since the social module landed; it reported "not configured" because no adapter
+  implemented it. Now `bash scripts/add-social-auth.sh` installs Apple **and** Google
+  together — deliberately, since **App Store guideline 4.8** makes Apple mandatory the
+  moment any other third-party login is offered. The two backends need genuinely different
+  implementations and share almost nothing. **Supabase** uses `signInWithOAuth` +
+  `expo-web-browser`, with Google's client ID and secret staying in the Supabase dashboard,
+  so nothing enters the app and it works on iOS and Android alike. **Firebase (JS SDK)**
+  cannot use `signInWithPopup` / `signInWithRedirect` at all — both need a `window`, which
+  React Native does not have, and that is what every Firebase tutorial reaches for. It
+  instead runs `expo-auth-session` code+PKCE (Google refuses implicit `id_token` for
+  installed apps) via the imperative `AuthRequest` API, because
+  `expo-auth-session/providers/google` is a React hook and `social.ts` is a plain module.
+  Firebase + Google is **iOS-only**: Android needs its own OAuth client keyed to a signing
+  SHA-1, so the module throws `not_wired` with an explanation rather than producing an
+  opaque `redirect_uri_mismatch`. Brings `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` (Firebase path
+  only, optional — social sign-in is opt-in, so it is enforced at the point of use).
+- **`flowType: "pkce"` on the Supabase client (#70).** It previously set none, so supabase-js
+  defaulted to the *implicit* flow: no code verifier is stored, and `exchangeCodeForSession()`
+  fails with "code verifier should be non-empty". PKCE is also the only one of the two that is
+  safe on a device, since implicit puts the access token in a URL. The social module reads
+  **both** callback shapes, so an app wired before this change keeps working without editing
+  an adapter the install script promises never to touch. Sign in with Apple is unaffected —
+  native sheet, no browser round-trip.
+- **`parseOAuthCallback()` and `googleReversedClientId()` in `src/services/auth/oauthCallback.ts`,
+  with unit tests (#70).** Callback parsing is the likeliest part of an OAuth flow to be
+  subtly wrong — query vs fragment, PKCE vs implicit, an error where a token was expected —
+  and it fails as a browser that closes with nothing happening, which is indistinguishable
+  from a dead button. Social modules are copied out of `templates/`, which this repo's CI
+  cannot import, type-check, or lint, so both helpers live where the test run can see them,
+  next to `appleNameToPersist` and for the same reason. Covered: `?code=`, `#access_token=`
+  with and without a refresh token, `error_description` in query *and* fragment, Google's
+  `access_denied` mapped to `cancelled` so the store swallows it, malformed percent escapes,
+  and a callback carrying nothing at all. Deriving the reversed client ID rather than taking
+  a second env var means `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and the `app.json` URL scheme
+  cannot drift apart silently.
+- **CI verification of the Supabase account-deletion contract (#68).**
+  `.github/workflows/verify-backend.yml` starts a throwaway local Supabase, applies
+  `templates/backends/supabase/schema.sql` (twice, since the file claims to be idempotent) and
+  runs `scripts/verify-backend-contract.mjs` against a real Postgres + GoTrue. It asserts the
+  auth user is genuinely gone after `delete_own_account()` — checked with the `service_role`
+  key rather than by trusting the RPC's own return value — that the `on delete cascade` really
+  removed the profile, and that `anon` is blocked by the missing grant rather than by the
+  function's own `Not authenticated` raise (without that distinction the test would pass even
+  if the `revoke` were dropped). The assertion that earns the workflow is the last one: CI
+  **drops the RPC and calls it again**, requiring the client to see an error. A deletion that
+  silently no-ops is indistinguishable from a successful one, which is exactly what Google
+  Play's Data safety requirement exists to catch, and until now `deleteAccount()` was only ever
+  tested against a stub. Runs on PRs touching `templates/backends/**` and weekly to catch drift
+  in Supabase itself; no-ops when no Supabase backend is wired.
+- **Typed Supabase database (#64).** `src/types/database.types.ts` is generated from
+  `schema.sql` and committed, and the adapter now calls `createClient<Database>(...)`, so
+  `.from("profiles").select()` returns typed rows instead of `any` and a renamed column is a
+  build error rather than `undefined` at runtime. The same workflow regenerates the file and
+  fails the PR when it has drifted. Generated with `--local` rather than the `--linked` form
+  first proposed: it needs no project ref and no `SUPABASE_ACCESS_TOKEN` in CI, and it covers
+  this template, which has no linked project. The trade-off is that **`schema.sql` is the
+  source of truth** — a change made only in the dashboard is caught when someone writes it back
+  to the file, not before. Documented in `docs/backends/supabase.md`.
+- **Cold-start persistence and background token refresh added to the Data safety checklist**
+  in `.claude/reference/store-submission.md`, with the reason each stays manual: they exercise
+  the `expo-sqlite/localStorage` session store and the module-scope `AppState` listener, neither
+  of which exists headlessly. A green headless check would prove the Supabase API works, not
+  that our wiring does — and would stop people running the test that actually proves it.
+- **Sign in with Apple for the Firebase backend (#62).** Only the Supabase half of the recipe
+  had shipped, so a Firebase app had no supported route to Apple sign-in — and **App Store
+  guideline 4.8** makes it mandatory the moment the app offers any other third-party login,
+  so adding Google later was a rejection waiting to happen. `bash scripts/add-social-auth.sh`
+  now takes no argument and detects the backend from whichever adapter is in
+  `src/services/auth/`, installing `templates/social/firebase-social.ts` plus `expo-crypto`
+  on the Firebase path. The Firebase credential needs a **nonce**, and the two sides get
+  different values derived from the same secret — Apple's sheet gets `SHA-256(raw)` as
+  lowercase hex, Firebase gets the raw nonce and hashes it itself. Reverse them and you get
+  `auth/invalid-credential` with nothing pointing at the cause, so both the module and
+  `docs/backends/firebase.md` spell the pairing out. Name capture reuses the already-tested
+  `appleNameToPersist`; Firebase does not populate `displayName` from an Apple credential on
+  its own, and Apple sends the name only on the first authorization ever. Note this costs the
+  Firebase JS SDK path its Expo Go support — the *Pick a path first* table now says so.
+- **Dev sign-in bypass button on the login screen (#39).** Once a backend is wired, every screen
+  sits behind auth and you retype credentials on every reload. Setting
+  `EXPO_PUBLIC_DEV_BYPASS_EMAIL` / `EXPO_PUBLIC_DEV_BYPASS_PASSWORD` adds a "Skip Sign-In (Dev)"
+  button that signs in through the **real** `signIn()` → `AuthProvider` path, so the app gets a
+  genuine session and JWT — a faked `isAuthenticated` flag would get past the redirect in
+  `app/index.tsx` and then fail silently on every RLS-protected query. It is the complement of
+  `DevSeedSessionButton`: that one only renders with no backend wired, this one only with one, so
+  exactly one of the two can ever appear. Gated on `isDevBuild`, as the first statement in the
+  component, per `.claude/CLAUDE.md`.
+- **`app.config.js` strips `EXPO_PUBLIC_DEV_BYPASS_*` from store-bound builds.** `isDevBuild` hides
+  the button, not the password — `EXPO_PUBLIC_*` values are inlined into the JS bundle, so a
+  credential left in a production EAS environment group would ship regardless of what renders. The
+  pair is now dropped from `extra.env` (with a build-time warning) on `main`, `release/*`, and any
+  build whose branch can't be resolved, failing closed the same way `isDevBuild` does. For the same
+  reason the two keys are deliberately absent from `readEnv()`'s `process.env` fallback in
+  `src/env.ts`: Babel would inline them there and defeat the strip.
+
+### Fixed
+- **A network failure during session hydration silently signed users out.** `useAuthStore.hydrate()`
+  caught every error from `getSession()` the same way, so a device with no connectivity looked
+  identical to an actually-invalid session — a user with a perfectly valid stored session got bounced
+  to the login screen on a flaky connection. `hydrate()` now branches on `AuthError.code === "network"`:
+  the existing session state is left untouched and a new `hydrationError` flag is set instead, which
+  `app/_layout.tsx` routes to a new `app/network-error.tsx` "No Connection" retry screen rather than
+  the login screen. Non-network hydration failures (corrupt keychain, malformed persisted session)
+  keep the previous signed-out fallback. `hydrationError` is cleared by every transition to a
+  known auth state (it lives in the store's `signedOut` constant and `applySession()`), so a
+  background token refresh landing while the user waits on the retry screen releases them
+  instead of pinning them there with a valid session. `AuthProvider.getSession()` documents the
+  contract this depends on: answer from persisted state first, and throw `AuthError("network")`
+  only when validating or refreshing a session that exists. (#63)
+- **`maestro-e2e.yml` had no working automatic trigger — it has never run in CI.** Its only
+  non-manual trigger was `release: [published]`, which can never fire: `release.yml` publishes that
+  Release with the default `GITHUB_TOKEN`, and GitHub's recursion guard suppresses workflow-triggering
+  events raised by that token. Confirmed on 0.9.0 — `release.yml` green, `v0.9.0` tagged and
+  published, and `gh run list --workflow maestro-e2e.yml` returned no runs at all. This is the same
+  trap `android-release.yml` hit with `push: tags:` (#95). Fixed the same way: `maestro-e2e.yml` now
+  exposes `workflow_call` (the dead `release:` trigger is gone, `workflow_dispatch` stays), and
+  `release.yml` calls it as a dependent job gated on the existing `tag_created` output, so a re-run
+  on an already-tagged `main` doesn't spend another 15-25 minutes of `macos-latest`. No PAT and no
+  new secret — and no `secrets: inherit` on this one, since nothing in the workflow reads a secret.
+  Runs in parallel with `android-release`, so it adds no wall-clock time to the Android path.
+- **Maestro debug artifacts are now uploaded when the E2E job fails.** `~/.maestro/tests` (view
+  hierarchies and screenshots) plus Metro's log are bundled as a `maestro-debug-output` artifact.
+  Those hierarchies identified four of the six flow defects fixed in #92, and none of those fixes has
+  ever executed in CI because of the trigger bug above — so the first genuine run, on a downstream
+  bootstrapped app, is the one most likely to fail on something a local run can't reproduce
+  (simulator selection, cold-runner Metro timing).
+- **Release gate's Device E2E row now says "Runs after merge to main"** instead of "Not run for this
+  release". The row stays ⚠️ on every release PR by design — a reusable workflow invoked via `uses:`
+  produces jobs inside the caller's run, never a `maestro-e2e.yml` run of its own for
+  `listWorkflowRuns` to resolve against the PR's head SHA — but the old wording implied the E2E was
+  skipped entirely, which is no longer true.
+
+---
+
 ## [0.9.0] — 2026-08-01
 
 ### Fixed

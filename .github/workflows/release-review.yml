@@ -122,7 +122,10 @@ jobs:
               '| CHANGELOG entry | ✅ Passed |',
               renderRow('Bootstrap smoke test', bootstrapConclusion, 'Not run for this change'),
               renderRow('Backend-wiring smoke test', backendConclusion, 'Not run for this change'),
-              renderRow('Device E2E (Maestro)', maestroConclusion, 'Not run for this release'),
+              // Permanently ⚠️ by design: release.yml calls maestro-e2e.yml as a reusable
+              // workflow, so its jobs live inside the release run and never produce a
+              // maestro-e2e.yml run of their own for this head SHA to resolve. See #95.
+              renderRow('Device E2E (Maestro)', maestroConclusion, 'Runs after merge to main'),
               '',
               'This release is ready to merge to `main`.',
               '',

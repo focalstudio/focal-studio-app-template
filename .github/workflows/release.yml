@@ -78,3 +78,18 @@ jobs:
     if: needs.tag-and-release.outputs.tag_created == 'true'
     uses: ./.github/workflows/android-release.yml
     secrets: inherit
+
+  # Post-release device smoke test, called the same way and for the same reason as
+  # android-release above: maestro-e2e.yml's old `release: [published]` trigger could
+  # never fire, because this workflow publishes that Release with the default
+  # GITHUB_TOKEN. It silently never ran once. See #95.
+  #
+  # This runs after the tag and Release already exist, so it is a signal, not a gate —
+  # a failure here means investigate and patch forward, not that the release was
+  # blocked. No `secrets: inherit`: unlike the Android job, nothing in this workflow
+  # reads a secret.
+  maestro-e2e:
+    name: Maestro E2E
+    needs: tag-and-release
+    if: needs.tag-and-release.outputs.tag_created == 'true'
+    uses: ./.github/workflows/maestro-e2e.yml

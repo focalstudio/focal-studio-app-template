@@ -64,7 +64,8 @@ export const auth: Auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
-async function toAuthSession(user: FirebaseUser | null): Promise<AuthSession | null> {
+/** Exported so `social.ts` maps sessions identically. See add-social-auth.sh. */
+export async function toAuthSession(user: FirebaseUser | null): Promise<AuthSession | null> {
   if (!user) return null;
   const token = await user.getIdTokenResult();
   return {
@@ -85,8 +86,10 @@ async function toAuthSession(user: FirebaseUser | null): Promise<AuthSession | n
  *
  * Never surface Firebase's raw message — it embeds request IDs and internal
  * identifiers that mean nothing to a user.
+ *
+ * Exported for the same reason as `toAuthSession` above.
  */
-function toAuthError(err: unknown): AuthError {
+export function toAuthError(err: unknown): AuthError {
   const code = (err as { code?: string })?.code ?? "";
   const message = err instanceof Error ? err.message : String(err);
 
@@ -209,7 +212,10 @@ export const firebaseAuthProvider: AuthProvider = {
     });
   },
 
-  // Social sign-in is intentionally not implemented here — see the social
-  // sign-in recipe issue. Omitting these makes the UI report "not configured"
-  // rather than rendering a dead button.
+  // Social sign-in is intentionally not implemented here. It needs native
+  // modules and dashboard configuration that not every app wants, so it is
+  // opt-in: `bash scripts/add-social-auth.sh` installs the packages and
+  // composes the methods onto this provider in src/services/auth/index.ts.
+  // Until then, omitting them makes the UI report "not configured" rather
+  // than rendering a dead button.
 };

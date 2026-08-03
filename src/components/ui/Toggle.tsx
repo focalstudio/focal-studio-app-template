@@ -9,9 +9,15 @@ type Props = {
   onValueChange: (v: boolean) => void;
   label?: string;
   description?: string;
+  /**
+   * Addresses the switch itself in an E2E flow. The label is a plain `Text`
+   * and isn't pressable, so without this a Maestro `tapOn` has nothing to
+   * match — and an unmatched `tapOn` reports COMPLETED while tapping nothing.
+   */
+  testID?: string;
 };
 
-export function Toggle({ value, onValueChange, label, description }: Props) {
+export function Toggle({ value, onValueChange, label, description, testID }: Props) {
   const { colors } = useTheme();
   return (
     <View style={styles.row}>
@@ -28,6 +34,7 @@ export function Toggle({ value, onValueChange, label, description }: Props) {
         </View>
       )}
       <Switch
+        testID={testID}
         value={value}
         onValueChange={(v) => {
           hapticTap();

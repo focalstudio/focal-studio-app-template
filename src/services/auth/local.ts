@@ -1,6 +1,7 @@
 import { STORAGE_PREFIX } from "../../constants";
 import { loadJson, saveJson, removeItem } from "../../utils/storage";
-import { AuthError, isValidSession, isValidUser } from "./types";
+import { userSchema } from "../../types/schemas";
+import { AuthError, authSessionSchema } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
 
 const SESSION_KEY = `${STORAGE_PREFIX}auth_session`;
@@ -32,12 +33,14 @@ export const localAuthProvider: AuthProvider = {
   name: "local",
 
   async getSession(): Promise<AuthSession | null> {
-    const raw = await loadJson<unknown>(SESSION_KEY, null);
-    if (isValidSession(raw)) return raw;
+    // A malformed blob and a missing one both read back as null, which is what
+    // the migration below wants: either way there is no usable session yet.
+    const session = await loadJson(SESSION_KEY, null, authSessionSchema);
+    if (session !== null) return session;
 
     // Migrate a bare user blob written by the pre-session scaffold.
-    const legacy = await loadJson<unknown>(LEGACY_USER_KEY, null);
-    if (isValidUser(legacy)) {
+    const legacy = await loadJson(LEGACY_USER_KEY, null, userSchema);
+    if (legacy !== null) {
       const migrated: AuthSession = {
         accessToken: "local-scaffold",
         refreshToken: null,

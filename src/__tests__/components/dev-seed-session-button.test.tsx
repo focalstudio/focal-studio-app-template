@@ -16,7 +16,35 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DevSeedSessionButton } from "../../components/dev/DevSeedSessionButton";
 import { useAuthStore } from "../../store/useAuthStore";
 
-jest.mock("../../env", () => ({ isDevBuild: true, backend: "none" }));
+// Spread the real module rather than replacing it: once a backend is wired, its
+// adapter calls `requireEnv(...)` at module load, and a mock that omits it takes
+// the whole suite down with "requireEnv is not a function" (#100). Only the two
+// values this file drives are overridden.
+jest.mock("../../env", () => ({
+  ...jest.requireActual("../../env"),
+  isDevBuild: true,
+  backend: "none",
+}));
+
+/**
+ * Pin the port to the local scaffold.
+ *
+ * This suite drives the gate by mutating the mocked `backend`, but
+ * `scripts/add-backend.sh` rewrites `authProvider` in the barrel — so in a wired
+ * app the seed test would press the button with `backend: "none"` while
+ * `hydrate()` asks the *real* adapter for a session. `seedLocalSession` writes
+ * the local scaffold's AsyncStorage key and no other provider reads it, so the
+ * round-trip silently fails to sign in (#100).
+ *
+ * Pinning here restores the only configuration in which this button exists at
+ * all, per its own gate. Faking at the `AuthProvider` port rather than at the
+ * SDK is the convention — see `docs/testing.md`. No-op in the un-wired template,
+ * where `authProvider` is already `localAuthProvider`.
+ */
+jest.mock("../../services/auth", () => ({
+  ...jest.requireActual("../../services/auth"),
+  authProvider: jest.requireActual("../../services/auth/local").localAuthProvider,
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockEnv = require("../../env") as { isDevBuild: boolean; backend: string };

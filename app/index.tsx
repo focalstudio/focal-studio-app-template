@@ -16,6 +16,7 @@ export default function Root() {
   const onboardingLoading = useOnboardingStore((s) => s.isLoading);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authLoading = useAuthStore((s) => s.isLoading);
+  const authError = useAuthStore((s) => s.hydrationError);
 
   if (onboardingLoading || authLoading) {
     return (
@@ -25,6 +26,10 @@ export default function Root() {
     );
   }
 
+  // Mirrors the guard order in `_layout.tsx`: a network failure means we
+  // couldn't verify anything, so it wins over onboarding/auth routing rather
+  // than redirecting toward a group `_layout.tsx` has left unguarded.
+  if (authError === "network") return <Redirect href="/network-error" />;
   if (!onboardingComplete) return <Redirect href="/onboarding" />;
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
   return <Redirect href="/(tabs)" />;

@@ -66,6 +66,14 @@ Only native dependencies are mocked. Everything else runs for real.
 | `posthog-react-native` | Same import path as above. Keeps the SDK's timers and network client out of the test process. |
 | `expo-store-review` | `src/services/ratingService.ts`, reached from settings. `isAvailableAsync` resolves `false` so no test trips the real prompt. |
 | `expo-status-bar` | `app/_layout.tsx` renders `<StatusBar>` unconditionally. Harmless in a single-screen test that never mounts the real root layout, but mounting the real layout with a `Stack.Protected`-guarded `Tabs` navigator active (any test of the auth/onboarding routing guards) makes the real component loop on every render — a synchronous loop severe enough that Jest's own `testTimeout` never gets a chance to fire. See `src/__tests__/screens/auth-guards.test.tsx`. |
+| `expo-sqlite/localStorage/install` | Only present once `add-backend.sh supabase` has run. The Supabase adapter imports it for its side effect (defining `localStorage`, which supabase-js uses as its storage adapter), and that side effect touches the native SQLite binding at import time. Mocked `virtual: true`, since the package is not a dependency of the template as shipped. |
+
+`jest.setup.js` also seeds `process.env` with placeholder `EXPO_PUBLIC_*` values for every
+backend, using `??=` so a real `.env.local` or CI value still wins. `src/env.ts` falls back to
+`process.env` when there is no Expo manifest — always, under Jest — and a wired adapter calls
+`requireEnv(...)` at module load, so without them every suite reaching `src/services/auth`
+fails to start. The values are structurally valid and meaningless; nothing should reach a
+network call with them.
 
 Deliberately **not** mocked: `expo-router` (the point of `renderRouter` is to run it for
 real), `react-native-svg`, `react-native-pager-view`, and `lucide-react-native` — all
@@ -83,17 +91,71 @@ friends at runtime but ships an empty `expect.d.ts`. Without this declaration fi
 matchers work under `npm test` and fail `npm run type-check`. Keep it in sync if
 `expo-router` is upgraded.
 
-### What `jest-expo` already handles — do not re-add
+### `jest.config.js` — why it isn't a `package.json` block
 
-The Jest block in `package.json` is deliberately four lines. The preset already supplies:
+Config lives in `jest.config.js` because two values have to be **derived** from jest-expo's
+rather than restated, and JSON cannot run code:
+
+- **`transformIgnorePatterns`** — the preset expresses its allowlist as a single negative
+  lookahead, `/node_modules/(?!(…))`. `firebase` and `@firebase` ship untranspiled ESM and
+  must be spliced *inside* that group. Appending a pattern cannot work: the option is an OR
+  of things to ignore, so extra entries only ever ignore more.
+- **`transform`** — the preset transforms `\.[jt]sx?$`, which excludes `.mjs`.
+  `@firebase/util` resolves to a real `.mjs`, so allowing it past the ignore patterns is only
+  half the fix. The babel entry is looked up in the preset, not restated, so it keeps the
+  preset's exact babel options.
+
+Both derivations **throw at config load** if the preset's shape stops matching. An Expo SDK
+bump is free to change it, and a silent no-op would restore the failure with no signal — it
+only reproduces once a backend is wired.
+
+### What `jest-expo` already handles — do not re-add
 
 - **`moduleNameMapper` for the `@/` alias.** `jest-expo` reads `tsconfig.json`'s `paths`
   and generates the mapping (`withTypescriptMapping`). Confirm with `npx jest --showConfig`.
-- **`transformIgnorePatterns`.** The preset ships an allowlist covering `react-native*`,
-  `expo*`, and `@react-navigation`.
 - **Expo NativeModules stubs** and the asset-file transformer.
 
-Overriding either of the first two by hand silently drops the rest of the preset's work.
+Overriding these by hand silently drops the rest of the preset's work.
+
+---
+
+## Keeping the suite green once a backend is wired
+
+`npm test` has to pass **after** `scripts/add-backend.sh`, not just in the template. That
+script rewrites `authProvider` in `src/services/auth/index.ts`, so a wired app pulls a real
+SDK into the import graph of every suite that touches auth — and `tsc` and `lint` both stay
+green while Jest is red, because all three failure modes are load-time. See #100.
+
+Two conventions follow:
+
+1. **Never replace `src/env.ts` wholesale in a `jest.mock` factory.** Spread it and override
+   only what the test drives:
+
+   ```ts
+   jest.mock("../../env", () => ({
+     ...jest.requireActual("../../env"),
+     isDevBuild: true,
+     backend: "none",
+   }));
+   ```
+
+   A factory returning a bare `{ isDevBuild, backend }` drops `requireEnv`, which a wired
+   adapter calls at module load — the suite then dies with `requireEnv is not a function`.
+
+2. **Build a `process.env` from `EVERY_BACKEND_CONFIGURED`**
+   ([`src/__tests__/support/backendEnv.ts`](../src/__tests__/support/backendEnv.ts)), never
+   from one backend's variables. `env.js` validates on require and promotes the selected
+   backend's variables from optional to required, so a Supabase-only fixture is *correctly*
+   rejected once Firebase is wired. `BACKEND_VARS[backend]` is there for the narrower case of
+   asserting the minimal valid configuration.
+
+   Files under `__tests__/support/` are excluded from `testMatch` by `testPathIgnorePatterns`
+   — Jest would otherwise treat a fixture as a suite and fail it for having no tests.
+
+The fence is the `Test` step in
+[`template-backend-smoke-test.yml`](../.github/workflows/template-backend-smoke-test.yml),
+which runs `npm test` in all four wired combinations. Before it existed, that workflow ran
+only `tsc` and `lint`, which is exactly why #100 shipped.
 
 ---
 

@@ -131,7 +131,7 @@ scripts/
 | `npm run build:ios` | EAS production build (iOS) |
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
 | `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
-| `bash scripts/add-social-auth.sh` | Add Sign in with Apple to a Supabase app (adds native code) |
+| `bash scripts/add-social-auth.sh` | Add Apple + Google sign-in to a Supabase or Firebase app (adds native code) |
 
 ---
 
@@ -150,15 +150,17 @@ bash scripts/add-backend.sh supabase   # or: firebase
 It installs the packages, drops the adapter into `src/services/auth/`, activates it, makes
 the provider's env vars required, and prints the remaining manual steps.
 
-Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple** —
-mandatory under App Store guideline 4.8 as soon as you offer any other third-party login.
-Note that it adds a native module, so the app stops running in Expo Go and needs a dev
-client. Supabase only for now; Google is tracked separately.
+Once a backend is wired, `bash scripts/add-social-auth.sh` adds **Sign in with Apple and
+Sign in with Google**. Both together, deliberately: Apple is mandatory under App Store
+guideline 4.8 as soon as you offer any other third-party login. The script takes no
+arguments and works with either backend; it detects which one from the adapter already in
+`src/services/auth/`. Note that it adds a native module, so the app stops running in Expo
+Go and needs a dev client. On the Firebase JS SDK path, Google is iOS-only — see its guide.
 
 | Provider | Guide | Notes |
 |---|---|---|
 | Supabase | [docs/backends/supabase.md](docs/backends/supabase.md) | Recommended default. Ships a `schema.sql` with RLS policies, a signup trigger, and the `delete_own_account()` function account deletion depends on. |
-| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin. Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
+| Firebase | [docs/backends/firebase.md](docs/backends/firebase.md) | Installs the JS SDK path — works in Expo Go, no config plugin (until you add Apple sign-in, which ends both). Migrate to React Native Firebase if you need Analytics, Crashlytics, or FCM. |
 
 **Writing your own?** Implement the `AuthProvider` port in
 [`src/services/auth/types.ts`](src/services/auth/types.ts) and change one export line.
@@ -181,6 +183,8 @@ cp .env.example .env.local
 | `EXPO_PUBLIC_SUPABASE_URL` | Only if using Supabase | Project URL from the Supabase dashboard |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only if using Supabase | Publishable key (`sb_publishable_…`; older docs call it the anon key) |
 | `EXPO_PUBLIC_FIREBASE_*` | Only if using the Firebase JS SDK | API key, auth domain, project ID, app ID — see `.env.example` |
+| `EXPO_PUBLIC_DEV_BYPASS_EMAIL` | No | Dev sign-in bypass account — **never set in production** |
+| `EXPO_PUBLIC_DEV_BYPASS_PASSWORD` | No | Password for that account — **never set in production** |
 
 The template ships with **no backend wired** — auth is local-only until you add one. The
 backend variables above are commented out in `.env.example`; uncomment the block for the
@@ -200,6 +204,14 @@ import { env, requireEnv } from "@/env";
 env.EXPO_PUBLIC_POSTHOG_KEY        // string | undefined, already validated
 requireEnv("EXPO_PUBLIC_SUPABASE_URL")  // throws rather than yielding undefined
 ```
+
+> **The bypass pair is a credential, not a config value.** Setting it adds a "Skip Sign-In
+> (Dev)" button to the login screen so you don't retype credentials on every reload once a
+> backend is wired. `isDevBuild` hides that button in a store build, but `EXPO_PUBLIC_*`
+> values are inlined into the JS bundle — hiding the control does not hide the password. So
+> [`app.config.js`](app.config.js) also strips the pair from any build cut off `main` or
+> `release/*` (or an unresolvable branch), and prints a warning when it does. Use a throwaway
+> test account regardless, and keep these out of the production EAS environment group.
 
 > The React Native Firebase path does not use `EXPO_PUBLIC_FIREBASE_*`. It reads
 > `google-services.json` / `GoogleService-Info.plist`, which are gitignored. EAS only

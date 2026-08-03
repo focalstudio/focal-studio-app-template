@@ -9,25 +9,13 @@
  * `process.env` with the module cache cleared.
  */
 
-const ENV_MODULE = "../../env.js";
+import {
+  BACKEND_VARS,
+  EVERY_BACKEND_CONFIGURED,
+  type BackendName,
+} from "./support/backendEnv";
 
-/**
- * A value for every backend's variables.
- *
- * `env.js` only *requires* the ones belonging to the backend it has selected,
- * so supplying all of them yields a valid environment whatever `BACKEND` is.
- * That keeps these tests meaningful both in the template (`BACKEND = "none"`)
- * and in an app that has run `scripts/add-backend.sh` — previously they
- * hardcoded the template's default and failed the moment a backend was wired.
- */
-const EVERY_BACKEND_CONFIGURED = {
-  EXPO_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
-  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xyz",
-  EXPO_PUBLIC_FIREBASE_API_KEY: "AIzaPlaceholder",
-  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: "abc.firebaseapp.com",
-  EXPO_PUBLIC_FIREBASE_PROJECT_ID: "abc",
-  EXPO_PUBLIC_FIREBASE_APP_ID: "1:2:web:3",
-};
+const ENV_MODULE = "../../env.js";
 
 function loadEnv(vars: Record<string, string | undefined>) {
   const original = process.env;
@@ -46,13 +34,13 @@ describe("env.js schema", () => {
     expect(() => loadEnv(EVERY_BACKEND_CONFIGURED)).not.toThrow();
   });
 
-  it("accepts a fully configured Supabase environment", () => {
-    expect(() =>
-      loadEnv({
-        EXPO_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
-        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xyz",
-      })
-    ).not.toThrow();
+  // The minimal case: exactly the wired backend's variables and nothing else.
+  // Previously hardcoded to Supabase's, which asserted `not.toThrow()` on an
+  // environment that is — correctly — invalid once Firebase is the backend (#100).
+  it("accepts exactly the selected backend's variables and nothing else", () => {
+    const { BACKEND } = loadEnv(EVERY_BACKEND_CONFIGURED) as { BACKEND: BackendName };
+
+    expect(() => loadEnv({ ...BACKEND_VARS[BACKEND] })).not.toThrow();
   });
 
   it("exposes validated values and the selected backend", () => {
@@ -99,6 +87,68 @@ describe("env.js schema", () => {
         EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xyz",
       })
     ).toThrow(/EXPO_PUBLIC_SUPABASE_URL/);
+  });
+
+  // Same half-configured trap as Supabase above, with a quieter failure: the
+  // bypass button's gate requires both, so one alone leaves it permanently
+  // hidden with nothing to explain why.
+  it("accepts both dev bypass credentials together", () => {
+    expect(() =>
+      loadEnv({
+        ...EVERY_BACKEND_CONFIGURED,
+        EXPO_PUBLIC_DEV_BYPASS_EMAIL: "dev@example.test",
+        EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2",
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects a dev bypass email without a password", () => {
+    expect(() =>
+      loadEnv({ EXPO_PUBLIC_DEV_BYPASS_EMAIL: "dev@example.test" })
+    ).toThrow(/EXPO_PUBLIC_DEV_BYPASS_PASSWORD/);
+  });
+
+  it("rejects a dev bypass password without an email", () => {
+    expect(() => loadEnv({ EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2" })).toThrow(
+      /EXPO_PUBLIC_DEV_BYPASS_EMAIL/
+    );
+  });
+
+  it("rejects a malformed dev bypass email", () => {
+    expect(() =>
+      loadEnv({
+        EXPO_PUBLIC_DEV_BYPASS_EMAIL: "not-an-email",
+        EXPO_PUBLIC_DEV_BYPASS_PASSWORD: "hunter2",
+      })
+    ).toThrow(/EXPO_PUBLIC_DEV_BYPASS_EMAIL/);
+  });
+
+  // Optional even on the Firebase backend: social sign-in is opt-in, so
+  // requiring it would break every Firebase app that only wants email or Apple.
+  // `social.ts` calls requireEnv() at the point of use instead.
+  it("accepts a Firebase environment with no Google client ID", () => {
+    expect(() => loadEnv(EVERY_BACKEND_CONFIGURED)).not.toThrow();
+  });
+
+  it("accepts a well-formed Google iOS client ID", () => {
+    expect(() =>
+      loadEnv({
+        ...EVERY_BACKEND_CONFIGURED,
+        EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: "123-abc.apps.googleusercontent.com",
+      })
+    ).not.toThrow();
+  });
+
+  // The reversed form is what goes in app.json's CFBundleURLSchemes, and the two
+  // are easy to mix up. Pasting it here yields a browser that opens and never
+  // returns — worth catching at build time rather than on a device.
+  it.each([
+    ["the reversed URL scheme", "com.googleusercontent.apps.123-abc"],
+    ["a bare ID", "123-abc"],
+  ])("rejects %s in place of the Google iOS client ID", (_label, value) => {
+    expect(() =>
+      loadEnv({ ...EVERY_BACKEND_CONFIGURED, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: value })
+    ).toThrow(/EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/);
   });
 
   it("names every offending variable in one message", () => {

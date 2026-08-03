@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { STORAGE_PREFIX } from "../constants";
 import { loadJson, saveJson } from "../utils/storage";
+import { storedSubscriptionSchema } from "../types/schemas";
 import type { SubscriptionTier } from "../types";
 
 const PAYWALL_KEY = `${STORAGE_PREFIX}subscription`;
@@ -25,11 +26,7 @@ export const usePaywallStore = create<PaywallState>((set) => ({
   },
 
   hydrate: async () => {
-    const validTiers: SubscriptionTier[] = ["free", "monthly", "annual", "lifetime"];
-    const data = await loadJson<{ tier: unknown }>(PAYWALL_KEY, { tier: "free" });
-    const tier: SubscriptionTier = (validTiers as unknown[]).includes(data.tier)
-      ? (data.tier as SubscriptionTier)
-      : "free";
+    const { tier } = await loadJson(PAYWALL_KEY, { tier: "free" as const }, storedSubscriptionSchema);
     set({ tier, isPro: tier !== "free", isLoading: false });
   },
 }));

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Theme, NotificationPrefs } from "../types";
 import { STORAGE_PREFIX, DEV_MODE_KEY } from "../constants";
 import { loadJson, saveJson, loadString, saveString } from "../utils/storage";
+import { themeSchema, storedNotificationPrefsSchema } from "../types/schemas";
 import { rescheduleNotifications } from "../services/notifications";
 import { Analytics, setAnalyticsEnabled as applyAnalyticsEnabled } from "../services/analytics";
 
@@ -17,6 +18,9 @@ const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
   reengagementEnabled: false,
   reengagementTime: "18:00",
 };
+
+/** Built once — each field falls back to its default independently on read. */
+const STORED_PREFS_SCHEMA = storedNotificationPrefsSchema(DEFAULT_NOTIF_PREFS);
 
 type AppState = {
   theme: Theme;
@@ -61,27 +65,8 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   hydrate: async () => {
-    const validThemes: Theme[] = ["light", "dark", "device"];
-    const rawTheme = await loadString(THEME_KEY, "device");
-    const theme: Theme = (validThemes as string[]).includes(rawTheme)
-      ? (rawTheme as Theme)
-      : "device";
-
-    const rawPrefs = await loadJson<Partial<NotificationPrefs>>(NOTIF_KEY, DEFAULT_NOTIF_PREFS);
-    const notificationPrefs: NotificationPrefs = {
-      dailyReminderEnabled: typeof rawPrefs.dailyReminderEnabled === "boolean"
-        ? rawPrefs.dailyReminderEnabled
-        : DEFAULT_NOTIF_PREFS.dailyReminderEnabled,
-      dailyReminderTime: typeof rawPrefs.dailyReminderTime === "string"
-        ? rawPrefs.dailyReminderTime
-        : DEFAULT_NOTIF_PREFS.dailyReminderTime,
-      reengagementEnabled: typeof rawPrefs.reengagementEnabled === "boolean"
-        ? rawPrefs.reengagementEnabled
-        : DEFAULT_NOTIF_PREFS.reengagementEnabled,
-      reengagementTime: typeof rawPrefs.reengagementTime === "string"
-        ? rawPrefs.reengagementTime
-        : DEFAULT_NOTIF_PREFS.reengagementTime,
-    };
+    const theme = themeSchema.catch("device").parse(await loadString(THEME_KEY, "device"));
+    const notificationPrefs = await loadJson(NOTIF_KEY, DEFAULT_NOTIF_PREFS, STORED_PREFS_SCHEMA);
 
     const analyticsStr = await loadString(`${STORAGE_PREFIX}analytics`, "true");
     const devModeStr = await loadString(DEV_MODE_KEY_STORE, "false");

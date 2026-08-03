@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { userSchema } from "../../types/schemas";
 import type { User } from "../../types";
 
 /**
@@ -6,15 +8,24 @@ import type { User } from "../../types";
  * This is deliberately provider-neutral: Supabase, Firebase, and a custom API
  * all expose these four facts in some shape, and nothing above this layer
  * should have to know which one is in use.
+ *
+ * The schema is the source of truth — it doubles as the validator for the
+ * persisted blob, so the type and the guard can't drift apart. It lives here
+ * rather than in `types/schemas.ts` because it is auth-domain.
+ *
+ * `.nullable()` and not `.optional()` on both nullable fields: a session with
+ * either key absent is malformed, not a session with a default.
  */
-export type AuthSession = {
-  accessToken: string;
+export const authSessionSchema = z.object({
+  accessToken: z.string(),
   /** Null when the provider issues no refresh token (e.g. the local scaffold). */
-  refreshToken: string | null;
+  refreshToken: z.string().nullable(),
   /** Epoch **seconds**, matching JWT `exp`. Null means "never expires". */
-  expiresAt: number | null;
-  user: User;
-};
+  expiresAt: z.number().nullable(),
+  user: userSchema,
+});
+
+export type AuthSession = z.infer<typeof authSessionSchema>;
 
 export type AuthErrorCode =
   /** No backend is wired yet — the local scaffold throws this for every remote call. */
@@ -55,6 +66,9 @@ export class AuthError extends Error {
  *   state on failure. Signing a user out while their account still exists looks
  *   identical to a successful deletion, and is exactly what Google Play's
  *   "Data safety" account-deletion requirement exists to prevent.
+ * - `getSession()` must answer from persisted state before it touches the
+ *   network — see its own doc below. `useAuthStore.hydrate()` reads a thrown
+ *   `AuthError("network")` as "a session exists but I couldn't verify it".
  * - `subscribe()` must return its own unsubscribe function.
  * - Throw `AuthError("cancelled")` when the user dismisses a native sheet or an
  *   OAuth browser. The store swallows it, so nothing is shown for a tap the
@@ -66,7 +80,28 @@ export type AuthProvider = {
   /** Identifies the active backend in logs and dev tooling. */
   readonly name: string;
 
-  /** Restore a persisted session at boot. Returns null when signed out. */
+  /**
+   * Restore a persisted session at boot. Returns null when signed out.
+   *
+   * Two rules, both load-bearing for offline behaviour:
+   *
+   * 1. **Answer from storage first.** With nothing persisted, resolve null
+   *    without a network round-trip. Never throw because the device happens to
+   *    be offline while signed out.
+   * 2. **Throw `AuthError("network")` only while validating or refreshing a
+   *    session that exists.** A `network` throw is read one level up as "there
+   *    is a session here I could not verify", and `useAuthStore.hydrate()`
+   *    blocks on a retry screen rather than guessing.
+   *
+   * The store cannot make this distinction itself: at the first hydrate() an
+   * unverifiable stored session and a fresh install look identical in memory
+   * (both have `session === null`). Break rule 1 and a fresh install with no
+   * connectivity is stranded on the retry screen instead of seeing onboarding.
+   *
+   * Supabase and Firebase both satisfy this as shipped — they read local
+   * persistence first and only reach the network to refresh an existing
+   * session. `local.ts` is a pure AsyncStorage read and never throws `network`.
+   */
   getSession(): Promise<AuthSession | null>;
 
   signIn(email: string, password: string): Promise<AuthSession>;
@@ -112,18 +147,15 @@ export function isSessionExpired(session: AuthSession | null): boolean {
 /**
  * Validates a session read back from storage. Persisted blobs are untrusted
  * input — a partial write or an older app version can leave a malformed shape.
+ *
+ * `local.ts` reads through `loadJson(key, fallback, schema)` and doesn't need
+ * these; they stay because they are exported from the barrel and a downstream
+ * app may already import them.
  */
 export function isValidSession(value: unknown): value is AuthSession {
-  if (typeof value !== "object" || value === null) return false;
-  const s = value as Partial<AuthSession>;
-  if (typeof s.accessToken !== "string") return false;
-  if (s.refreshToken !== null && typeof s.refreshToken !== "string") return false;
-  if (s.expiresAt !== null && typeof s.expiresAt !== "number") return false;
-  return isValidUser(s.user);
+  return authSessionSchema.safeParse(value).success;
 }
 
 export function isValidUser(value: unknown): value is User {
-  if (typeof value !== "object" || value === null) return false;
-  const u = value as Partial<User>;
-  return typeof u.id === "string" && typeof u.email === "string";
+  return userSchema.safeParse(value).success;
 }

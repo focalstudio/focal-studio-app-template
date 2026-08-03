@@ -14,6 +14,8 @@ After `release/x.x.x` is merged to `main` and CI is green:
 5. In App Store Connect: select the new build, add release notes (match CHANGELOG), submit for review.
 6. Verify dev mode is off: tap the app title 5× — confirm no dev badge appears.
 7. **Data safety check** (see below) — the App Privacy answers must match what the app actually does.
+8. **Social sign-in check** (see below, if `src/services/auth/social.ts` exists) — guideline 4.8
+   makes a broken or missing Apple button a rejection the moment Google is also offered.
 
 ## Google Play checklist
 `android-release.yml` builds and submits automatically as part of the same `release.yml` run — this checklist is what's left to do by hand:
@@ -27,13 +29,26 @@ After `release/x.x.x` is merged to `main` and CI is green:
 
 ## Data safety checklist (both stores)
 
-Run this before every store submission. All three items ship with the template but each
+Run this before every store submission. Every item ships with the template but each
 one has to actually work in the built app, not just exist in the source:
 
 - [ ] **Account deletion works end-to-end.** Settings → Danger Zone → Delete Account, on a
       real build against the production backend. Confirm the account is genuinely gone —
       not just signed out. `useAuthStore.deleteAccount()` must throw on a failed backend
       call so the UI surfaces the error rather than faking success.
+      For Supabase, `verify-backend.yml` already covers the **backend** half in CI (the row
+      is really gone, the cascade really cascaded, a broken RPC really errors), so what this
+      manual pass is for is the **UI** half: that a failure reaches the user as a failure.
+- [ ] **Session survives a cold start.** Sign in, force-quit the app from the app switcher,
+      relaunch — you must still be signed in, with no credential re-entry and no flash of the
+      login screen. *Cannot be automated:* this exercises the `expo-sqlite/localStorage`
+      session store, which only exists on device. Headless Node calling `getSession()` would
+      prove the Supabase API works, not that our storage wiring does.
+- [ ] **Token refresh survives backgrounding.** Sign in, background the app past the access
+      token's expiry (1 h by default), foreground it, and perform an authenticated action —
+      it must succeed without a re-login. *Cannot be automated:* this exercises the
+      module-scope `AppState` listener in `src/services/auth/supabase.ts` that drives
+      `startAutoRefresh`/`stopAutoRefresh`, and `AppState` never fires headlessly.
 - [ ] **Analytics opt-out survives a cold start.** Toggle Analytics off, force-quit,
       relaunch, and confirm no events are sent before touching the toggle again. The
       preference is re-applied during `useAppStore.hydrate()` — verify it, don't assume it.
@@ -47,5 +62,32 @@ one has to actually work in the built app, not just exist in the source:
       The `verify-privacy.yml` workflow automates both checks (generate + live-URL `#delete`).
 - [ ] **`store-listing/*.md` URLs match `src/constants.ts`.** These drift easily; a stale
       URL in the listing files is a common rejection cause.
+
+## Social sign-in checklist (Apple, if `src/services/auth/social.ts` exists)
+
+Run this before every submission of an app that has run `scripts/add-social-auth.sh`. Both
+adapters are type-checked and unit-tested in CI (`template-backend-smoke-test.yml`), but the
+actual OAuth round-trip needs a real device, real provider credentials, and a live backend —
+none of which CI has. A green build proves the code compiles against the port; it does not
+prove a user can complete the flow.
+
+- [ ] **Sign in with Apple completes.** Tap "Continue with Apple", complete the native sheet,
+      confirm you land in the app.
+- [ ] **Cancelling Apple's sheet shows no error.** Tap it again and back out. `AuthError("cancelled")`
+      is swallowed by the store — anything visible here is a bug, not a real failure.
+- [ ] **Sign in with Google completes.** Tap "Continue with Google", complete the consent
+      screen, confirm the browser closes and you land in the app. On the Firebase backend this
+      is iOS-only — don't test it on an Android build, the button is expected to fail there
+      with an explanatory message.
+- [ ] **Cancelling Google's browser shows no error**, same contract as Apple above.
+- [ ] **Guideline 4.8**: if Google sign-in ships, Apple sign-in must also be present and
+      working — a build that offers one without the other is a rejection risk, not just an
+      incomplete feature.
+
+*Cannot be automated:* both flows need a native module (`expo-apple-authentication`) that
+doesn't exist in CI's Node environment, and Google's needs a real OAuth consent screen and a
+live backend project — neither of which CI has credentials for. This is the same category as
+the cold-start and token-refresh items above: a green CI run proves the wiring compiles, not
+that the flow completes.
 
 First-ever Android release for a newly bootstrapped app additionally needs the one-time setup in [KEYSTORE.md](../KEYSTORE.md) (keystore generation, Play Console app entry, service account) run **before** any tag push, since CI cannot generate a keystore non-interactively.

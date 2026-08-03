@@ -154,7 +154,22 @@ That installs the packages, copies the adapter from `templates/backends/<provide
 
 For any **other** backend, write an adapter implementing `AuthProvider` and change that one line. Do not edit `useAuthStore` or any `(auth)` screen — they are already provider-agnostic, and editing them is how a template stops being reusable.
 
-**Sign in with Apple** is opt-in on top of a wired backend: `bash scripts/add-social-auth.sh` (Supabase only for now). It composes `socialAuth` onto the provider by spread rather than editing the adapter, so adapter methods must never rely on `this`. It adds a native module — the app stops running in Expo Go and the EAS build cache is invalidated, so surface that, never add it silently.
+**Social sign-in (Apple + Google)** is opt-in on top of a wired backend: `bash scripts/add-social-auth.sh`. It takes no arguments — it detects Supabase or Firebase from the adapter in `src/services/auth/` and copies the matching `templates/social/<backend>-social.ts`. It composes `socialAuth` onto the provider by spread rather than editing the adapter, so adapter methods must never rely on `this`. It adds a native module — the app stops running in Expo Go and the EAS build cache is invalidated, so surface that, never add it silently. Both providers land together on purpose: App Store guideline 4.8 makes Apple mandatory as soon as Google is offered.
+
+The two providers share nothing structurally. Apple is a native sheet returning an identity token; Google is a browser round-trip with a redirect URI, PKCE, and a callback to parse.
+
+**Google, per backend:**
+
+- **Supabase** — `signInWithOAuth({ provider: "google", skipBrowserRedirect: true })` + `expo-web-browser` + `expo-linking`. Client ID *and* secret live in the Supabase dashboard, so nothing enters the app and it works on both platforms. `skipBrowserRedirect` is mandatory: without it supabase-js tries to navigate a nonexistent `window.location`, yielding no navigation *and* no `data.url`.
+- **Firebase JS SDK** — `signInWithPopup` / `signInWithRedirect` **do not work in React Native** (no `window`), which is what every Firebase tutorial uses. Needs `expo-auth-session` code+PKCE — Google rejects implicit `id_token` for installed apps — then `signInWithCredential`. Use the imperative `new AuthSession.AuthRequest(...)`; `expo-auth-session/providers/google` is a React *hook* and unusable from a plain module. **iOS only**: Android needs its own OAuth client and SHA-1, and the module throws `not_wired` there rather than failing opaquely.
+
+**`parseOAuthCallback` and `googleReversedClientId` live in `src/services/auth/oauthCallback.ts`, not in `templates/`** — this repo's CI cannot import, type-check, or lint `templates/**`, so the parts most likely to be wrong (query vs fragment, PKCE vs implicit, the reversed URL scheme) sit where the test run covers them. Same rule as `appleName.ts`. Keep new pure logic there.
+
+Three Firebase-specific facts, each the difference between working and a dead end:
+
+- **The nonce pairing.** Supabase's `signInWithIdToken` needs only the identity token. Firebase's `OAuthProvider("apple.com").credential()` needs a nonce, and the two sides get *different* values from the same secret: Apple's sheet gets `SHA-256(raw)` as lowercase hex, Firebase gets the **raw** nonce and hashes it itself. Swap them and you get `auth/invalid-credential` with nothing pointing at the cause. Hence the extra `expo-crypto` dependency on this path (`digestStringAsync` defaults to hex — do not ask for base64).
+- **`auth/invalid-credential` on Google means no iOS app is registered** in the Firebase project — its audience is your bundle ID, which Firebase won't recognise until you add the iOS app. That step also creates the iOS OAuth client `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` comes from.
+- **`social.ts` imports `toAuthSession` / `toAuthError` from the adapter**, which is why `templates/backends/firebase/firebase.ts` exports them. An adapter copied from an older template lacks those exports; the script greps for them and refuses with the fix rather than patching the adapter.
 
 Three contracts the port enforces, all load-bearing:
 

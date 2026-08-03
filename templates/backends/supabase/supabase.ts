@@ -26,8 +26,12 @@ import type { Session, AuthError as SupabaseAuthError } from "@supabase/supabase
 import { requireEnv } from "../../env";
 import { AuthError } from "./types";
 import type { AuthProvider, AuthSession } from "./types";
+// Generated from schema.sql — see docs/backends/supabase.md. Passing it to createClient is
+// what makes `.from("profiles").select()` return typed rows instead of `any`, so a column
+// rename fails at build time rather than silently at runtime.
+import type { Database } from "../../types/database.types";
 
-export const supabase = createClient(
+export const supabase = createClient<Database>(
   requireEnv("EXPO_PUBLIC_SUPABASE_URL"),
   requireEnv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
   {
@@ -41,6 +45,18 @@ export const supabase = createClient(
       // Mandatory on native. There is no URL to parse a session out of, and
       // leaving it true causes spurious session churn.
       detectSessionInUrl: false,
+      // Required for the OAuth flow in `social.ts`. supabase-js defaults to
+      // `implicit`, which stores no code verifier — so the browser comes back
+      // with `?code=` and `exchangeCodeForSession()` fails with "code verifier
+      // should be non-empty". PKCE is also the only one of the two that is safe
+      // on a device: the implicit flow puts the access token in a URL, where the
+      // OS and any handler in the redirect chain can see it.
+      //
+      // Sign in with Apple is unaffected either way — it uses a native sheet and
+      // an identity token, with no browser round-trip. Changing this does not
+      // invalidate existing sessions, and `social.ts` reads both callback
+      // shapes, so an app whose adapter predates this line keeps working.
+      flowType: "pkce",
     },
   }
 );

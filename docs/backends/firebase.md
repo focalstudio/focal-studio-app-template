@@ -15,9 +15,15 @@ That installs the **Firebase JS SDK** path. Read the next section before running
 | Runs in Expo Go | ✅ | ❌ needs `expo-dev-client` |
 | Config plugin / prebuild | none | required |
 | Auth, Firestore, Storage | ✅ | ✅ |
+| Sign in with Apple | ✅ * | ✅ |
+| Sign in with Google | ✅ iOS only * | ✅ both platforms |
 | Analytics, Crashlytics, Performance, FCM | ❌ | ✅ |
 | EAS build cache | untouched | invalidated (~15 min full iOS rebuild) |
 | Current version | `firebase` 12.x | `@react-native-firebase/*` 25.x |
+
+\* **Those two ✅s cancel the "runs in Expo Go" row above them.** Both are supported on the JS SDK path ([section 4](#4-social-sign-in--apple-and-google-optional)), but the recipe installs `expo-apple-authentication` — a native module with a config plugin. The moment you add it, "runs in Expo Go" and "EAS build cache untouched" stop being true, and the JS SDK's remaining advantage over React Native Firebase is that it's less to configure. If Expo Go was your reason for picking this column, decide about social sign-in *now*, not after you've built on it.
+
+Google is **iOS only** here, and that is a real limit rather than an omission: Android needs its own OAuth client keyed to the package name and the signing certificate's SHA-1, which differs between a local build, EAS, and Play App Signing. React Native Firebase with `@react-native-google-signin/google-signin` gives you a native account picker on both platforms with no browser hop. If you need Android Google sign-in, that is the moment to switch columns.
 
 **The script installs the JS SDK** because it needs no native modules, no `app.json` edits, and doesn't invalidate the EAS cache — and this repo's rules forbid silently adding a config plugin. It covers auth, Firestore, and Storage, which is what most apps need.
 
@@ -50,7 +56,113 @@ The Firebase "API key" is not a secret — it identifies the project. **Security
 
 Authentication → Sign-in method → enable **Email/Password**.
 
-## 4. Account deletion — do not skip this
+## 4. Social sign-in — Apple and Google (optional)
+
+One script adds both, and that is deliberate: **App Store guideline 4.8** makes Sign in with Apple mandatory the moment your app offers any other third-party login, so shipping Google alone is a rejection.
+
+```bash
+bash scripts/add-social-auth.sh
+```
+
+The script takes no arguments — it detects Firebase from the adapter already in `src/services/auth/`. It installs `expo-apple-authentication`, `expo-crypto`, `expo-auth-session` and `expo-web-browser`, copies the social module to `src/services/auth/social.ts`, and composes it onto the provider in `src/services/auth/index.ts`:
+
+```ts
+export const authProvider: AuthProvider = { ...firebaseAuthProvider, ...socialAuth };
+```
+
+It does **not** touch the adapter or `app.json`. The rest is manual:
+
+> [!warning]
+> This adds a native module with a config plugin. **The app no longer runs in Expo Go** — build a dev client (`npx expo run:ios`). It also invalidates the EAS build cache, so your next build is a cold one. On this path that costs you the JS SDK's main advantage — see [Pick a path first](#pick-a-path-first).
+
+### Apple
+
+**1. `app.json`** — add the plugin and the entitlement:
+
+```json
+"plugins": ["expo-router", "expo-system-ui", "expo-apple-authentication"],
+"ios": { "usesAppleSignIn": true }
+```
+
+Without `usesAppleSignIn` the build fails **App Store validation at upload time**, not at runtime — so you find out at the worst possible moment.
+
+**2. Apple Developer** → Certificates, Identifiers & Profiles → Identifiers → your App ID → enable **Sign In with Apple**.
+
+That is all the native iOS flow needs. A Services ID, a Key, and a Return URL are only for the web/Android flow, which this recipe doesn't ship. The entitlement change invalidates your provisioning profile — let EAS regenerate it, or re-sync in Xcode.
+
+**3. Firebase Console** → Authentication → Sign-in method → **Apple** → Enable → Save.
+
+Leave **Services ID**, **Apple team ID**, **Key ID** and **Private key** blank. Those exist for the web and Android OAuth flow. The native iOS flow verifies the identity token directly, and filling those fields in for an iOS-only app is a common way to break a setup that was working.
+
+#### The nonce pairing — the one thing that costs people an afternoon
+
+Supabase's `signInWithIdToken` takes the identity token and nothing else. Firebase's Apple credential requires a nonce, and **the two sides get different values derived from the same secret**:
+
+| Party | Value it receives |
+|---|---|
+| `AppleAuthentication.signInAsync({ nonce })` | `SHA-256(rawNonce)`, lowercase hex |
+| `new OAuthProvider("apple.com").credential({ rawNonce })` | the **raw** nonce, unhashed |
+
+Apple embeds the hash it was given into the identity token's `nonce` claim. Firebase hashes the `rawNonce` you hand it and compares the two. Give either side the other's value and Firebase rejects the credential with `auth/invalid-credential` — a message that points nowhere near the cause.
+
+`expo-crypto`'s `digestStringAsync` defaults to lowercase hex, which is the encoding Firebase hashes to. Asking for `CryptoEncoding.BASE64` fails the same opaque way.
+
+#### What else the Apple module does for you
+
+Apple hands back the user's name **only on the very first authorization**, ever, for that Apple ID and app pair — every later sign-in returns nulls, and reinstalling doesn't reset it. Firebase does not populate `displayName` from an Apple credential on its own, so without this the user record stays permanently nameless. The module writes it via `updateProfile` immediately, because there is no second chance.
+
+The decision of *what* to write lives in `appleNameToPersist` (`src/services/auth/appleName.ts`), which is unit-tested — social modules are copied out of `templates/`, which CI cannot type-check or lint, so the part that must be right lives where the test run can see it.
+
+### Google
+
+> [!important]
+> **iOS only on this path.** The module refuses on Android with a clear message rather than failing opaquely. See [Pick a path first](#pick-a-path-first) for why, and what to do if you need Android.
+
+**4. Firebase Console** → Authentication → Sign-in method → **Google** → Enable.
+
+**5. Firebase Console** → Project settings → Your apps → **Add app → iOS**, using the `bundleIdentifier` from `app.json`.
+
+Do not skip this. Without an iOS app registered, Firebase has no OAuth client whose audience matches your bundle ID, and it rejects the token with `auth/invalid-credential` — an error that points nowhere near the cause. Adding the iOS app is also what *creates* the iOS OAuth client you need in the next step.
+
+**6. `.env.local`** — the iOS client ID from the app you just added:
+
+```bash
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=123456789-abcdef.apps.googleusercontent.com
+```
+
+The **Web** client ID is not used here. It's only needed if you later move to `@react-native-google-signin/google-signin`, which wants it as `webClientId`.
+
+**7. `app.json`** — register the reversed client ID as a URL scheme, so the browser can hand control back:
+
+```json
+"ios": {
+  "infoPlist": {
+    "CFBundleURLTypes": [
+      { "CFBundleURLSchemes": ["com.googleusercontent.apps.123456789-abcdef"] }
+    ]
+  }
+}
+```
+
+Same ID, reversed. The module derives its redirect URI (`com.googleusercontent.apps.<id>:/oauthredirect` — one slash, not two) from `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` at runtime, so this `app.json` entry is the one place the two values can drift apart. When they do, the browser opens and never returns.
+
+#### Why not `signInWithPopup` / `signInWithRedirect`
+
+Every Firebase web tutorial uses one of those two, and **neither works in React Native** — both need a `window` to navigate, and there is no shim. The supported route is to run the OAuth flow yourself and hand the resulting ID token to `signInWithCredential`.
+
+Three constraints shape how the module does that:
+
+| Constraint | Why |
+|---|---|
+| Authorization-code flow with **PKCE**, not implicit | Google refuses to issue an `id_token` directly to an installed app. |
+| The **imperative** `new AuthSession.AuthRequest(...)` API | `expo-auth-session/providers/google` is a React *hook*. `social.ts` is a plain module the port calls as a function, so a hook is not available to it. |
+| Redirect URI = reversed client ID | The only shape a Google **iOS** OAuth client accepts. |
+
+The exchange then needs `code_verifier` passed explicitly in `extraParams` — omit it and Google returns `invalid_grant`.
+
+---
+
+## 5. Account deletion — do not skip this
 
 `deleteUser()` removes the **auth user only**. Firestore documents and Storage objects survive, and answering Play's Data safety form as though data is deleted when it isn't is exactly the misrepresentation the requirement targets.
 
@@ -176,6 +288,10 @@ For realtime (`onSnapshot`), prefer a `useEffect` subscription writing into
 
 ## Gotchas
 
+- **Apple returns the user's name once, ever.** `fullName` and a real `email` arrive only on the *first* authorization for that Apple ID and app pair. Reinstalling the app does not reset it — to test that path again you must revoke the app under Settings → Apple ID → Sign in with Apple.
+- **Apple's private relay.** Users can hide behind `@privaterelay.appleid.com`. If you send them mail, configure the relay domain and sender in Apple's console, or it silently bounces.
+- **Google sign-in is iOS-only on this path, and refuses loudly on Android.** Android needs an OAuth client keyed to the package name and the signing certificate's SHA-1 — and that fingerprint differs between a local build, EAS, and Play App Signing, so "it worked in debug" is the normal way to discover this. Rather than send the iOS client ID and get an opaque `redirect_uri_mismatch`, the module throws `not_wired` with an explanation. Android means React Native Firebase plus `@react-native-google-signin/google-signin`.
+- **`auth/invalid-credential` on a Google sign-in almost always means no iOS app is registered** in the Firebase project, not a bad token. See [section 4](#google).
 - **Crashlytics doesn't report native crashes under `expo-dev-client`** — the custom error overlay swallows them. Only release builds validate it.
 - **`getReactNativePersistence` breaks under Webpack for web.** Branch on `Platform.OS` to `browserLocalPersistence` if you ship web.
 - **RNFirebase `functions` requires the New Architecture.** This template has it enabled, so that's fine — but don't disable it.
