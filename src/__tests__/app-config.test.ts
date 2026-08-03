@@ -11,6 +11,8 @@
  * re-requires it under a mutated `process.env` with the module cache cleared.
  */
 
+import { EVERY_BACKEND_CONFIGURED } from "./support/backendEnv";
+
 const CONFIG_MODULE = "../../app.config.js";
 
 const BYPASS = {
@@ -24,10 +26,17 @@ type Extra = { env: Record<string, string | undefined>; gitBranch: string | null
  * Loads app.config.js as if built on `branch`, and returns the resolved
  * `extra`. A null branch simulates the unresolvable case (a remote EAS build:
  * no CI variables, no `.git`) by making `execSync` throw.
+ *
+ * `vars` layers *on top of* a valid backend configuration rather than replacing
+ * the environment outright. `app.config.js` requires `env.js`, which validates
+ * on require — so without that base every case here threw the moment a backend
+ * was wired, which is the whole of #100's second root cause. Nothing in this
+ * file is about backend selection; the base just keeps the schema satisfied.
  */
 function loadExtra(branch: string | null, vars: Record<string, string> = BYPASS): Extra {
   const original = process.env;
   process.env = {
+    ...EVERY_BACKEND_CONFIGURED,
     ...vars,
     ...(branch === null ? {} : { GITHUB_REF_NAME: branch }),
   } as NodeJS.ProcessEnv;

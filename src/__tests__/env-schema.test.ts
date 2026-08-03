@@ -9,25 +9,13 @@
  * `process.env` with the module cache cleared.
  */
 
-const ENV_MODULE = "../../env.js";
+import {
+  BACKEND_VARS,
+  EVERY_BACKEND_CONFIGURED,
+  type BackendName,
+} from "./support/backendEnv";
 
-/**
- * A value for every backend's variables.
- *
- * `env.js` only *requires* the ones belonging to the backend it has selected,
- * so supplying all of them yields a valid environment whatever `BACKEND` is.
- * That keeps these tests meaningful both in the template (`BACKEND = "none"`)
- * and in an app that has run `scripts/add-backend.sh` — previously they
- * hardcoded the template's default and failed the moment a backend was wired.
- */
-const EVERY_BACKEND_CONFIGURED = {
-  EXPO_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
-  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xyz",
-  EXPO_PUBLIC_FIREBASE_API_KEY: "AIzaPlaceholder",
-  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: "abc.firebaseapp.com",
-  EXPO_PUBLIC_FIREBASE_PROJECT_ID: "abc",
-  EXPO_PUBLIC_FIREBASE_APP_ID: "1:2:web:3",
-};
+const ENV_MODULE = "../../env.js";
 
 function loadEnv(vars: Record<string, string | undefined>) {
   const original = process.env;
@@ -46,13 +34,13 @@ describe("env.js schema", () => {
     expect(() => loadEnv(EVERY_BACKEND_CONFIGURED)).not.toThrow();
   });
 
-  it("accepts a fully configured Supabase environment", () => {
-    expect(() =>
-      loadEnv({
-        EXPO_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
-        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xyz",
-      })
-    ).not.toThrow();
+  // The minimal case: exactly the wired backend's variables and nothing else.
+  // Previously hardcoded to Supabase's, which asserted `not.toThrow()` on an
+  // environment that is — correctly — invalid once Firebase is the backend (#100).
+  it("accepts exactly the selected backend's variables and nothing else", () => {
+    const { BACKEND } = loadEnv(EVERY_BACKEND_CONFIGURED) as { BACKEND: BackendName };
+
+    expect(() => loadEnv({ ...BACKEND_VARS[BACKEND] })).not.toThrow();
   });
 
   it("exposes validated values and the selected backend", () => {

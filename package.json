@@ -56,14 +56,5 @@
     "react-test-renderer": "^19.2.3",
     "typescript": "~6.0.3"
   },
-  "jest": {
-    "preset": "jest-expo",
-    "setupFiles": [
-      "./jest.setup.js"
-    ],
-    "setupFilesAfterEnv": [
-      "./jest.setup.after-env.js"
-    ]
-  },
   "private": true
 }
