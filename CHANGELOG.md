@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.10.0] — 2026-08-03
+
 ### Fixed
 - **Wiring a backend left 6–7 Jest suites red (#100).** `npm test` passed in the template
   (25 suites) and in CI, but `scripts/add-backend.sh` closes by telling the developer to run
