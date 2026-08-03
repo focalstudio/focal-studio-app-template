@@ -24,9 +24,13 @@ Versioning: [Semantic Versioning](https://semver.org/)
   that had never actually been run: it assumed Maestro on `PATH`, a JDK, a bootstrapped `app.json`
   and a reachable Metro, and gave nothing back when any of those was missing. Every one of those
   now fails in a second with the fix, rather than as a 60-second silent assertion timeout against a
-  red screen. Also quotes the `$(node -p ...)` substitutions, gates on the same `[APP_SLUG]` check
-  CI uses, adds an `E2E_METRO_PORT` escape hatch, and passes arguments through so a single flow can
-  be run (`npm run e2e -- .maestro/persistence.yaml`).
+  red screen. Also quotes the `$(node -p ...)` substitutions, adds an `E2E_METRO_PORT` escape
+  hatch, and passes arguments through so a single flow can be run
+  (`npm run e2e -- .maestro/persistence.yaml`). Its bootstrap gate tests the *shape* of the
+  resolved identifiers rather than grepping `app.json` for placeholder text — deliberately, because
+  `scripts/init.sh` rewrites those tokens across `*.sh` as well as source files, so a literal one
+  written into this script would be substituted at bootstrap and invert the gate into one that
+  fires on every bootstrapped app.
 
 - **Coverage is now gated in CI.** `jest.config.js` gained `collectCoverageFrom` and
   `coverageThreshold`, and `ci.yml` runs `npm test -- --coverage` (the flag is what enforces the

@@ -19,16 +19,33 @@ cd "$(dirname "$0")/.."
 
 fail() { echo "✗ $1" >&2; shift; for line in "$@"; do echo "  $line" >&2; done; exit 1; }
 
-# ── The app must be bootstrapped ──────────────────────────────────────────────
-# app.json still holds [APP_ID] / [APP_SLUG] on a fresh template. Unquoted command
-# substitution leaves those literal (they are glob character classes that match no
-# file), so Maestro would be handed `APP_ID=[APP_ID]` and fail deep inside a flow
-# on an appId that cannot exist. Same gate maestro-e2e.yml applies in CI.
-if grep -q '\[APP_SLUG\]' app.json; then
-  fail "This repo is still an unbootstrapped template." \
-       "app.json has [APP_*] placeholders, so there is no app to drive." \
-       "Run scripts/init.sh to bootstrap a real app first."
-fi
+# ── Resolve identifiers, and use them as the bootstrap gate ───────────────────
+# Quoted, unlike the original one-liner: a value containing whitespace or a glob
+# character would otherwise be split or expanded before Maestro ever saw it.
+APP_ID="$(node -p "require('./app.json').expo.ios.bundleIdentifier")"
+APP_SCHEME="$(node -p "require('./app.json').expo.scheme")"
+
+# On an unbootstrapped template these resolve to the bracketed template
+# placeholders. Unquoted substitution used to leave those literal (they are glob
+# character classes matching no file), handing Maestro an appId that cannot exist
+# and failing deep inside a flow instead of here. Checked first, because "there is
+# no app" makes every check below moot.
+#
+# Deliberately checked by *shape* rather than by grepping app.json for the
+# placeholder text: scripts/init.sh rewrites those tokens across `*.sh` too, so a
+# literal one written here would be substituted at bootstrap and the check would
+# then test for the real slug — inverting it into a gate that always fires.
+for value in "$APP_ID" "$APP_SCHEME"; do
+  case "$value" in
+    *'['* | *']'* | '' | undefined)
+      fail "This repo is still an unbootstrapped template." \
+           "app.json resolved to placeholder identifiers, so there is no app to drive:" \
+           "  bundleIdentifier = $APP_ID" \
+           "  scheme           = $APP_SCHEME" \
+           "Run scripts/init.sh to bootstrap a real app first."
+      ;;
+  esac
+done
 
 # ── Maestro CLI ───────────────────────────────────────────────────────────────
 if ! command -v maestro > /dev/null 2>&1; then
@@ -77,12 +94,6 @@ if ! curl -sf "http://localhost:$METRO_PORT/status" 2>/dev/null | grep -q "packa
        "native debug build probes 8081 regardless of any --port flag. See the E2E" \
        "section of docs/testing.md for the RCT_jsLocation workaround."
 fi
-
-# ── Resolve identifiers and run ───────────────────────────────────────────────
-# Quoted, unlike the original one-liner: a value containing whitespace or a glob
-# character would otherwise be split or expanded before Maestro ever saw it.
-APP_ID="$(node -p "require('./app.json').expo.ios.bundleIdentifier")"
-APP_SCHEME="$(node -p "require('./app.json').expo.scheme")"
 
 echo "▸ Maestro $(maestro --version 2>/dev/null | tail -1) → $APP_ID (Metro :$METRO_PORT)"
 

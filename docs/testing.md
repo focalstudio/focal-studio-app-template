@@ -297,7 +297,7 @@ npm run e2e -- .maestro/persistence.yaml     # or just one flow
 otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
 out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
 the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
-still holds `[APP_*]` placeholders.
+still holds its unreplaced template placeholders.
 
 ### Metro must be on port 8081
 
@@ -338,8 +338,7 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, installs, then hits the `[APP_SLUG]` bootstrap gate and
-skips — the signal only becomes real in an app generated from it.
+On this template repo the job checks out, installs, then hits the bootstrap gate and skips — the signal only becomes real in an app generated from it.
 
 ---
 
