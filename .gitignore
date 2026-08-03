@@ -6,6 +6,10 @@ node_modules/
 dist/
 web-build/
 
+# Jest coverage output — `npm run test:coverage` (and `npm test -- --coverage`,
+# which is what ci.yml runs) writes an lcov report tree here.
+coverage/
+
 # Environment
 .env
 .env.local

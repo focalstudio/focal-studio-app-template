@@ -262,23 +262,84 @@ Two flows in [`.maestro/`](../.maestro/) drive a real iOS Simulator:
 `full-journey.yaml` (onboarding → paywall → tabs → account deletion) and `persistence.yaml`
 (does what the app wrote survive a force-quit and read back through the zod schemas?).
 
-Run them locally — it costs nothing and is far tighter than waiting on CI:
+Run them locally — it costs nothing and is far tighter than waiting on CI. Both flows pass in
+**under a minute** on a warm simulator, against a build that takes ~10 minutes the first time.
+
+### One-time setup
 
 ```bash
-brew install maestro          # or: curl -fsSL https://get.maestro.mobile.dev | bash
-npx expo run:ios              # build + install once; leave Metro running
-npm run e2e                   # in a second terminal
+brew install openjdk@17                       # Maestro is a JVM app
+export JAVA_HOME="$(brew --prefix openjdk@17)"   # add to ~/.zshrc
+MAESTRO_VERSION=2.8.0 \
+  curl -fsSL https://get.maestro.mobile.dev | bash
 ```
 
-`npm run e2e` resolves `APP_ID` and `APP_SCHEME` out of `app.json` the same way
-[`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does, so the two cannot drift.
-Pin the CLI to the version in `VERSIONS.md`.
+> **Do not run `brew install maestro`.** Homebrew core's `maestro` is a cask for an unrelated
+> product — *"Maestro (AI agent command center)"* from `runmaestro.ai`. The mobile-testing
+> Maestro is mobile-dev-inc's, published only through the installer above or the
+> `mobile-dev-inc/tap` tap. Prefer the installer: it honours `MAESTRO_VERSION`, so you get the
+> version pinned in [`VERSIONS.md`](../VERSIONS.md) rather than whatever is latest. Note it
+> appends PATH lines to `~/.zshrc` and `~/.bash_profile`.
 
-A `--debug-output` directory with screenshots and view hierarchies is written to
-`~/.maestro/tests/<run>` — that is what to read first when a flow fails, because a `tapOn`
-against an unmatched-but-present element reports COMPLETED while tapping nothing.
+`JAVA_HOME` specifically is required — a `java` on `PATH` is not enough, and Maestro's launcher
+fails with a bare *"Please set the JAVA_HOME variable"* that never mentions Maestro. CI does not
+hit this because `actions/setup-java` exports `JAVA_HOME` for free.
 
-In CI these run post-release only, via `workflow_call` from `release.yml`.
+### Running
+
+```bash
+npx expo run:ios              # build + install once; leaves Metro in the foreground
+npm run e2e                   # in a second terminal
+npm run e2e -- .maestro/persistence.yaml     # or just one flow
+```
+
+`npm run e2e` runs [`scripts/e2e.sh`](../scripts/e2e.sh), which preflights the four things that
+otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
+out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
+the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
+still holds `[APP_*]` placeholders.
+
+### Metro must be on port 8081
+
+This is the one that will cost you an afternoon. A Debug build's `RCTBundleURLProvider` probes
+`http://localhost:8081/status` and nothing else. **`RCT_METRO_PORT` is baked nowhere in the Expo
+prebuild**, so `expo start --port N` and `expo run:ios --port N` change only which server the
+*CLI* talks to — the installed app still looks for 8081. If anything else holds that port the app
+comes up on the red *"No script URL provided"* screen with `unsanitizedScriptURLString = (null)`,
+and every assertion times out against it.
+
+Free the port if you can. If you cannot (a system process may hold it invisibly — `lsof` shows
+nothing without `sudo`), point both the app and the preflight at the real port:
+
+```bash
+xcrun simctl spawn booted defaults write <bundle-id> RCT_jsLocation localhost:8083
+E2E_METRO_PORT=8083 npm run e2e
+```
+
+That user default survives Maestro's `clearState: true`, so the flows still start from a clean
+app state.
+
+### When a flow fails
+
+Screenshots and view hierarchies are written to `~/.maestro/tests/<run>` — read those first,
+because a `tapOn` against an unmatched-but-present element reports COMPLETED while tapping
+nothing. `commands.json` in that directory gives every step's status, which is the fastest way to
+spot a step that "passed" without doing anything.
+
+### In CI
+
+Post-release via `workflow_call` from `release.yml`, on PRs to `main`, and on any PR labelled
+`e2e` (see [Opt-in E2E on a PR](#opt-in-e2e-on-a-pr) below).
+
+### Opt-in E2E on a PR
+
+`maestro-e2e.yml` runs automatically on PRs targeting `main` — release PRs, where a pre-merge
+gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt a risky feature
+PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
+already-open PR works.
+
+On this template repo the job checks out, installs, then hits the `[APP_SLUG]` bootstrap gate and
+skips — the signal only becomes real in an app generated from it.
 
 ---
 
