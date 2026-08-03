@@ -22,6 +22,32 @@ The table below lists what an agent *may* load. The agent's own `.md` holds the 
 
 `test-engineer` deliberately loads nothing by default — the harness conventions live in [`docs/testing.md`](../docs/testing.md), which it reads directly.
 
+## Picking among overlapping skills
+
+Some conditional skills cover adjacent ground. Rather than merge them (real content, real
+authors, higher risk to cut), pick by task shape:
+
+**RN/React performance trio** (`rn-react-native`, `rn-react-best-practices`, `react-native-expert`):
+- **Building or wiring** something new — navigation hierarchies, native modules, platform-specific
+  iOS/Android code, Expo SDK config — reach for `react-native-expert` first; it's the
+  implementation-focused specialist of the three.
+- **Diagnosing or optimizing** an existing screen's runtime performance — FPS, TTI, list
+  rendering, animations, bundle size — reach for `rn-react-native` first; it's the broadest,
+  most RN/Expo-native guide (Callstack profiling + Vercel patterns combined) of the three.
+- **Pure React component/rendering-pattern theory** with no RN-specific concern — reach for
+  `rn-react-best-practices` only as a secondary check. It's Vercel's React/Next.js guidance, not
+  RN-specific, so some of its advice (Next.js bundling, server components) doesn't apply here.
+
+**UI/UX design trio** (`frontend_design`, `ui-ux-pro-max`, `design-for-ai`):
+- `ui-ux-pro-max` is the primary reference for RN screens — it's the only one of the three that
+  explicitly covers React Native as a target stack, with a full style/palette/font-pairing/UX
+  catalog to pull from.
+- `frontend_design` is web/artifact-oriented (its own examples are websites, landing pages,
+  HTML/CSS) — use it as a supplementary source only, e.g. when porting a web-style pattern or
+  working in an artifact rather than the app itself.
+- `design-for-ai` stays scoped to its documented trigger: unspecced design calls needing visual
+  hierarchy/typography/spacing/color fundamentals, not a full component build.
+
 ## Model and effort per agent
 
 Tiered by how expensive a mistake is, not by how hard the task feels. Declared in each agent's frontmatter.
