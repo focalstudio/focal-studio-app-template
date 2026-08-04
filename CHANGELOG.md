@@ -10,6 +10,28 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`maestro-e2e.yml` now runs pre-merge, plus an opt-in `e2e` label (#113).** It previously fired
+  only via `workflow_call` from `release.yml` (post-release) and `workflow_dispatch`, so there was
+  no E2E signal before a merge at all. Now: PRs targeting `main` — release PRs, where a gate is
+  worth ~20 minutes of macOS runner — plus any PR carrying the new `e2e` label, for a risky feature
+  PR that wants the signal on request. `types:` includes `labeled` because the default
+  opened/synchronize/reopened would mean adding the label to an open PR triggered nothing and the
+  opt-in looked broken. One job-level `if:` covers both paths; a false `if:` skips without
+  allocating a runner, so routine `dev` PRs still cost nothing. **The value here is downstream** —
+  on this template the job hits the `[APP_SLUG]` gate and skips; it only becomes a real signal in a
+  generated app.
+- **`scripts/e2e.sh` — a preflight in front of the Maestro flows.** `npm run e2e` was a one-liner
+  that had never actually been run: it assumed Maestro on `PATH`, a JDK, a bootstrapped `app.json`
+  and a reachable Metro, and gave nothing back when any of those was missing. Every one of those
+  now fails in a second with the fix, rather than as a 60-second silent assertion timeout against a
+  red screen. Also quotes the `$(node -p ...)` substitutions, adds an `E2E_METRO_PORT` escape
+  hatch, and passes arguments through so a single flow can be run
+  (`npm run e2e -- .maestro/persistence.yaml`). Its bootstrap gate tests the *shape* of the
+  resolved identifiers rather than grepping `app.json` for placeholder text — deliberately, because
+  `scripts/init.sh` rewrites those tokens across `*.sh` as well as source files, so a literal one
+  written into this script would be substituted at bootstrap and invert the gate into one that
+  fires on every bootstrapped app.
+
 - **Coverage is now gated in CI.** `jest.config.js` gained `collectCoverageFrom` and
   `coverageThreshold`, and `ci.yml` runs `npm test -- --coverage` (the flag is what enforces the
   thresholds — without it Jest collects nothing). `collectCoverageFrom` matters on its own: an
@@ -51,6 +73,41 @@ Versioning: [Semantic Versioning](https://semver.org/)
   existing adapter and `schema.sql` were unaffected only because git keeps tracking files it
   already tracks; anything added there afterwards was invisible to `git status`. Now anchored as
   `/supabase/`.
+- **`docs/testing.md` told you to install the wrong software.** It recommended
+  `brew install maestro`, which resolves to Homebrew core's cask for *"Maestro (AI agent command
+  center)"* from `runmaestro.ai` — an unrelated product. The mobile-testing Maestro ships only via
+  `get.maestro.mobile.dev` or `mobile-dev-inc/tap`. Anyone following the docs installed a macOS app
+  they did not want and then hit `maestro: command not found`.
+- **Two undocumented prerequisites for running the flows locally**, both found by actually running
+  them end-to-end for the first time against a bootstrapped throwaway app:
+  1. **A JDK 17+ has to be reachable, and Homebrew's is keg-only.** `brew install openjdk@17`
+     deliberately does not link the formula onto `PATH`, so you end up with a JDK installed and no
+     `java` command, and Maestro's launcher dies on a message that never mentions Maestro. Fixed by
+     documenting `export PATH="$(brew --prefix openjdk@17)/bin:$PATH"`. Either `JAVA_HOME` or
+     `java` on `PATH` satisfies the launcher — it is the stock Gradle start script and falls back
+     to `PATH`. CI never hit this because `actions/setup-java` handles both.
+  2. **Metro must be on port 8081.** A Debug build's `RCTBundleURLProvider` probes
+     `http://localhost:8081/status` and nothing else — `RCT_METRO_PORT` is baked nowhere in the
+     Expo prebuild, so `expo start --port N` / `expo run:ios --port N` move only the CLI's server,
+     not what the installed app looks for. With 8081 occupied the app comes up on the red
+     "No script URL provided" screen (`unsanitizedScriptURLString = (null)`) and every assertion
+     times out with nothing explaining why. Documented along with the `RCT_jsLocation` workaround,
+     which survives Maestro's `clearState: true`.
+- **`coverage/` was not gitignored.** `npm run test:coverage` and `npm test -- --coverage` write an
+  lcov report tree at the repo root, so any local coverage run left ~90 untracked files sitting in
+  `git status`, easy to sweep into a commit by accident. CI never noticed because it never commits.
+- **Corrected the cost premise in `maestro-e2e.yml`'s header.** It claimed macOS runners are
+  "billed at a 10x minute multiplier" as the reason for a narrow trigger. The multiplier is real
+  but applies to *billable* minutes, and this repo is public — GitHub-hosted runners are free here.
+  The reasons that do hold are wall-clock latency and downstream private apps that inherit the
+  workflow.
+
+### Verified
+- **Both Maestro flows pass unmodified** — 2/2 in 47s on Xcode 26.6 / iPhone 17 simulator /
+  Maestro 2.8.0, driven through a throwaway app bootstrapped from this template. Every step in
+  `commands.json` reports COMPLETED, so no `tapOn` silently no-op'd. The flow files and their
+  whole-label regex selectors needed no changes; only the surrounding tooling and docs did — the
+  flows had never actually been executed anywhere before this, in CI or locally.
 
 ### Changed
 - **Simplified the Claude Code tooling layer.** `.claude/SKILLS.md` is now the single source of
