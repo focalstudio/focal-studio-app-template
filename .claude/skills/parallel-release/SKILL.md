@@ -106,7 +106,7 @@ Delegate the git mechanics to the **`release-manager`** agent (or follow
 [.claude/CLAUDE.md](../../CLAUDE.md) → "Release workflow"). The sequence:
 
 1. `release-manager` cuts `release/x.x.x` off `dev`, runs `bash scripts/bump-version.sh x.x.x`,
-   moves the `CHANGELOG.md` Unreleased block to `## [x.x.x] — YYYY-MM-DD`, bumps `DEV_MODE_KEY`,
+   moves the `CHANGELOG.md` Unreleased block to `## [x.x.x] — YYYY-MM-DD`,
    pre-emptively reviews the diff, syncs with `main`, and opens **two** PRs: `release/x.x.x → main`
    and the `release/x.x.x → dev` backmerge.
 2. Merge the `→ main` PR with **`gh pr merge NNN --merge`** — **never `--delete-branch`** (it
