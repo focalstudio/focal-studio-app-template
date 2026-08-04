@@ -66,4 +66,4 @@ Return:
     in Internal testing, review, roll out/promote per policy
   - (first release only) confirm the KEYSTORE.md Android bootstrap is complete
 
-**If the pre-emptive review (step 6) surfaces a long list of findings (~80+ lines), write the full audit to `.claude/scratch/release-manager-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary in the release report.**
+**If the pre-emptive review (step 5) surfaces a long list of findings (~80+ lines), write the full audit to `.claude/scratch/release-manager-<YYYYMMDD-HHMM>.md` and return only the path plus a 3-bullet summary in the release report.**
