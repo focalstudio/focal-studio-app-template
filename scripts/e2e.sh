@@ -56,16 +56,43 @@ if ! command -v maestro > /dev/null 2>&1; then
        "  MAESTRO_VERSION=2.8.0 curl -fsSL https://get.maestro.mobile.dev | bash"
 fi
 
-# Maestro is a JVM app whose launcher reads JAVA_HOME specifically — a `java` on
-# PATH is not enough, and the error it prints ("Please set the JAVA_HOME variable")
-# says nothing about Maestro. CI never hits this because actions/setup-java exports
-# JAVA_HOME for free.
-if [ -z "${JAVA_HOME:-}" ] && ! /usr/libexec/java_home > /dev/null 2>&1; then
-  fail "JAVA_HOME is not set and no JDK was found." \
-       "Maestro needs a JDK 17+. With Homebrew's keg-only openjdk@17:" \
+# Maestro is a JVM app needing Java 17+. Its launcher is the stock Gradle start
+# script: it uses "$JAVA_HOME/bin/java" when JAVA_HOME is set, and otherwise falls
+# back to `java` on PATH. Either satisfies it — JAVA_HOME is not required.
+#
+# Mirrored here rather than checked against /usr/libexec/java_home, which only sees
+# JDKs registered under /Library/Java/JavaVirtualMachines. Homebrew's openjdk is
+# keg-only and is not registered there, so a java_home-based check reports "no JDK"
+# on a machine with a perfectly working `java` on PATH.
+#
+# Worth pre-empting at all because with neither present the launcher's own version
+# probe trips first, printing `[: : integer expression expected` ahead of its real
+# error.
+if [ -n "${JAVA_HOME:-}" ]; then
+  JAVACMD="$JAVA_HOME/bin/java"
+  if [ ! -x "$JAVACMD" ]; then
+    fail "JAVA_HOME is set but contains no executable bin/java:" \
+         "  $JAVA_HOME" \
+         "Unset it to fall back to \`java\` on PATH, or point it at a real JDK home." \
+         "For Homebrew's openjdk@17 that is:" \
+         "" \
+         "  \$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+  fi
+else
+  JAVACMD=java
+fi
+
+# Probed by running it, not by `command -v`. macOS ships /usr/bin/java as a stub
+# that exists and is executable but has no runtime behind it — it satisfies a
+# presence test and then exits 1 on anything real. That stub is precisely what a
+# machine with no JDK has, so a presence-only check passes exactly when it matters.
+if ! "$JAVACMD" -version > /dev/null 2>&1; then
+  fail "No working JDK found — Maestro needs Java 17+." \
+       "(\`$JAVACMD\` exists but does not run; on macOS /usr/bin/java is a stub.)" \
+       "Homebrew's openjdk@17 is keg-only, so it is not linked onto PATH for you:" \
        "" \
        "  brew install openjdk@17" \
-       "  export JAVA_HOME=\"\$(brew --prefix openjdk@17)\""
+       "  export PATH=\"\$(brew --prefix openjdk@17)/bin:\$PATH\""
 fi
 
 # ── Metro must be reachable on the port the *native debug build* probes ───────

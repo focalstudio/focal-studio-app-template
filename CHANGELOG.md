@@ -80,10 +80,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
   they did not want and then hit `maestro: command not found`.
 - **Two undocumented prerequisites for running the flows locally**, both found by actually running
   them end-to-end for the first time against a bootstrapped throwaway app:
-  1. **`JAVA_HOME` must be exported** — not merely a `java` on `PATH`. Maestro's launcher reads
-     that variable specifically and otherwise fails with a bare "Please set the JAVA_HOME
-     variable" that never mentions Maestro. CI never hit it because `actions/setup-java` exports
-     it for free.
+  1. **A JDK 17+ has to be reachable, and Homebrew's is keg-only.** `brew install openjdk@17`
+     deliberately does not link the formula onto `PATH`, so you end up with a JDK installed and no
+     `java` command, and Maestro's launcher dies on a message that never mentions Maestro. Fixed by
+     documenting `export PATH="$(brew --prefix openjdk@17)/bin:$PATH"`. Either `JAVA_HOME` or
+     `java` on `PATH` satisfies the launcher — it is the stock Gradle start script and falls back
+     to `PATH`. CI never hit this because `actions/setup-java` handles both.
   2. **Metro must be on port 8081.** A Debug build's `RCTBundleURLProvider` probes
      `http://localhost:8081/status` and nothing else — `RCT_METRO_PORT` is baked nowhere in the
      Expo prebuild, so `expo start --port N` / `expo run:ios --port N` move only the CLI's server,

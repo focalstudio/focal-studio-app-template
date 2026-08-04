@@ -268,8 +268,8 @@ Run them locally — it costs nothing and is far tighter than waiting on CI. Bot
 ### One-time setup
 
 ```bash
-brew install openjdk@17                       # Maestro is a JVM app
-export JAVA_HOME="$(brew --prefix openjdk@17)"   # add to ~/.zshrc
+brew install openjdk@17                                  # Maestro is a JVM app
+export PATH="$(brew --prefix openjdk@17)/bin:$PATH"      # keg-only — add to ~/.zshrc
 MAESTRO_VERSION=2.8.0 \
   curl -fsSL https://get.maestro.mobile.dev | bash
 ```
@@ -281,9 +281,17 @@ MAESTRO_VERSION=2.8.0 \
 > version pinned in [`VERSIONS.md`](../VERSIONS.md) rather than whatever is latest. Note it
 > appends PATH lines to `~/.zshrc` and `~/.bash_profile`.
 
-`JAVA_HOME` specifically is required — a `java` on `PATH` is not enough, and Maestro's launcher
-fails with a bare *"Please set the JAVA_HOME variable"* that never mentions Maestro. CI does not
-hit this because `actions/setup-java` exports `JAVA_HOME` for free.
+Maestro needs **Java 17+ reachable either way**: its launcher uses `$JAVA_HOME/bin/java` when
+`JAVA_HOME` is set, and otherwise falls back to `java` on `PATH`. `JAVA_HOME` is not required.
+The `export PATH` line above is there because Homebrew's `openjdk@17` is *keg-only* — Homebrew
+installs it but deliberately does not link it onto `PATH`, so without that line you have a JDK
+installed and no `java` command.
+
+> If you would rather set `JAVA_HOME`, point it at the real JDK home —
+> `$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`, not the formula prefix itself.
+> And note that `/usr/libexec/java_home` will **not** find a Homebrew JDK: it only reports JDKs
+> registered under `/Library/Java/JavaVirtualMachines/`, which a keg-only formula never touches
+> (linking it there needs `sudo`, which this repo's permission model denies).
 
 ### Running
 
