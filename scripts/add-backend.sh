@@ -107,6 +107,24 @@ echo
 echo "==> Installing adapter → $DEST"
 cp "$SRC_DIR/$PROVIDER.ts" "$DEST"
 
+# The adapter's contract tests ride along with it.
+#
+# They live beside the adapter in templates/ but are written against their
+# destination — `../$PROVIDER` and `../types` only resolve once both files are
+# here. jest.config.js excludes /templates/ from testMatch for exactly that
+# reason, so this copy is the only thing that ever makes them runnable.
+#
+# Copying rather than leaving them behind is the point: the generated app
+# inherits coverage of the mapping its auth depends on, and
+# template-backend-smoke-test.yml's existing `npm test` step picks them up with
+# no workflow change.
+if [ -f "$SRC_DIR/$PROVIDER.test.ts" ]; then
+  TEST_DEST="src/services/auth/__tests__/$PROVIDER.test.ts"
+  echo "==> Installing adapter tests → $TEST_DEST"
+  mkdir -p "$(dirname "$TEST_DEST")"
+  cp "$SRC_DIR/$PROVIDER.test.ts" "$TEST_DEST"
+fi
+
 # ---------------------------------------------------------------------------
 # 3. Point the port at it
 # ---------------------------------------------------------------------------

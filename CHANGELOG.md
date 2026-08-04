@@ -11,6 +11,175 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [0.11.0] — 2026-08-04
+
+### Added
+- **Contract tests for both social sign-in modules (#114)** —
+  `templates/social/{supabase,firebase}-social.test.ts`, 29 and 32 tests over the 547 lines
+  that had none. `templates/` is excluded from `tsconfig.json`, `eslint.config.js` and Jest's
+  `testMatch`, so nothing type-checked, linted or ran these files until an app copied them
+  out; `template-backend-smoke-test.yml` checked them with greps alone. Same mechanism as
+  #111: authored against their destination, copied by `scripts/add-social-auth.sh` to
+  `src/services/auth/__tests__/social.test.ts`, picked up by the two `*-plus-social` jobs'
+  existing `npm test` step. Unlike the adapter tests they mock the *adapter* rather than the
+  SDK — the subject here is the composition, and that is what makes "reuses the adapter's
+  `toAuthSession` / `toAuthError` instead of growing a second mapping" assertable.
+  Heaviest on `AuthError("cancelled")`: `useAuthStore` swallows it, so mapping a dismissed
+  Apple sheet or OAuth browser to anything else shows a red error for a tap the user
+  deliberately took back — the likeliest bug here and invisible to a structural grep. Also
+  both Supabase callback shapes (PKCE `?code=` and implicit `#access_token=`, parsed from real
+  redirect URLs), Firebase's Apple nonce (Apple gets SHA-256(raw), Firebase gets the raw
+  value — swap them and you get `auth/invalid-credential`), Apple's once-ever name capture,
+  and that neither method depends on `this`, since both are composed on by object spread.
+  The two `*-plus-social` jobs now also assert the test file arrived, because the copy is
+  guarded by `[ -f ]` and a rename would otherwise skip it with CI still green.
+- **`maestro-e2e.yml` now runs pre-merge, plus an opt-in `e2e` label (#113).** It previously fired
+  only via `workflow_call` from `release.yml` (post-release) and `workflow_dispatch`, so there was
+  no E2E signal before a merge at all. Now: PRs targeting `main` — release PRs, where a gate is
+  worth ~20 minutes of macOS runner — plus any PR carrying the new `e2e` label, for a risky feature
+  PR that wants the signal on request. `types:` includes `labeled` because the default
+  opened/synchronize/reopened would mean adding the label to an open PR triggered nothing and the
+  opt-in looked broken. One job-level `if:` covers both paths; a false `if:` skips without
+  allocating a runner, so routine `dev` PRs still cost nothing. **The value here is downstream** —
+  on this template the job hits the `[APP_SLUG]` gate and skips; it only becomes a real signal in a
+  generated app.
+- **`scripts/e2e.sh` — a preflight in front of the Maestro flows.** `npm run e2e` was a one-liner
+  that had never actually been run: it assumed Maestro on `PATH`, a JDK, a bootstrapped `app.json`
+  and a reachable Metro, and gave nothing back when any of those was missing. Every one of those
+  now fails in a second with the fix, rather than as a 60-second silent assertion timeout against a
+  red screen. Also quotes the `$(node -p ...)` substitutions, adds an `E2E_METRO_PORT` escape
+  hatch, and passes arguments through so a single flow can be run
+  (`npm run e2e -- .maestro/persistence.yaml`). Its bootstrap gate tests the *shape* of the
+  resolved identifiers rather than grepping `app.json` for placeholder text — deliberately, because
+  `scripts/init.sh` rewrites those tokens across `*.sh` as well as source files, so a literal one
+  written into this script would be substituted at bootstrap and invert the gate into one that
+  fires on every bootstrapped app.
+
+- **Coverage is now gated in CI.** `jest.config.js` gained `collectCoverageFrom` and
+  `coverageThreshold`, and `ci.yml` runs `npm test -- --coverage` (the flag is what enforces the
+  thresholds — without it Jest collects nothing). `collectCoverageFrom` matters on its own: an
+  untested module used to be absent from the report rather than counted as 0%, flattering the
+  totals by ~1 point. `src/services/` carries a floor of its own on top of the global one,
+  because a single global number cannot protect a layer — the service layer sat at **19%
+  statements** while the global average stayed in the mid-70s, carried by well-tested screens
+  and stores. New `npm run test:coverage` script.
+- **Unit tests for the service layer** (`src/services/__tests__/`): `analytics`, `notifications`,
+  `ratingService`, `haptics` — 58 tests taking `src/services/` from 19% to 100% statements.
+  Beyond line coverage they pin the behaviours that fail silently on a device: the analytics
+  init/hydrate ordering re-apply, `parseTime()` rejecting malformed persisted times instead of
+  scheduling at `NaN:NaN`, the rating prompt not burning its once-per-version flag when
+  StoreKit was unavailable or the request threw, and the Android channel without which Android
+  drops every notification.
+- **Tests for the auth port's own validators** (`src/services/auth/__tests__/types.test.ts`):
+  `isValidSession` / `isValidUser` against malformed persisted blobs, and `isSessionExpired`
+  boundaries including the seconds-vs-milliseconds unit that silently signs everyone out if
+  misread.
+- **Adapter contract tests for both backends** —
+  `templates/backends/{supabase,firebase}/<provider>.test.ts`, 44 and 46 tests. They cover the
+  `AuthProvider` mapping (session shape, the full error-code table, `getSession()`'s offline
+  rules, and `deleteAccount()` throwing without clearing local state — the claim the app makes
+  on Google Play's Data safety form). `scripts/add-backend.sh` copies each one into
+  `src/services/auth/__tests__/` alongside its adapter, so **the generated app inherits them**
+  and `template-backend-smoke-test.yml`'s existing `npm test` step picks them up with no
+  workflow change. This is the first CI checking `templates/**` has ever had — both
+  `tsconfig.json` and `eslint.config.js` exclude it, since those files cannot resolve until
+  they are copied.
+- **`npm run e2e`** runs the Maestro flows against a local iOS Simulator, resolving `APP_ID` and
+  `APP_SCHEME` from `app.json` exactly as `maestro-e2e.yml` does so the two cannot drift. Local
+  E2E costs nothing and is a far tighter loop than the post-release CI run. Documented in
+  `docs/testing.md`.
+
+### Fixed
+- **A failed Apple name write reported success on the Supabase backend (#114).** Found while
+  writing the tests above, which is the point of them — nothing had ever executed this code.
+  `captureAppleName()` in `templates/social/supabase-social.ts` wrapped
+  `supabase.auth.updateUser()` in a `try/catch`, but supabase-js reports API failures by
+  *returning* `{ error }` and only rejects on a transport failure. So the common failure fell
+  straight through and the function returned a session with the name attached — the app showed
+  a name the server never stored, and the next `getSession()` silently dropped it. Apple sends
+  `fullName` only on the very first authorization ever, so there was no second chance to
+  recover it. Both shapes are handled now; a failed write still never fails the sign-in.
+- **`.gitignore` silently ignored every new file under `templates/backends/supabase/`.** The
+  entry was `supabase/`, unanchored — which matches a directory of that name at *any* depth, not
+  just the throwaway `supabase/` that `verify-backend.yml` creates via `supabase init`. The
+  existing adapter and `schema.sql` were unaffected only because git keeps tracking files it
+  already tracks; anything added there afterwards was invisible to `git status`. Now anchored as
+  `/supabase/`.
+- **`docs/testing.md` told you to install the wrong software.** It recommended
+  `brew install maestro`, which resolves to Homebrew core's cask for *"Maestro (AI agent command
+  center)"* from `runmaestro.ai` — an unrelated product. The mobile-testing Maestro ships only via
+  `get.maestro.mobile.dev` or `mobile-dev-inc/tap`. Anyone following the docs installed a macOS app
+  they did not want and then hit `maestro: command not found`.
+- **Two undocumented prerequisites for running the flows locally**, both found by actually running
+  them end-to-end for the first time against a bootstrapped throwaway app:
+  1. **A JDK 17+ has to be reachable, and Homebrew's is keg-only.** `brew install openjdk@17`
+     deliberately does not link the formula onto `PATH`, so you end up with a JDK installed and no
+     `java` command, and Maestro's launcher dies on a message that never mentions Maestro. Fixed by
+     documenting `export PATH="$(brew --prefix openjdk@17)/bin:$PATH"`. Either `JAVA_HOME` or
+     `java` on `PATH` satisfies the launcher — it is the stock Gradle start script and falls back
+     to `PATH`. CI never hit this because `actions/setup-java` handles both.
+  2. **Metro must be on port 8081.** A Debug build's `RCTBundleURLProvider` probes
+     `http://localhost:8081/status` and nothing else — `RCT_METRO_PORT` is baked nowhere in the
+     Expo prebuild, so `expo start --port N` / `expo run:ios --port N` move only the CLI's server,
+     not what the installed app looks for. With 8081 occupied the app comes up on the red
+     "No script URL provided" screen (`unsanitizedScriptURLString = (null)`) and every assertion
+     times out with nothing explaining why. Documented along with the `RCT_jsLocation` workaround,
+     which survives Maestro's `clearState: true`.
+- **`coverage/` was not gitignored.** `npm run test:coverage` and `npm test -- --coverage` write an
+  lcov report tree at the repo root, so any local coverage run left ~90 untracked files sitting in
+  `git status`, easy to sweep into a commit by accident. CI never noticed because it never commits.
+- **Corrected the cost premise in `maestro-e2e.yml`'s header.** It claimed macOS runners are
+  "billed at a 10x minute multiplier" as the reason for a narrow trigger. The multiplier is real
+  but applies to *billable* minutes, and this repo is public — GitHub-hosted runners are free here.
+  The reasons that do hold are wall-clock latency and downstream private apps that inherit the
+  workflow.
+- **Retired the obsolete "update `DEV_MODE_KEY` in `src/constants.ts`" release step.** Both
+  `APP_VERSION` and `DEV_MODE_KEY` have been derived from `package.json` since 0.10.0, and
+  `bump-version.sh` says in its own comments that it skips `constants.ts` deliberately — so
+  following the instruction literally either did nothing or reintroduced exactly the desync the
+  derivation exists to prevent. It survived in five places: `.claude/CLAUDE.md`'s release step 4,
+  `.claude/agents/release-manager.md` (both its step 5 and its frontmatter description — the agent
+  that actually executes releases, so leaving it stale would have repeated the mistake every time),
+  `AGENTS.md`'s file map, and `parallel-release/SKILL.md`. Removing the step renumbered the
+  `CLAUDE.md` and `release-manager.md` sequences, and their internal cross-references moved with
+  them. `scripts/init.sh` carried the same staleness as two dead `sed` calls targeting
+  `APP_VERSION = "x.y.z"` and `dev_mode_x.y.z` literals that no longer exist; both matched nothing
+  and exited 0. Removed.
+
+### Verified
+- **Both Maestro flows pass unmodified** — 2/2 in 47s on Xcode 26.6 / iPhone 17 simulator /
+  Maestro 2.8.0, driven through a throwaway app bootstrapped from this template. Every step in
+  `commands.json` reports COMPLETED, so no `tapOn` silently no-op'd. The flow files and their
+  whole-label regex selectors needed no changes; only the surrounding tooling and docs did — the
+  flows had never actually been executed anywhere before this, in CI or locally.
+
+### Changed
+- **Simplified the Claude Code tooling layer.** `.claude/SKILLS.md` is now the single source of
+  truth for agent model/effort and skill-loading rules — `.claude/CLAUDE.md`'s agent table no
+  longer duplicates model/effort data, and its "UI/UX design rules" no longer contradicts
+  `SKILLS.md` by mandating `frontend_design`/`ui-ux-pro-max` unconditionally. Added explicit
+  pick-order guidance in `SKILLS.md` for the three overlapping RN-performance skills
+  (`rn-react-native`, `rn-react-best-practices`, `react-native-expert`) and the three overlapping
+  UI-design skills (`ui-ux-pro-max`, `frontend_design`, `design-for-ai`). Tightened
+  `.claude/settings.json`'s allowlist by removing unconditional `mkdir`/`chmod`/`cp`/`mv` (these
+  now prompt for confirmation, matching the documented "neither allow nor deny" behavior).
+  Removed a stale cross-repo scratch file.
+- **`scripts/init.sh` now resets `STATUS.md` and `ROADMAP.md` at bootstrap.** Both are ordinary
+  `*.md` files, so the placeholder pass only swapped the app name inside them — every generated app
+  inherited the *template's own* status and roadmap, down to its PR numbers and open issues. They
+  are now overwritten with genuine starters (version 0.1.0, stage "New app", the generic four-phase
+  scaffold). The starter bodies use a quoted heredoc on purpose: they contain backticks, which an
+  unquoted one would execute, and no placeholder token may appear in them because `init.sh` is
+  itself a `*.sh` caught by its own `--include` filter and would rewrite the heredoc mid-run. The
+  app name is echoed separately from the variable. Execution was never at risk — `sed -i` renames,
+  so the running shell keeps reading the original unlinked inode.
+- **`ROADMAP.md` now tracks the template's own work** instead of sitting as an all-unchecked
+  placeholder, so `/standup` reports real per-phase progress rather than ~0% for a repo where most
+  of the starter kit is finished. Four phases: template foundation, test/CI hardening, release and
+  store automation, monetization and growth.
+
+---
+
 ## [0.10.0] — 2026-08-03
 
 ### Fixed

@@ -74,7 +74,8 @@ see them — tracked here instead so they're not invisible to an upgrade pass.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Maestro CLI | `2.8.0` | Pinned via `MAESTRO_VERSION` in [.github/workflows/maestro-e2e.yml](.github/workflows/maestro-e2e.yml) — the installer performs no checksum/signature verification, so an unpinned "latest" would let a compromised or changed `get.maestro.mobile.dev` response silently alter what CI executes between runs. Bump deliberately, not automatically. |
+| Maestro CLI | `2.8.0` | Pinned via `MAESTRO_VERSION` in [.github/workflows/maestro-e2e.yml](.github/workflows/maestro-e2e.yml) — the installer performs no checksum/signature verification, so an unpinned "latest" would let a compromised or changed `get.maestro.mobile.dev` response silently alter what CI executes between runs. Bump deliberately, not automatically. **Locally, install with the same pinned installer — not `brew install maestro`, which resolves to an unrelated Homebrew cask** (see [docs/testing.md](docs/testing.md)). |
+| JDK (Maestro runtime) | `17` | Maestro is a JVM app. CI pins it via `actions/setup-java` in [.github/workflows/maestro-e2e.yml](.github/workflows/maestro-e2e.yml); locally any JDK 17+ works, reachable either through `JAVA_HOME` or as `java` on `PATH` — the launcher accepts both. Homebrew's `openjdk@17` is keg-only, so it needs `$(brew --prefix openjdk@17)/bin` added to `PATH` (see [docs/testing.md](docs/testing.md)). |
 | Supabase CLI | `2.111.0` | Pinned via `SUPABASE_CLI_VERSION` in [.github/workflows/verify-backend.yml](.github/workflows/verify-backend.yml). It both runs the local stack the deletion contract is asserted against and generates `src/types/database.types.ts`, so an unpinned "latest" would let a CLI codegen change turn an unrelated PR red on the drift check. **When bumping, regenerate the types in the same PR.** |
 
 ---

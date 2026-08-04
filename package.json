@@ -1,6 +1,6 @@
 {
   "name": "[APP_SLUG]",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -14,6 +14,8 @@
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "submit:android": "eas submit --platform android --profile production --latest",
     "test": "jest --watchAll=false",
+    "test:coverage": "jest --watchAll=false --coverage",
+    "e2e": "bash scripts/e2e.sh",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "bump-version": "bash scripts/bump-version.sh"

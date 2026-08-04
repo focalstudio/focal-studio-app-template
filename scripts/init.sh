@@ -143,17 +143,16 @@ echo "  Replacing [GITHUB_REPO]..."
 replace "\[GITHUB_REPO\]" "$GITHUB_REPO"
 
 # ── Version reset (new apps always start at 0.1.0, not the template version) ──
+# src/constants.ts is deliberately not touched: APP_VERSION and DEV_MODE_KEY are
+# derived from package.json, so rewriting it here would only reintroduce the
+# desync the derivation exists to prevent.
 echo "  Resetting version to 0.1.0..."
 if [[ "$(uname)" == "Darwin" ]]; then
   sed -i '' 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' package.json
   sed -i '' 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' app.json
-  sed -i '' 's/APP_VERSION = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/APP_VERSION = "0.1.0"/' src/constants.ts
-  sed -i '' 's/dev_mode_[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/dev_mode_0.1.0/' src/constants.ts
 else
   sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' package.json
   sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' app.json
-  sed -i 's/APP_VERSION = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/APP_VERSION = "0.1.0"/' src/constants.ts
-  sed -i 's/dev_mode_[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/dev_mode_0.1.0/' src/constants.ts
 fi
 cat > CHANGELOG.md << EOF
 # Changelog
@@ -170,6 +169,72 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ---
 EOF
 echo "  ✅  Version reset to 0.1.0"
+
+# ── Tracking-file reset (STATUS.md / ROADMAP.md track the TEMPLATE's own work) ─
+# Both files are ordinary *.md, so the replace() pass above only swaps the app-name
+# placeholder inside them — a new app would otherwise start life owning the
+# template's own status and roadmap. Overwrite them with genuine starters instead.
+#
+# The bodies use a QUOTED heredoc (<< 'EOF') deliberately, for two reasons:
+#   1. They contain backticks; an unquoted heredoc would run those as command
+#      substitution rather than writing them literally.
+#   2. No placeholder token may appear inside them. init.sh is itself a *.sh
+#      caught by its own --include filter, so replace() rewrites this file on
+#      disk mid-run; a token in the heredoc would be substituted at bootstrap.
+#      The app name is echoed separately instead, expanded from the variable.
+#      (Execution is safe regardless: sed -i renames, so the running shell keeps
+#      reading the original unlinked inode.)
+echo "  Resetting STATUS.md and ROADMAP.md..."
+{
+  echo "# $APP_NAME — Status"
+  echo ""
+  echo "_Updated: $(date +%Y-%m-%d)_"
+  echo ""
+  echo "**Version:** 0.1.0   **Stage:** New app"
+  cat << 'EOF'
+
+## Now
+Freshly bootstrapped from the template. Nothing built yet.
+
+## Next
+- Replace the placeholder splash / icon / adaptive-icon assets
+- Wire a backend: `bash scripts/add-backend.sh supabase` (or `firebase`)
+- Write the onboarding slides in `app/onboarding.tsx`
+
+## Blockers
+None.
+EOF
+} > STATUS.md
+
+{
+  echo "# $APP_NAME — Roadmap"
+  cat << 'EOF'
+
+> Starter roadmap. Replace these phases and substages with the real ones for your app.
+> `/standup` computes progress bars from the `## Phase` headings and their checkboxes;
+> `/wrap` checks boxes off as work ships. Headings **must** start with `## Phase`.
+
+## Phase 1 — Foundation
+- [ ] Replace placeholder splash / icon / adaptive-icon assets
+- [ ] Onboarding slides finalised (`app/onboarding.tsx`)
+- [ ] Backend wired (`scripts/add-backend.sh`)
+
+## Phase 2 — Core Product
+- [ ] Primary feature screens built
+- [ ] Auth flow working end to end
+- [ ] Paywall wired to RevenueCat
+
+## Phase 3 — Store Readiness
+- [ ] Store listing copy drafted (`store-listing/`)
+- [ ] Data-safety checklist passing on a production build
+- [ ] First release cut and submitted (iOS + Android)
+
+## Phase 4 — Growth
+- [ ] Analytics events instrumented (PostHog)
+- [ ] Post-launch iteration backlog triaged
+EOF
+} > ROADMAP.md
+echo "  ✅  STATUS.md and ROADMAP.md reset to starters"
 
 # ── Regenerate lockfile so it carries the real app name/version ───────────────
 # package-lock.json is excluded from sed replacements above (wrong tool for JSON

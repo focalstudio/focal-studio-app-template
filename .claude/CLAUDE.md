@@ -71,18 +71,17 @@ Two slash commands bracket every work session (defined in [.claude/commands/](co
 When the user says to cut a release:
 
 1. Create `release/x.x.x` off `dev`.
-2. Run `bash scripts/bump-version.sh x.x.x` — updates `package.json` and `app.json` version in one step.
+2. Run `bash scripts/bump-version.sh x.x.x` — updates `package.json` and `app.json` version in one step. **`src/constants.ts` needs no edit**: `APP_VERSION` and `DEV_MODE_KEY` are derived from `package.json`, so they track the bump automatically. The script deliberately does not touch it.
 3. Move `## [Unreleased]` in `CHANGELOG.md` to `## [x.x.x] — YYYY-MM-DD`; add a fresh empty `## [Unreleased]` section above it.
-4. Update `DEV_MODE_KEY` in `src/constants.ts` to match the new version string.
-5. **Pre-emptive code review**: before opening the PR, review every file changed since `dev`. For each changed TypeScript and React file, check for: broken async contracts, state not reset on all exit paths, missing guards in async callbacks, resource cleanup gaps (notifications, timers), timing races, and type contract mismatches. Fix all real bugs found before opening the PR. This prevents cascading review rounds from CI.
-6. **Sync with main before opening the PR**: run `git fetch origin main && git merge origin/main` on the release branch. Conflicts, if any, will only be version strings; keep ours. This prevents GitHub rejecting the PR with a merge conflict.
-7. Open a PR: `release/x.x.x` → `main`.
-8. The `release.yml` GitHub Actions workflow automatically creates tag `vx.x.x` and publishes a GitHub Release on merge — no manual tagging needed.
-9. **Immediately after step 7** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
+4. **Pre-emptive code review**: before opening the PR, review every file changed since `dev`. For each changed TypeScript and React file, check for: broken async contracts, state not reset on all exit paths, missing guards in async callbacks, resource cleanup gaps (notifications, timers), timing races, and type contract mismatches. Fix all real bugs found before opening the PR. This prevents cascading review rounds from CI.
+5. **Sync with main before opening the PR**: run `git fetch origin main && git merge origin/main` on the release branch. Conflicts, if any, will only be version strings; keep ours. This prevents GitHub rejecting the PR with a merge conflict.
+6. Open a PR: `release/x.x.x` → `main`.
+7. The `release.yml` GitHub Actions workflow automatically creates tag `vx.x.x` and publishes a GitHub Release on merge — no manual tagging needed.
+8. **Immediately after step 6** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
    > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
-10. Follow the **Apple App Store checklist** in [.claude/reference/store-submission.md](reference/store-submission.md) for the iOS upload.
-11. Follow the **Google Play checklist** in the same file for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 8, but Play Console review steps are still manual.
-12. Verify dev mode is off on device before store submission.
+9. Follow the **Apple App Store checklist** in [.claude/reference/store-submission.md](reference/store-submission.md) for the iOS upload.
+10. Follow the **Google Play checklist** in the same file for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 7, but Play Console review steps are still manual.
+11. Verify dev mode is off on device before store submission.
 
 ## Automated release workflow
 `.github/workflows/release.yml` triggers on every push to `main`. It:
@@ -237,7 +236,7 @@ isDevBuild = __DEV__ || (gitBranch !== null && !isStoreBranch(gitBranch))
 - Keep the gate as the first thing in the component (`if (!isDevBuild) return null;`) so there is exactly one place to audit. `src/components/dev/DevSeedSessionButton.tsx` is the reference.
 
 ## UI/UX design rules
-- Invoke the `frontend_design` and `ui-ux-pro-max` skills whenever making UI/UX or frontend changes.
+- Skill selection for UI/UX or frontend work is conditional, not automatic — see the `ios-frontend` row of the routing matrix in [.claude/SKILLS.md](SKILLS.md) for which of `frontend_design`, `ui-ux-pro-max`, and `design-for-ai` to load for a given task shape.
 - Use design tokens from `src/theme/` — never hardcode colours, spacing, or typography values.
 - Match iOS platform conventions (system font sizes, safe area insets, tab bar heights).
 - Use `lucide-react-native` for all icons. Always pass `color` from `useTheme()` — never hardcode icon colors or sizes.
@@ -394,18 +393,18 @@ All eight specialist subagents live in [.claude/agents/](agents/) and ship with 
 
 Each agent declares its own `model` and `effort` in frontmatter, tiered by how expensive a mistake is. Do not override these per-spawn unless the brief is genuinely atypical.
 
-| Agent | Purpose | Model / effort |
-|---|---|---|
-| `ios-frontend` | React Native + Expo UI work | sonnet / medium |
-| `backend-integrator` | Third-party service integration | sonnet / high |
-| `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` | sonnet / medium |
-| `release-manager` | Runs the full release workflow above | sonnet / low |
-| `aso-marketing` | Store-listing copy with hard char-limit enforcement | haiku / low |
-| `qa-reviewer` | Read-only pre-PR review | opus / high |
-| `devops-agent` | Package risk assessment + controlled installation | opus / medium |
-| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing | sonnet / medium |
+| Agent | Purpose |
+|---|---|
+| `ios-frontend` | React Native + Expo UI work |
+| `backend-integrator` | Third-party service integration |
+| `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` |
+| `release-manager` | Runs the full release workflow above |
+| `aso-marketing` | Store-listing copy with hard char-limit enforcement |
+| `qa-reviewer` | Read-only pre-PR review |
+| `devops-agent` | Package risk assessment + controlled installation |
+| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing |
 
-Which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md).
+Model/effort per agent and which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md), the single source of truth for both. Do not duplicate that data here.
 
 ### Bootstrap trigger
 

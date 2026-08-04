@@ -46,7 +46,7 @@ focal-studio-app-template/
 │   ├── theme/             ← design tokens. NEVER hardcode color/spacing/typography — import from here
 │   ├── utils/
 │   │   └── storage.ts     ← AsyncStorage helpers; ALWAYS use these, never raw AsyncStorage
-│   └── constants.ts       ← DEV_MODE_KEY lives here; bump on every release
+│   └── constants.ts       ← APP_VERSION + DEV_MODE_KEY, derived from package.json; never edit by hand
 │
 ├── scripts/
 │   ├── bump-version.sh    ← updates package.json + app.json in one shot

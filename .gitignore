@@ -6,6 +6,10 @@ node_modules/
 dist/
 web-build/
 
+# Jest coverage output — `npm run test:coverage` (and `npm test -- --coverage`,
+# which is what ci.yml runs) writes an lcov report tree here.
+coverage/
+
 # Environment
 .env
 .env.local
@@ -28,7 +32,13 @@ store-listing/privacy-*.html
 # Local Supabase stack. verify-backend.yml runs `supabase init` to get a throwaway
 # config.toml for `supabase start`; schema.sql is applied directly, so there are no
 # migrations here worth committing.
-supabase/
+#
+# Anchored with a leading slash. Unanchored, `supabase/` matches a directory of
+# that name at ANY depth — including `templates/backends/supabase/`, which
+# silently ignored every *new* file added there (the existing adapter and
+# schema.sql only survived because git keeps tracking files it already tracks).
+# The adapter's contract tests landed in exactly that blind spot.
+/supabase/
 
 # OS
 .DS_Store
