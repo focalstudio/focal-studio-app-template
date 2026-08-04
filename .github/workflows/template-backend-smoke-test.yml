@@ -117,6 +117,11 @@ jobs:
           [ -f "src/services/auth/social.ts" ] || { echo "::error::src/services/auth/social.ts was not created"; exit 1; }
           grep -q "supabaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with supabaseAuthProvider"; exit 1; }
           grep -q "socialAuth" src/services/auth/index.ts || { echo "::error::index.ts was not composed with socialAuth"; exit 1; }
+          # The test copy in add-social-auth.sh is guarded by `[ -f "$TEST_SRC" ]`,
+          # so renaming a file under templates/social/ would skip it silently and
+          # the Test step below would still pass — on a suite that no longer
+          # contains the social contract tests at all.
+          [ -f "src/services/auth/__tests__/social.test.ts" ] || { echo "::error::social contract tests were not installed"; exit 1; }
           grep -q 'const BACKEND = "supabase";' env.js || { echo "::error::env.js BACKEND was not set to supabase"; exit 1; }
           grep -qE "^EXPO_PUBLIC_SUPABASE_URL=" .env.example || { echo "::error::.env.example Supabase URL line was not uncommented"; exit 1; }
           grep -qE "^EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=" .env.example || { echo "::error::.env.example Supabase key line was not uncommented"; exit 1; }
@@ -228,6 +233,11 @@ jobs:
           [ -f "src/services/auth/social.ts" ] || { echo "::error::src/services/auth/social.ts was not created"; exit 1; }
           grep -q "firebaseAuthProvider" src/services/auth/index.ts || { echo "::error::index.ts was not activated with firebaseAuthProvider"; exit 1; }
           grep -q "socialAuth" src/services/auth/index.ts || { echo "::error::index.ts was not composed with socialAuth"; exit 1; }
+          # The test copy in add-social-auth.sh is guarded by `[ -f "$TEST_SRC" ]`,
+          # so renaming a file under templates/social/ would skip it silently and
+          # the Test step below would still pass — on a suite that no longer
+          # contains the social contract tests at all.
+          [ -f "src/services/auth/__tests__/social.test.ts" ] || { echo "::error::social contract tests were not installed"; exit 1; }
           grep -q 'const BACKEND = "firebase";' env.js || { echo "::error::env.js BACKEND was not set to firebase"; exit 1; }
           # social.ts reuses the adapter's mapping — the export guard in
           # add-social-auth.sh is only as good as the adapter still exporting
