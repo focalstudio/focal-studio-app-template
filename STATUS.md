@@ -1,18 +1,22 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-02_
+_Updated: 2026-08-04_
 
-**Version:** 0.9.0   **Stage:** Template / pre-app
+**Version:** 0.10.0   **Stage:** Template / pre-app
 
 ## Now
-Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app. Auth backend work landed this session: Sign in with Google shipped for both Supabase and Firebase (#70, PR #102), alongside the Supabase CI verification and typed-database work that merged just before it (#64, #68, PR #101). Apple sign-in (#62) and the dev sign-in bypass (#39) also shipped earlier and were only just closed — none of this reaches `main` until the next release, since template PRs target `dev`.
+Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app. This session validated `npm run e2e` end-to-end for the first time (PR #115, merged to `dev`): both Maestro flows pass **unmodified** against a real simulator, 2/2 in ~50s — they had never actually been executed anywhere, in CI or locally. The flows were fine; the tooling around them was not, so the output is `scripts/e2e.sh` (a preflight turning four silent 60-second timeouts into one-line errors), corrected install and prerequisite docs, and the #113 CI trigger (PRs to `main` plus an opt-in `e2e` label). Three unreleased PRs now sit on `dev` ahead of `main`: #110 (tooling), #111 (coverage gate + service/adapter tests), #115.
 
 ## Next
-- PR #103 (social sign-in store-submission checklist) needs review/merge.
-- **#100 is open and current**: wiring either backend leaves 6 Jest suites red (`app-config`, both dev-button tests, and three `(auth)` screen tests) — confirmed still reproducing against today's `dev` tip. Worth fixing before the next person wires a backend and hits it cold.
-- Run the bootstrap flow (`app-bootstrapper`) to turn this template into a real app.
-- Replace the placeholder `STATUS.md` / `ROADMAP.md` content with the new app's real phases.
-- Swap placeholder splash/icon assets before the first EAS build.
+- **#114** — contract tests for `templates/social/*.ts` (547 uncovered lines), reusing #111's copy-on-wire pattern. `templates/` gets zero CI checking until copied (both `tsconfig.json` and `eslint.config.js` exclude it), so it has to be verified by actually running the script.
+- **Cut release 0.11.0** — test/CI hardening as its own release theme, carrying #110, #111 and #115 to `main`. This is also what finally auto-closes #113.
+- **#112** — RevenueCat behind a `PaywallProvider` port, deliberately held for 0.12.0 so a red integration can't block the already-proven coverage work.
 
 ## Blockers
-None — #100 above is a known issue, not a blocker on current work.
+None.
+
+Three things worth carrying forward, none of them blocking:
+
+- #113 stays **open** despite shipping in #115 — `Closes` only fires on merges to the default branch, and template PRs target `dev`. It closes when 0.11.0 reaches `main`.
+- The E2E job #113 adds has never actually driven a simulator in CI; every run on this repo skips at the `[APP_SLUG]` gate. It is validated as wiring only, and gets its first real exercise in an app generated from this template.
+- Running the flows locally needs Metro on **port 8081 specifically** — `RCT_METRO_PORT` is baked nowhere in the Expo prebuild, so `--port` moves only the CLI's server, not what the installed debug build probes. See the E2E section of `docs/testing.md` for the `RCT_jsLocation` workaround when 8081 is occupied.
