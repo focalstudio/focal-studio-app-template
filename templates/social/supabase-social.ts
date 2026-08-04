@@ -210,11 +210,23 @@ async function captureAppleName(
   const name = appleNameToPersist(credential.fullName, session.user.name);
   if (name === null) return session;
 
+  // A failed name write must not fail the sign-in — the user is already
+  // authenticated at this point, and reporting an error here would be a lie.
+  // It must not be reported as a *success* either: returning the session with
+  // the name attached shows the user a name the server never stored, and the
+  // next getSession() silently drops it.
+  //
+  // Both failure shapes are handled, because supabase-js has two. API errors
+  // come back as a *returned* `{ error }` — which a try/catch alone never sees,
+  // and which is the shape a rejected write actually takes — while a transport
+  // failure still rejects.
   try {
-    await supabase.auth.updateUser({ data: { name } });
+    const { error } = await supabase.auth.updateUser({ data: { name } });
+    if (error) {
+      console.warn("[Auth] Could not save the name Apple provided:", error);
+      return session;
+    }
   } catch (err) {
-    // A failed name write must not fail the sign-in — the user is already
-    // authenticated at this point, and reporting an error here would be a lie.
     console.warn("[Auth] Could not save the name Apple provided:", err);
     return session;
   }

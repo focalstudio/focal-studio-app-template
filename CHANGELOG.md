@@ -10,6 +10,25 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **Contract tests for both social sign-in modules (#114)** —
+  `templates/social/{supabase,firebase}-social.test.ts`, 29 and 32 tests over the 547 lines
+  that had none. `templates/` is excluded from `tsconfig.json`, `eslint.config.js` and Jest's
+  `testMatch`, so nothing type-checked, linted or ran these files until an app copied them
+  out; `template-backend-smoke-test.yml` checked them with greps alone. Same mechanism as
+  #111: authored against their destination, copied by `scripts/add-social-auth.sh` to
+  `src/services/auth/__tests__/social.test.ts`, picked up by the two `*-plus-social` jobs'
+  existing `npm test` step. Unlike the adapter tests they mock the *adapter* rather than the
+  SDK — the subject here is the composition, and that is what makes "reuses the adapter's
+  `toAuthSession` / `toAuthError` instead of growing a second mapping" assertable.
+  Heaviest on `AuthError("cancelled")`: `useAuthStore` swallows it, so mapping a dismissed
+  Apple sheet or OAuth browser to anything else shows a red error for a tap the user
+  deliberately took back — the likeliest bug here and invisible to a structural grep. Also
+  both Supabase callback shapes (PKCE `?code=` and implicit `#access_token=`, parsed from real
+  redirect URLs), Firebase's Apple nonce (Apple gets SHA-256(raw), Firebase gets the raw
+  value — swap them and you get `auth/invalid-credential`), Apple's once-ever name capture,
+  and that neither method depends on `this`, since both are composed on by object spread.
+  The two `*-plus-social` jobs now also assert the test file arrived, because the copy is
+  guarded by `[ -f ]` and a rename would otherwise skip it with CI still green.
 - **`maestro-e2e.yml` now runs pre-merge, plus an opt-in `e2e` label (#113).** It previously fired
   only via `workflow_call` from `release.yml` (post-release) and `workflow_dispatch`, so there was
   no E2E signal before a merge at all. Now: PRs targeting `main` — release PRs, where a gate is
@@ -67,6 +86,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `docs/testing.md`.
 
 ### Fixed
+- **A failed Apple name write reported success on the Supabase backend (#114).** Found while
+  writing the tests above, which is the point of them — nothing had ever executed this code.
+  `captureAppleName()` in `templates/social/supabase-social.ts` wrapped
+  `supabase.auth.updateUser()` in a `try/catch`, but supabase-js reports API failures by
+  *returning* `{ error }` and only rejects on a transport failure. So the common failure fell
+  straight through and the function returned a session with the name attached — the app showed
+  a name the server never stored, and the next `getSession()` silently dropped it. Apple sends
+  `fullName` only on the very first authorization ever, so there was no second chance to
+  recover it. Both shapes are handled now; a failed write still never fails the sign-in.
 - **`.gitignore` silently ignored every new file under `templates/backends/supabase/`.** The
   entry was `supabase/`, unanchored — which matches a directory of that name at *any* depth, not
   just the throwaway `supabase/` that `verify-backend.yml` creates via `supabase init`. The

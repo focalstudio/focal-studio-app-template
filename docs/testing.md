@@ -197,33 +197,55 @@ Almost everything here fakes the **port** — `AuthProvider` — and never the S
 it. That is deliberate: a store or screen test cares that `signIn()` resolved or threw
 `AuthError("invalid_credentials")`, not how supabase-js spelled it.
 
-The one exception is an **adapter contract test**, where the mapping *is* the thing under
+The exception is an **adapter contract test**, where the mapping *is* the thing under
 test. Faking the port there would leave nothing to assert, so those mock the SDK directly
 (`@supabase/supabase-js`, `firebase/auth`).
+
+**Social sign-in tests sit between the two.** `templates/social/<backend>-social.test.ts`
+mocks the *adapter* — `../supabase` / `../firebase` — because the subject is the composition
+on top of the mapping, not the mapping itself. That is also what makes the port's "reuse the
+adapter's `toAuthSession` / `toAuthError` rather than growing a second mapping" rule
+assertable: with the adapter faked, a second inline mapping fails the test. The pure helpers
+those modules call (`appleNameToPersist`, `parseOAuthCallback`, `googleReversedClientId`)
+are deliberately left real — they already have unit coverage of their own, and faking them
+would leave the composition untested.
 
 | Level | Use for | Example |
 |---|---|---|
 | Port (`AuthProvider`) | stores, screens, anything above the adapter | [`useAuthStore.test.ts`](../src/store/__tests__/useAuthStore.test.ts) |
+| Adapter | social sign-in modules composed onto an adapter | [`supabase-social.test.ts`](../templates/social/supabase-social.test.ts) |
 | SDK | adapter contract tests only | [`supabase.test.ts`](../templates/backends/supabase/supabase.test.ts) |
 
-### Adapter contract tests live in `templates/` and run somewhere else
+### Tests in `templates/` run somewhere else
 
-`templates/backends/<provider>/<provider>.test.ts` sits beside its adapter but is **written
-against its destination** — `../<provider>` and `../types` only resolve once
-`scripts/add-backend.sh` has copied both into `src/services/auth/`. The script copies the
-test to `src/services/auth/__tests__/` in the same step it installs the adapter.
+Two families of test live under `templates/`, and both work the same way:
 
-Three consequences worth knowing:
+| Test | Copied by | Destination |
+|---|---|---|
+| `templates/backends/<provider>/<provider>.test.ts` | `scripts/add-backend.sh` | `src/services/auth/__tests__/<provider>.test.ts` |
+| `templates/social/<backend>-social.test.ts` | `scripts/add-social-auth.sh` | `src/services/auth/__tests__/social.test.ts` |
+
+Each sits beside the module it exercises but is **written against its destination** —
+`../<provider>`, `../social` and `../types` only resolve once the install script has copied
+both files into `src/services/auth/`. Each script copies the test in the same step it
+installs the module.
+
+Four consequences worth knowing:
 
 - `jest.config.js` lists `/templates/` in `testPathIgnorePatterns`, so the un-wired template
-  never tries to run them against SDKs it deliberately does not install.
+  never tries to run them against SDKs and native modules it deliberately does not install.
 - No workflow change was needed to run them:
   [`template-backend-smoke-test.yml`](../.github/workflows/template-backend-smoke-test.yml)
-  already runs `npm test` after `add-backend.sh` in all four jobs.
+  already runs `npm test` after the install scripts in all four jobs.
+- Each copy **is** asserted, though. Both copies are guarded by `[ -f ]`, so renaming a file
+  under `templates/` would skip one silently and leave `npm test` passing on a suite that no
+  longer contains it. The smoke jobs check the destination file exists.
 - **The generated app inherits them.** That is the point — the app's auth depends on this
-  mapping, and it is the one part of `templates/` that otherwise gets no CI checking at all
-  (both `tsconfig.json` and `eslint.config.js` exclude `templates/**`, because those files
-  cannot resolve until they are copied).
+  code, and it is the part of `templates/` that otherwise gets no CI checking at all (both
+  `tsconfig.json` and `eslint.config.js` exclude `templates/**`, because those files cannot
+  resolve until they are copied). Until they existed, nothing had ever type-checked, linted
+  or executed these modules; writing them surfaced a real bug in the Supabase social module
+  on the first pass.
 
 These complement rather than duplicate
 [`verify-backend.yml`](../.github/workflows/verify-backend.yml), which proves the *database*

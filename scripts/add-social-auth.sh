@@ -179,6 +179,27 @@ echo
 echo "==> Installing social module → $DEST"
 cp "$SRC" "$DEST"
 
+# The module's contract tests ride along with it, exactly as add-backend.sh does
+# for the adapter's.
+#
+# They live beside the module in templates/ but are written against their
+# destination — `../social`, `../$BACKEND` and `../types` only resolve once the
+# module is here. jest.config.js excludes /templates/ from testMatch for exactly
+# that reason, so this copy is the only thing that ever makes them runnable.
+#
+# Copying rather than leaving them behind is the point: the generated app
+# inherits coverage of the sign-in flow its users meet first, and
+# template-backend-smoke-test.yml's existing `npm test` step picks them up with
+# no workflow change. The same workflow asserts the file arrived, so a rename
+# here fails loudly instead of silently skipping the copy.
+TEST_SRC="templates/social/$BACKEND-social.test.ts"
+if [ -f "$TEST_SRC" ]; then
+  TEST_DEST="src/services/auth/__tests__/social.test.ts"
+  echo "==> Installing social contract tests → $TEST_DEST"
+  mkdir -p "$(dirname "$TEST_DEST")"
+  cp "$TEST_SRC" "$TEST_DEST"
+fi
+
 # ---------------------------------------------------------------------------
 # 3. Compose it onto the active provider
 # ---------------------------------------------------------------------------
