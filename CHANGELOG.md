@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.11.0] — 2026-08-04
+
 ### Added
 - **Contract tests for both social sign-in modules (#114)** —
   `templates/social/{supabase,firebase}-social.test.ts`, 29 and 32 tests over the 547 lines
@@ -129,6 +133,18 @@ Versioning: [Semantic Versioning](https://semver.org/)
   but applies to *billable* minutes, and this repo is public — GitHub-hosted runners are free here.
   The reasons that do hold are wall-clock latency and downstream private apps that inherit the
   workflow.
+- **Retired the obsolete "update `DEV_MODE_KEY` in `src/constants.ts`" release step.** Both
+  `APP_VERSION` and `DEV_MODE_KEY` have been derived from `package.json` since 0.10.0, and
+  `bump-version.sh` says in its own comments that it skips `constants.ts` deliberately — so
+  following the instruction literally either did nothing or reintroduced exactly the desync the
+  derivation exists to prevent. It survived in five places: `.claude/CLAUDE.md`'s release step 4,
+  `.claude/agents/release-manager.md` (both its step 5 and its frontmatter description — the agent
+  that actually executes releases, so leaving it stale would have repeated the mistake every time),
+  `AGENTS.md`'s file map, and `parallel-release/SKILL.md`. Removing the step renumbered the
+  `CLAUDE.md` and `release-manager.md` sequences, and their internal cross-references moved with
+  them. `scripts/init.sh` carried the same staleness as two dead `sed` calls targeting
+  `APP_VERSION = "x.y.z"` and `dev_mode_x.y.z` literals that no longer exist; both matched nothing
+  and exited 0. Removed.
 
 ### Verified
 - **Both Maestro flows pass unmodified** — 2/2 in 47s on Xcode 26.6 / iPhone 17 simulator /
@@ -148,6 +164,19 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `.claude/settings.json`'s allowlist by removing unconditional `mkdir`/`chmod`/`cp`/`mv` (these
   now prompt for confirmation, matching the documented "neither allow nor deny" behavior).
   Removed a stale cross-repo scratch file.
+- **`scripts/init.sh` now resets `STATUS.md` and `ROADMAP.md` at bootstrap.** Both are ordinary
+  `*.md` files, so the placeholder pass only swapped the app name inside them — every generated app
+  inherited the *template's own* status and roadmap, down to its PR numbers and open issues. They
+  are now overwritten with genuine starters (version 0.1.0, stage "New app", the generic four-phase
+  scaffold). The starter bodies use a quoted heredoc on purpose: they contain backticks, which an
+  unquoted one would execute, and no placeholder token may appear in them because `init.sh` is
+  itself a `*.sh` caught by its own `--include` filter and would rewrite the heredoc mid-run. The
+  app name is echoed separately from the variable. Execution was never at risk — `sed -i` renames,
+  so the running shell keeps reading the original unlinked inode.
+- **`ROADMAP.md` now tracks the template's own work** instead of sitting as an all-unchecked
+  placeholder, so `/standup` reports real per-phase progress rather than ~0% for a repo where most
+  of the starter kit is finished. Four phases: template foundation, test/CI hardening, release and
+  store automation, monetization and growth.
 
 ---
 
