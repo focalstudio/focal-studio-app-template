@@ -34,7 +34,7 @@
 // the control, not the credential — see stripDevBypass below.
 const { execSync } = require("child_process");
 
-const { env, BACKEND } = require("./env");
+const { env, BACKEND, PAYWALL } = require("./env");
 
 /**
  * The branch this build was cut from, or null when it cannot be determined.
@@ -122,6 +122,7 @@ module.exports = ({ config }) => {
       ...config.extra,
       env: stripDevBypass(env, gitBranch),
       backend: BACKEND,
+      paywall: PAYWALL,
       gitBranch,
     },
   };

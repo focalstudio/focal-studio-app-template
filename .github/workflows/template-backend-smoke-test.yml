@@ -1,10 +1,11 @@
 ---
-name: Template Backend Scripts Smoke Test
+name: Template Integration Scripts Smoke Test
 
-# scripts/add-backend.sh and scripts/add-social-auth.sh are the second and third
-# things every downstream app runs, and nothing tests them. Neither script needs
-# real credentials to be exercised structurally: env.js's zod schema is
-# format-only (z.url(), no network), so placeholder values satisfy it.
+# scripts/add-backend.sh, scripts/add-social-auth.sh and scripts/add-paywall.sh
+# are the first things every downstream app runs, and nothing else tests them.
+# None of them needs real credentials to be exercised structurally: env.js's zod
+# schema is format-only (z.url(), prefix regexes, no network), so placeholder
+# values satisfy it.
 #
 # The trap: add-backend.sh rewrites BACKEND in env.js. From that point on,
 # env.js THROWS until matching EXPO_PUBLIC_* vars exist — and app.config.js
@@ -20,8 +21,11 @@ on:
     paths:
       - "scripts/add-backend.sh"
       - "scripts/add-social-auth.sh"
+      - "scripts/add-paywall.sh"
       - "templates/backends/**"
       - "templates/social/**"
+      - "templates/paywall/**"
+      - "src/services/paywall/**"
       - "env.js"
       - "jest.config.js"
       - "jest.setup.js"
@@ -261,5 +265,121 @@ jobs:
       # import, the native SQLite binding, and env.js validating on require.
       # add-backend.sh closes by telling the developer to run this exact command,
       # so CI has to run it too or the instruction is untested.
+      - name: Test
+        run: npm test
+
+  paywall:
+    name: Wire RevenueCat Paywall
+    runs-on: ubuntu-latest
+    # env.js regex-checks these prefixes, so a placeholder still has to carry the
+    # right one — the same trap the header describes for backend credentials.
+    env:
+      EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: appl_placeholder
+      EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: goog_placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run add-paywall.sh revenuecat
+        run: bash scripts/add-paywall.sh revenuecat
+
+      - name: Assert structural changes
+        run: |
+          set -e
+          [ -f "src/services/paywall/revenuecat.ts" ] || { echo "::error::src/services/paywall/revenuecat.ts was not created"; exit 1; }
+          # The test copy in add-paywall.sh is guarded by `[ -f ... ]`, so renaming
+          # a file under templates/paywall/ would skip it silently and the Test
+          # step below would still pass — on a suite that no longer contains the
+          # adapter contract tests, including the only check that errors.ts agrees
+          # with the SDK's real PURCHASES_ERROR_CODE enum.
+          [ -f "src/services/paywall/__tests__/revenuecat.test.ts" ] || { echo "::error::RevenueCat contract tests were not installed"; exit 1; }
+          grep -q "revenuecatPaywallProvider" src/services/paywall/index.ts || { echo "::error::index.ts was not activated with revenuecatPaywallProvider"; exit 1; }
+          grep -q 'const PAYWALL = "revenuecat";' env.js || { echo "::error::env.js PAYWALL was not set to revenuecat"; exit 1; }
+          grep -qE "^EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=" .env.example || { echo "::error::.env.example RevenueCat iOS key line was not uncommented"; exit 1; }
+          # add-paywall.sh must not touch BACKEND: its regex is anchored on
+          # PAYWALL, and the two constants sit next to each other in env.js. A
+          # greedy pattern here would silently unwire a generated app's backend.
+          grep -q 'const BACKEND = "none";' env.js || { echo "::error::add-paywall.sh clobbered BACKEND in env.js"; exit 1; }
+          # react-native-purchases ships no config plugin and is autolinked, so
+          # nothing may appear in app.json. An entry there breaks the build.
+          ! grep -q "react-native-purchases" app.json || { echo "::error::react-native-purchases must not be added to app.json — it has no config plugin"; exit 1; }
+          echo "RevenueCat paywall wired correctly."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # The step that matters most here: the adapter's contract test only becomes
+      # runnable once add-paywall.sh has copied it out of templates/, and it is
+      # the one place the SDK is imported for real.
+      - name: Test
+        run: npm test
+
+  supabase-plus-paywall:
+    name: Wire Supabase Backend + RevenueCat Paywall
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+      EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: appl_placeholder
+      EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: goog_placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # The interaction no single-script job can catch: both scripts regex-rewrite
+      # a `const X = "..."` line in env.js, and those two lines sit next to each
+      # other. If the BACKEND and PAYWALL patterns ever stop being disjoint, one
+      # script silently clobbers the other's selection and the app boots with the
+      # wrong provider wired. Only a job that runs both surfaces it.
+      - name: Run add-backend.sh supabase
+        run: bash scripts/add-backend.sh supabase
+
+      - name: Run add-paywall.sh revenuecat
+        run: bash scripts/add-paywall.sh revenuecat
+
+      - name: Assert both selections survived
+        run: |
+          set -e
+          grep -q 'const BACKEND = "supabase";' env.js || { echo "::error::add-paywall.sh clobbered BACKEND — the two env.js regexes are not disjoint"; exit 1; }
+          grep -q 'const PAYWALL = "revenuecat";' env.js || { echo "::error::env.js PAYWALL was not set to revenuecat"; exit 1; }
+          [ -f "src/services/auth/supabase.ts" ] || { echo "::error::src/services/auth/supabase.ts was not created"; exit 1; }
+          [ -f "src/services/paywall/revenuecat.ts" ] || { echo "::error::src/services/paywall/revenuecat.ts was not created"; exit 1; }
+          grep -q "supabaseAuthProvider" src/services/auth/index.ts || { echo "::error::auth index.ts was not activated"; exit 1; }
+          grep -q "revenuecatPaywallProvider" src/services/paywall/index.ts || { echo "::error::paywall index.ts was not activated"; exit 1; }
+          echo "Supabase backend + RevenueCat paywall wired correctly, both selections intact."
+
+      - name: Expo doctor
+        run: npx expo-doctor@latest || true
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
       - name: Test
         run: npm test

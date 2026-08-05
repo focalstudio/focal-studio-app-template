@@ -9,6 +9,83 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-05
+
+### Added
+- **`scripts/add-paywall.sh` + the RevenueCat adapter (#112)** — `bash scripts/add-paywall.sh
+  revenuecat` installs `react-native-purchases`, drops the adapter into `src/services/paywall/`,
+  activates it with a one-line rewrite of the barrel, promotes `EXPO_PUBLIC_REVENUECAT_*` from
+  optional to required, and prints the dashboard steps it cannot do for you. The package is
+  deliberately **not** a dependency of the template: an app that never monetizes carries no native
+  IAP module, no extra EAS rebuild, and no store key at boot. Nothing is added to `app.json` —
+  `react-native-purchases` ships no config plugin and is autolinked, so a plugin entry would break
+  the build, and CI now asserts one never appears.
+- **Auth ↔ paywall identity binding** — `usePaywallStore.init()` calls the port's optional
+  `identify()` / `forget()` as the signed-in user changes. Purchase providers alias *anonymous*
+  app-user IDs by default, so without this the next person to sign in on a shared device inherits
+  the previous user's Pro, and a purchase does not follow its owner to a second device. A provider
+  that omits the pair (the local scaffold does) stays in anonymous mode, which is correct for an
+  app with no auth.
+- **`EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` / `..._ANDROID_API_KEY`** — validated in `env.js` with
+  `appl_` / `goog_` prefix regexes. Swapping the two is the classic RevenueCat mistake and surfaces
+  at runtime as an opaque "invalid credentials"; this turns it into a build failure. Only the iOS
+  key is required, matching the template's iOS-first stance — the adapter asks for the Android key
+  at point of use.
+- **`PAYWALL` selector in `env.js`**, parallel to `BACKEND` and orthogonal to it, plus
+  `extra.paywall` in the manifest and `paywall` in `src/env.ts`. Each `add-*.sh` script rewrites
+  only its own constant; a new `supabase-plus-paywall` CI job runs both scripts and asserts neither
+  clobbered the other, which is the one failure no single-script job can catch.
+- **Two smoke-test jobs** in the (renamed) *Template Integration Scripts Smoke Test* workflow, which
+  now covers all three integration scripts. The RevenueCat contract test only becomes runnable once
+  `add-paywall.sh` has copied it out of `templates/`, and it carries the only check that
+  `errors.ts`'s code table still agrees with the SDK's real `PURCHASES_ERROR_CODE` enum.
+- **`docs/paywall/revenuecat.md`** — dashboard setup, the two traps that look like bugs in this code
+  (all subscriptions in one App Store Connect group; the In-App Purchase Key + Server Notifications
+  URL, without which renewals never reach RevenueCat and the entitlement listener goes silent
+  forever), and why `react-native-purchases-ui` is deliberately not wired.
+- **`PaywallProvider` port in `src/services/paywall/` (#112)** — the paywall now sits behind the same
+  port/adapter shape as `src/services/auth/`: `types.ts` declares the contract, `local.ts` is the
+  committed default, and `index.ts` holds the single assignment a future `scripts/add-paywall.sh`
+  rewrites. Nothing new is installed — a generated app that never monetizes still carries no in-app
+  purchase dependency, no native rebuild, and no store key at boot. The contract states the two
+  semantics that get quietly wrong: `getSubscription()` must **never throw and never downgrade on
+  doubt** (the inverse of `AuthProvider.getSession()`, because the failure mode here is revoking
+  access someone paid for, not trusting an unverified session), and `restore()` resolving "nothing
+  found" is a **success**, not an error — while it must still throw when offline, since silently
+  telling a paying user they own nothing is the worst outcome of a Restore button.
+- **`payment_pending` as a first-class state** — Ask-to-Buy, SCA and slow Play payment methods are
+  neither success nor failure. The purchase sheet dismisses, nothing is granted, the copy does not
+  apologise, and the entitlement arrives later through the provider's subscription. `app/_layout.tsx`
+  now opens that subscription via `usePaywallStore.init()`, which is the only path by which an
+  approved deferred purchase can ever reach the app.
+- **Pure, CI-covered mapping logic** — `entitlement.ts` (entitlement → tier), `offerings.ts`
+  (package selection and ISO-8601 intro-offer copy), `errors.ts` (provider codes → `PaywallErrorCode`)
+  and `messages.ts` live under `src/services/` rather than in a future `templates/` directory, so tsc,
+  eslint and jest all see them — the same rule that pulled `oauthCallback.ts` and `appleName.ts` out
+  of `templates/social/`. `resolveTier` carries one invariant with a test per input class: an active
+  entitlement never resolves to `free`.
+
+### Changed
+- **`app/paywall.tsx` renders store-localized prices** — the hardcoded `$4.99` / `$29.99` / `$79.99`
+  are gone. A literal USD price is wrong in every non-USD storefront and wrong the day it changes in
+  App Store Connect, which is an App Store Guideline 3.1.2 problem the template shipped by default.
+  With no provider wired the cards show `—` placeholders and stay fully designable. `handleSubscribe`
+  and `handleRestore` no longer throw or `TODO` — they go through the store, so the paywall buttons
+  are exercised by tests for the first time.
+
+### Breaking
+- **`usePaywallStore.setSubscription()` has been removed.** It was a public, synchronous method that
+  granted Pro with no payment and persisted it — the entitlement twin of the fake-signup scaffold this
+  repo already deleted from auth, and safe until now only because `app/paywall.tsx` threw before
+  reaching it. Use `purchase(tier)`, which goes through the port. For tests and dev builds,
+  `seedLocalSubscription()` in `src/services/paywall/local.ts` is the replacement seam (not exported
+  from the barrel, and inert once a real provider is wired). `isPro` and `tier` are unchanged, so no
+  screen that only reads entitlement state needs touching.
+- **`storedSubscriptionSchema` moved** from `src/types/schemas.ts` to `src/services/paywall/types.ts`
+  — it is paywall-domain, the same reasoning `authSessionSchema` gives. `subscriptionTierSchema` stays
+  where it was. A device holding the old bare `{ tier }` blob still reads back correctly: every field
+  in the new schema carries its own `.catch()`, so the update does not downgrade a paying user.
+
 ---
 
 ## [0.11.0] — 2026-08-04

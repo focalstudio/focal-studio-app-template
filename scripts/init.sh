@@ -222,7 +222,7 @@ EOF
 ## Phase 2 — Core Product
 - [ ] Primary feature screens built
 - [ ] Auth flow working end to end
-- [ ] Paywall wired to RevenueCat
+- [ ] Paywall wired (bash scripts/add-paywall.sh revenuecat)
 
 ## Phase 3 — Store Readiness
 - [ ] Store listing copy drafted (`store-listing/`)

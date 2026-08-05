@@ -1,39 +1,47 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-04_
+_Updated: 2026-08-05_
 
-**Version:** 0.11.0   **Stage:** Template / pre-app
+**Version:** 0.12.0   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
-**0.11.0 is cut as a test/CI hardening release**, carrying five merged PRs from `dev` to `main`:
-#110 (Claude tooling simplification), #111 (coverage gate + service, auth-port and backend-adapter
-tests), #115 (E2E validated end-to-end, `scripts/e2e.sh` preflight, pre-merge E2E trigger), #116
-(status refresh) and #117 (social sign-in contract tests). The theme is deliberate — RevenueCat
-(#112) is held for 0.12.0 so a red third-party integration cannot block coverage work that is
-already proven green. This release also retires the obsolete "bump `DEV_MODE_KEY` by hand" step
-from the release docs (it has been derived from `package.json` since 0.10.0) and stops
-`scripts/init.sh` handing new apps the template's own `STATUS.md` and `ROADMAP.md`.
+**0.12.0 is the monetization release**, carrying the two halves of #112 from `dev` to `main`:
+#120 put the paywall behind a `PaywallProvider` port (the same port/adapter shape as
+`src/services/auth/`), and #121 added `scripts/add-paywall.sh` plus the RevenueCat adapter behind
+it. Nothing is installed by default — an app that never monetizes still carries no in-app purchase
+dependency, no native rebuild and no store key at boot. `app/paywall.tsx` now renders
+store-localized prices: the hardcoded `$4.99`/`$29.99`/`$79.99` were wrong in every non-USD
+storefront and wrong the day a price changed in App Store Connect, an App Store Guideline 3.1.2
+exposure the template shipped by default. One breaking change —
+`usePaywallStore.setSubscription()` is gone; it granted Pro with no payment and persisted it, the
+entitlement twin of the fake-signup scaffold already deleted from auth. Use `purchase(tier)`, or
+`seedLocalSubscription()` for tests and dev builds.
 
 ## Next
-- **#112** — RevenueCat behind a `PaywallProvider` port, not wired into the store directly. This is
-  the 0.12.0 theme.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
-  the only way to exercise the parts of the pipeline the template itself can never reach.
+  the only way to exercise the parts of the pipeline the template itself can never reach. It is
+  also the only way to exercise the RevenueCat adapter and the E2E CI job for real.
 - **#54** — dev-only Showcase screen for smoke-testing template changes.
+- **#66** — encrypted-at-rest session option via `LargeSecureStore`.
 
 ## Blockers
 None.
 
 Three things worth carrying forward, none of them blocking:
 
-- **#113 and #114 both stay open until 0.11.0 lands on `main`.** `Closes` only fires on merges to
-  the default branch and template PRs target `dev`, so both issues shipped (in #115 and #117) while
-  remaining open. Merging this release closes them.
-- The E2E job #113 adds has never actually driven a simulator in CI; every run on this repo skips
-  at the `[APP_SLUG]` gate. It is validated as wiring only, and gets its first real exercise in an
-  app generated from this template.
-- Running the flows locally needs Metro on **port 8081 specifically** — `RCT_METRO_PORT` is baked
-  nowhere in the Expo prebuild, so `--port` moves only the CLI's server, not what the installed
-  debug build probes. See the E2E section of `docs/testing.md` for the `RCT_jsLocation` workaround
-  when 8081 is occupied.
+- **#112 stays open until 0.12.0 lands on `main`.** `Closes` only fires on merges to the default
+  branch and template PRs target `dev`, so the work shipped while the issue stayed open — the same
+  mechanic that held #113 and #114 open through 0.11.0. The release PR closes it.
+- **The RevenueCat adapter has never run against a live RevenueCat project.** CI proves the wiring
+  (`Wire RevenueCat Paywall` and `Wire Supabase Backend + RevenueCat Paywall` both green, the
+  latter being the only check that catches one `add-*.sh` clobbering the other's selector), and the
+  contract test pins `errors.ts` against the SDK's real `PURCHASES_ERROR_CODE` enum. The two traps
+  that look like bugs in this code — all subscriptions in one App Store Connect group, and the
+  In-App Purchase Key + Server Notifications URL, without which renewals never reach RevenueCat and
+  the entitlement listener goes silent forever — are documented in `docs/paywall/revenuecat.md` and
+  only reachable from a real app.
+- Running the E2E flows locally still needs Metro on **port 8081 specifically** — `RCT_METRO_PORT`
+  is baked nowhere in the Expo prebuild, so `--port` moves only the CLI's server, not what the
+  installed debug build probes. See the E2E section of `docs/testing.md` for the `RCT_jsLocation`
+  workaround when 8081 is occupied.

@@ -50,7 +50,9 @@ export const userSchema = z.object({
 
 export const subscriptionTierSchema = z.enum(["free", "monthly", "annual", "lifetime"]);
 
-/** What `usePaywallStore` writes to storage. An unknown tier reads back as free. */
-export const storedSubscriptionSchema = z.object({
-  tier: subscriptionTierSchema.catch("free"),
-});
+/*
+ * The storage-boundary schema for a subscription lives in
+ * `src/services/paywall/types.ts`, not here — it is paywall-domain, the same
+ * reasoning `authSessionSchema` gives for living beside the auth port. The tier
+ * enum above stays because `SubscriptionTier` is app-wide.
+ */

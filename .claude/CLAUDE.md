@@ -159,7 +159,7 @@ still reflects what you last left it in.
 ## Module guidance
 - **Onboarding**: `app/onboarding.tsx` + `src/store/useOnboardingStore.ts`. Slides live in the `SLIDES` array.
 - **Auth**: `app/(auth)/` screens + `src/store/useAuthStore.ts`. Wire backend by replacing placeholder calls in `login.tsx` / `signup.tsx`.
-- **Paywall**: `app/paywall.tsx` + `src/store/usePaywallStore.ts`. See RevenueCat integration comments in both files.
+- **Paywall**: `app/paywall.tsx` + `src/store/usePaywallStore.ts` consume the `PaywallProvider` port in `src/services/paywall/`; both are provider-agnostic. Wire a real provider with `bash scripts/add-paywall.sh revenuecat` — never by calling `Purchases.*` from the store or the screen.
 - **Settings**: `app/(tabs)/settings.tsx` — add new settings rows in their respective `Card` sections.
 - **Theme**: `src/theme/` — all design tokens. Use `useTheme()` hook in every component.
 
