@@ -2,7 +2,6 @@ import {
   timeOfDaySchema,
   themeSchema,
   storedNotificationPrefsSchema,
-  storedSubscriptionSchema,
   userSchema,
 } from "../types/schemas";
 
@@ -60,18 +59,11 @@ describe("storedNotificationPrefsSchema", () => {
   });
 });
 
-describe("storedSubscriptionSchema", () => {
-  it("round-trips a known tier", () => {
-    expect(storedSubscriptionSchema.parse({ tier: "annual" })).toEqual({ tier: "annual" });
-  });
-
-  it.each([["an unknown string", "pro"], ["null", null], ["a number", 1], ["missing", undefined]])(
-    "catches an invalid tier (%s) as free",
-    (_desc, tier) => {
-      expect(storedSubscriptionSchema.parse({ tier })).toEqual({ tier: "free" });
-    }
-  );
-});
+/*
+ * `storedSubscriptionSchema` moved to `src/services/paywall/types.ts` — it is
+ * paywall-domain, the same reasoning `authSessionSchema` gives for living beside
+ * the auth port. Its cases live in `services/paywall/__tests__/types.test.ts`.
+ */
 
 describe("userSchema", () => {
   it("requires id and email as strings", () => {
