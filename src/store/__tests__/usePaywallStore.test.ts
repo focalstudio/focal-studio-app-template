@@ -1,6 +1,7 @@
 import { usePaywallStore } from "../usePaywallStore";
 import { paywallProvider, PaywallError, FREE_SUBSCRIPTION } from "../../services/paywall";
 import { Analytics } from "../../services/analytics";
+import { useAuthStore } from "../useAuthStore";
 import type { PaywallSubscription, PaywallOffering } from "../../services/paywall";
 
 /**
@@ -54,12 +55,30 @@ const offering: PaywallOffering = {
 
 const initialState = usePaywallStore.getState();
 
+/*
+ * `init()` opens a real subscription on `useAuthStore`, which is a module
+ * singleton shared across every test in this file. Start it through this helper
+ * so the teardown is tracked: a leaked subscription from an earlier test keeps
+ * firing on later ones, and the identity assertions below start counting each
+ * other's calls.
+ */
+const teardowns: (() => void)[] = [];
+function startInit(): () => void {
+  const stop = usePaywallStore.getState().init();
+  teardowns.push(stop);
+  return stop;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   usePaywallStore.setState(initialState, true);
   provider.getSubscription.mockResolvedValue(FREE_SUBSCRIPTION);
   provider.getOfferings.mockResolvedValue(null);
   provider.subscribe.mockReturnValue(jest.fn());
+});
+
+afterEach(() => {
+  teardowns.splice(0).forEach((stop) => stop());
 });
 
 describe("hydrate", () => {
@@ -117,10 +136,13 @@ describe("hydrate", () => {
 });
 
 describe("init", () => {
-  it("returns the provider's unsubscribe", () => {
+  it("tears down the provider subscription on cleanup", () => {
     const unsubscribe = jest.fn();
     provider.subscribe.mockReturnValue(unsubscribe);
-    expect(usePaywallStore.getState().init()).toBe(unsubscribe);
+
+    startInit()();
+
+    expect(unsubscribe).toHaveBeenCalled();
   });
 
   /*
@@ -129,7 +151,7 @@ describe("init", () => {
    * unlocked.
    */
   it("applies an entitlement delivered out of band", () => {
-    usePaywallStore.getState().init();
+    startInit();
     const onChange = provider.subscribe.mock.calls[0][0];
 
     onChange(paid);
@@ -140,12 +162,123 @@ describe("init", () => {
 
   it("applies an expiry delivered out of band", () => {
     usePaywallStore.setState({ ...usePaywallStore.getState(), subscription: paid, tier: "annual", isPro: true });
-    usePaywallStore.getState().init();
+    startInit();
 
     provider.subscribe.mock.calls[0][0](FREE_SUBSCRIPTION);
 
     expect(usePaywallStore.getState().isPro).toBe(false);
     expect(usePaywallStore.getState().tier).toBe("free");
+  });
+});
+
+describe("init — identity binding", () => {
+  const identify = jest.fn().mockResolvedValue(undefined);
+  const forget = jest.fn().mockResolvedValue(undefined);
+  const signedIn = { id: "user-1", email: "a@b.c" };
+
+  beforeEach(() => {
+    identify.mockClear().mockResolvedValue(undefined);
+    forget.mockClear().mockResolvedValue(undefined);
+    Object.assign(provider, { identify, forget });
+    useAuthStore.setState({
+      ...useAuthStore.getState(),
+      user: null,
+      session: null,
+      isAuthenticated: false,
+    });
+  });
+
+  afterEach(() => {
+    delete (provider as { identify?: unknown }).identify;
+    delete (provider as { forget?: unknown }).forget;
+  });
+
+  // hydrate() may resolve before this effect runs, in which case no change event
+  // is coming and a subscribe-only implementation would never bind at all.
+  it("binds whoever is already signed in when init runs", () => {
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+
+    startInit();
+
+    expect(identify).toHaveBeenCalledWith("user-1");
+  });
+
+  it("identifies on sign-in", () => {
+    startInit();
+    identify.mockClear();
+
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+
+    expect(identify).toHaveBeenCalledWith("user-1");
+  });
+
+  /*
+   * The shared-device bug this exists to prevent: without forget(), the next
+   * person to sign in on this device inherits the outgoing user's Pro.
+   */
+  it("forgets on sign-out", () => {
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+    startInit();
+    forget.mockClear();
+
+    useAuthStore.setState({ ...useAuthStore.getState(), user: null, isAuthenticated: false });
+
+    expect(forget).toHaveBeenCalled();
+  });
+
+  it("re-identifies when a different user signs in", () => {
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+    startInit();
+    identify.mockClear();
+
+    useAuthStore.setState({
+      ...useAuthStore.getState(),
+      user: { id: "user-2", email: "c@d.e" },
+    });
+
+    expect(identify).toHaveBeenCalledWith("user-2");
+  });
+
+  // identify() must be safe to call repeatedly, but calling it on every
+  // unrelated auth-store write (isSubmitting flipping, say) is pure noise.
+  it("does not re-identify when the user id is unchanged", () => {
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+    startInit();
+    identify.mockClear();
+
+    useAuthStore.setState({ ...useAuthStore.getState(), isSubmitting: true });
+
+    expect(identify).not.toHaveBeenCalled();
+  });
+
+  it("stops binding after cleanup", () => {
+    const teardown = startInit();
+    identify.mockClear();
+    teardown();
+
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+
+    expect(identify).not.toHaveBeenCalled();
+  });
+
+  // Failing to bind an identity must never take down app boot.
+  it("swallows a rejected identify", async () => {
+    identify.mockRejectedValue(new Error("provider offline"));
+    useAuthStore.setState({ ...useAuthStore.getState(), user: signedIn, isAuthenticated: true });
+
+    expect(() => startInit()).not.toThrow();
+    await Promise.resolve();
+  });
+
+  /*
+   * A provider that omits these — the local scaffold does — stays in anonymous
+   * mode, which is correct for an app with no auth. init() must not assume.
+   */
+  it("is a no-op for a provider that does not implement identity", () => {
+    delete (provider as { identify?: unknown }).identify;
+    delete (provider as { forget?: unknown }).forget;
+
+    expect(() => startInit()).not.toThrow();
   });
 });
 

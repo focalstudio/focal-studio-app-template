@@ -10,6 +10,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`scripts/add-paywall.sh` + the RevenueCat adapter (#112)** — `bash scripts/add-paywall.sh
+  revenuecat` installs `react-native-purchases`, drops the adapter into `src/services/paywall/`,
+  activates it with a one-line rewrite of the barrel, promotes `EXPO_PUBLIC_REVENUECAT_*` from
+  optional to required, and prints the dashboard steps it cannot do for you. The package is
+  deliberately **not** a dependency of the template: an app that never monetizes carries no native
+  IAP module, no extra EAS rebuild, and no store key at boot. Nothing is added to `app.json` —
+  `react-native-purchases` ships no config plugin and is autolinked, so a plugin entry would break
+  the build, and CI now asserts one never appears.
+- **Auth ↔ paywall identity binding** — `usePaywallStore.init()` calls the port's optional
+  `identify()` / `forget()` as the signed-in user changes. Purchase providers alias *anonymous*
+  app-user IDs by default, so without this the next person to sign in on a shared device inherits
+  the previous user's Pro, and a purchase does not follow its owner to a second device. A provider
+  that omits the pair (the local scaffold does) stays in anonymous mode, which is correct for an
+  app with no auth.
+- **`EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` / `..._ANDROID_API_KEY`** — validated in `env.js` with
+  `appl_` / `goog_` prefix regexes. Swapping the two is the classic RevenueCat mistake and surfaces
+  at runtime as an opaque "invalid credentials"; this turns it into a build failure. Only the iOS
+  key is required, matching the template's iOS-first stance — the adapter asks for the Android key
+  at point of use.
+- **`PAYWALL` selector in `env.js`**, parallel to `BACKEND` and orthogonal to it, plus
+  `extra.paywall` in the manifest and `paywall` in `src/env.ts`. Each `add-*.sh` script rewrites
+  only its own constant; a new `supabase-plus-paywall` CI job runs both scripts and asserts neither
+  clobbered the other, which is the one failure no single-script job can catch.
+- **Two smoke-test jobs** in the (renamed) *Template Integration Scripts Smoke Test* workflow, which
+  now covers all three integration scripts. The RevenueCat contract test only becomes runnable once
+  `add-paywall.sh` has copied it out of `templates/`, and it carries the only check that
+  `errors.ts`'s code table still agrees with the SDK's real `PURCHASES_ERROR_CODE` enum.
+- **`docs/paywall/revenuecat.md`** — dashboard setup, the two traps that look like bugs in this code
+  (all subscriptions in one App Store Connect group; the In-App Purchase Key + Server Notifications
+  URL, without which renewals never reach RevenueCat and the entitlement listener goes silent
+  forever), and why `react-native-purchases-ui` is deliberately not wired.
 - **`PaywallProvider` port in `src/services/paywall/` (#112)** — the paywall now sits behind the same
   port/adapter shape as `src/services/auth/`: `types.ts` declares the contract, `local.ts` is the
   committed default, and `index.ts` holds the single assignment a future `scripts/add-paywall.sh`

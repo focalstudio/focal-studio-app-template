@@ -3,6 +3,7 @@ import type { SubscriptionTier } from "../types";
 import { paywallProvider, PaywallError, isEntitled, FREE_SUBSCRIPTION } from "../services/paywall";
 import type { PaywallSubscription, PaywallOffering } from "../services/paywall";
 import { Analytics } from "../services/analytics";
+import { useAuthStore } from "./useAuthStore";
 
 type PaywallState = {
   /** The single gate for paid features. Derived — never set directly. */
@@ -73,16 +74,55 @@ export const usePaywallStore = create<PaywallState>((set) => ({
   },
 
   /**
-   * Opens the provider's entitlement subscription and returns its unsubscribe.
-   * Call from a `useEffect` in `app/_layout.tsx` and return this as cleanup —
-   * see the "Cleanup contracts" section of the `expo-services` skill.
+   * Opens the provider's entitlement subscription and binds the store account to
+   * the app account. Returns one unsubscribe covering both. Call from a
+   * `useEffect` in `app/_layout.tsx` and return this as cleanup — see the
+   * "Cleanup contracts" section of the `expo-services` skill.
    *
-   * This catches every change the store never initiated: a renewal, an expiry, a
-   * billing-retry recovery, a purchase made on another device — and a deferred
-   * (Ask-to-Buy) purchase being approved, which has no other path back into the
-   * app at all.
+   * The entitlement subscription catches every change the store never initiated:
+   * a renewal, an expiry, a billing-retry recovery, a purchase made on another
+   * device — and a deferred (Ask-to-Buy) purchase being approved, which has no
+   * other path back into the app at all.
+   *
+   * The identity binding is the other half, and it is not optional for an app
+   * with auth. Purchase providers alias *anonymous* app-user IDs by default, so
+   * entitlements attach to the device's store account rather than to the person
+   * signed in. Two consequences, both bugs:
+   *
+   * - On a shared device, the next person to sign in inherits the previous
+   *   user's Pro.
+   * - A user's purchase does not follow them to a second device.
+   *
+   * A provider that omits `identify`/`forget` (the local scaffold does) is left
+   * in anonymous mode, which is the correct behaviour for an app with no auth.
+   *
+   * Errors are swallowed deliberately: failing to bind an identity must never
+   * take down app boot. The entitlement the provider already has stays valid,
+   * and the next sign-in retries.
    */
-  init: () => paywallProvider.subscribe((s) => set(applySubscription(s))),
+  init: () => {
+    const stopEntitlements = paywallProvider.subscribe((s) => set(applySubscription(s)));
+
+    const syncIdentity = (userId: string | null) => {
+      const call = userId === null ? paywallProvider.forget?.() : paywallProvider.identify?.(userId);
+      void call?.catch(() => {});
+    };
+
+    // Bind whoever is already signed in — hydrate() may well have resolved
+    // before this effect runs, in which case no change event is coming.
+    syncIdentity(useAuthStore.getState().user?.id ?? null);
+
+    const stopAuth = useAuthStore.subscribe((state, prev) => {
+      const next = state.user?.id ?? null;
+      if (next === (prev.user?.id ?? null)) return;
+      syncIdentity(next);
+    });
+
+    return () => {
+      stopAuth();
+      stopEntitlements();
+    };
+  },
 
   /**
    * Fetches the localized packages for display. Deliberately not part of

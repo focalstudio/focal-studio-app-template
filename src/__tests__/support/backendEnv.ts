@@ -36,11 +36,37 @@ export const BACKEND_VARS = {
 export type BackendName = keyof typeof BACKEND_VARS;
 
 /**
- * A value for every backend's variables at once.
+ * The minimum valid configuration for each paywall provider.
  *
- * `env.js` only *requires* the ones belonging to the backend it has selected,
- * so this is a valid environment whatever `BACKEND` happens to be. Use it as the
- * base whenever a test cares about something other than backend selection.
+ * Orthogonal to the backend, exactly as `PAYWALL` is to `BACKEND` in `env.js` —
+ * an app can have either, both, or neither.
+ *
+ * The `appl_` prefix is not decorative: `env.js` regex-checks it so that
+ * swapping the Apple and Google keys fails at build time rather than at runtime
+ * as an opaque "invalid credentials".
+ */
+export const PAYWALL_VARS = {
+  none: {},
+  revenuecat: {
+    EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: "appl_placeholder",
+    EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: "goog_placeholder",
+  },
+} as const;
+
+export type PaywallName = keyof typeof PAYWALL_VARS;
+
+/**
+ * A value for every backend's and every paywall provider's variables at once.
+ *
+ * `env.js` only *requires* the ones belonging to the backend and paywall it has
+ * selected, so this is a valid environment whatever `BACKEND` and `PAYWALL`
+ * happen to be. Use it as the base whenever a test cares about something other
+ * than provider selection.
+ *
+ * The paywall entries matter for the same reason the backend ones do: once
+ * `scripts/add-paywall.sh` runs, the adapter calls `requireEnv(...)` at module
+ * load, so every suite whose import graph reaches
+ * `src/services/paywall/index.ts` would fail to start without them (#100).
  */
 // Typed as a plain string record, not `as const`: callers spread it into a
 // `NodeJS.ProcessEnv` cast, which TypeScript rejects against a readonly object
@@ -48,4 +74,5 @@ export type BackendName = keyof typeof BACKEND_VARS;
 export const EVERY_BACKEND_CONFIGURED: Record<string, string> = {
   ...BACKEND_VARS.supabase,
   ...BACKEND_VARS.firebase,
+  ...PAYWALL_VARS.revenuecat,
 };
