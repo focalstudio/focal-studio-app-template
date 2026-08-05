@@ -80,6 +80,18 @@ see them — tracked here instead so they're not invisible to an upgrade pass.
 
 ---
 
+## On-demand packages (not in `package.json`)
+
+Installed by an integration script only when an app opts into the feature, so they are absent from
+the tables above by design — a generated app that never uses the feature carries no native module,
+no extra rebuild and no store key at boot. Tracked here so they aren't invisible to an upgrade pass.
+
+| Package | Installed by | Notes |
+|---|---|---|
+| `react-native-purchases` | `bash scripts/add-paywall.sh revenuecat` | Version is resolved by `npx expo install` against the current Expo SDK rather than pinned here — the SDK generation is the constraint, and pinning in two places is how they drift. **Takes no `app.json` plugin entry**: it ships no config plugin and is autolinked, so adding one breaks the build; the *Wire RevenueCat Paywall* job in [template-backend-smoke-test.yml](.github/workflows/template-backend-smoke-test.yml) asserts one never appears. Being a native module, it needs a new dev client or EAS build after installation — Expo Go cannot load it. Setup and the dashboard traps: [docs/paywall/revenuecat.md](docs/paywall/revenuecat.md). |
+
+---
+
 ## Upgrade checklist
 
 Follow this order every time dependencies change:

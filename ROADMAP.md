@@ -43,7 +43,7 @@
 - [ ] First template-generated app shipped through both stores end to end
 
 ## Phase 4 — Monetization & Growth
-- [ ] RevenueCat wired behind a `PaywallProvider` port rather than into the store directly (#112)
+- [x] RevenueCat wired behind a `PaywallProvider` port rather than into the store directly (#112)
 - [ ] Dev-only Showcase screen for smoke-testing template changes (#54)
 - [ ] Encrypted-at-rest session option via `LargeSecureStore` (#66)
 - [ ] Cross-repo privacy auto-PR workflow (#56)

@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-05
+
 ### Added
 - **`scripts/add-paywall.sh` + the RevenueCat adapter (#112)** — `bash scripts/add-paywall.sh
   revenuecat` installs `react-native-purchases`, drops the adapter into `src/services/paywall/`,
