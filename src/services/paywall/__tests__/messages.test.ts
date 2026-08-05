@@ -47,10 +47,18 @@ describe("paywallErrorMessage", () => {
     expect(message).not.toMatch(/wrong|failed|error|try again/i);
   });
 
-  // Retrying a missing offering never works, so the copy must not suggest it.
-  it("does not tell the user to try again for not_configured", () => {
+  /*
+   * A missing entitlement or offering is fixed in a dashboard, never by tapping
+   * again, so the copy must not invite a retry at all.
+   *
+   * The assertion this replaced was `/try again\b(?!.*later)/i` — contorted
+   * specifically so that "Please try again later" would slip past it, which is
+   * exactly the string the comment above it claimed was absent. A test shaped
+   * around the bug it should have caught is worse than no test.
+   */
+  it("does not invite a retry for not_configured", () => {
     expect(paywallErrorMessage(new PaywallError("not_configured", "raw"))).not.toMatch(
-      /try again\b(?!.*later)/i
+      /try again/i
     );
   });
 

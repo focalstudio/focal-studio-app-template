@@ -91,10 +91,11 @@ export default function PaywallScreen() {
 
   async function handleSubscribe(tier: SubscriptionTier) {
     try {
-      // A cancelled sheet is already swallowed by the store, so reaching the
-      // line below means the purchase actually went through.
-      await purchase(tier);
-      router.back();
+      // Resolves false when the user dismissed the sheet. The store swallows
+      // that (it is not an error) but it is not a purchase either, so the
+      // paywall has to stay open — closing it on a tap the user took back reads
+      // as "we bought it anyway".
+      if (await purchase(tier)) router.back();
     } catch (err) {
       const pending = err instanceof PaywallError && err.code === "payment_pending";
       Alert.alert(pending ? "Approval Needed" : "Purchase Failed", paywallErrorMessage(err));

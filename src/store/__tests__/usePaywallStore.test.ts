@@ -170,9 +170,9 @@ describe("loadOffering", () => {
 });
 
 describe("purchase", () => {
-  it("applies the subscription the store granted", async () => {
+  it("applies the subscription the store granted and resolves true", async () => {
     provider.purchase.mockResolvedValue(paid);
-    await usePaywallStore.getState().purchase("annual");
+    await expect(usePaywallStore.getState().purchase("annual")).resolves.toBe(true);
 
     expect(provider.purchase).toHaveBeenCalledWith("annual");
     expect(usePaywallStore.getState().isPro).toBe(true);
@@ -194,10 +194,14 @@ describe("purchase", () => {
     spy.mockRestore();
   });
 
-  // Nobody sees a red error for a tap they took back.
-  it("swallows a cancellation and grants nothing", async () => {
+  /*
+   * Nobody sees a red error for a tap they took back — but the caller still has
+   * to be able to tell a dismissal from a purchase. Resolving `undefined` for
+   * both is what let `app/paywall.tsx` close the paywall on a cancelled sheet.
+   */
+  it("resolves false on a cancellation and grants nothing", async () => {
     provider.purchase.mockRejectedValue(new PaywallError("cancelled", "dismissed"));
-    await expect(usePaywallStore.getState().purchase("annual")).resolves.toBeUndefined();
+    await expect(usePaywallStore.getState().purchase("annual")).resolves.toBe(false);
 
     expect(usePaywallStore.getState().isPro).toBe(false);
     expect(usePaywallStore.getState().isSubmitting).toBe(false);
