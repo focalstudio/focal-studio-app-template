@@ -147,6 +147,59 @@ jest.mock(
 );
 
 /**
+ * The RevenueCat SDK.
+ *
+ * `templates/paywall/revenuecat.ts` calls `Purchases.configure()` at module
+ * scope, and the SDK touches `NativeModules` as soon as it is imported — so
+ * without this, every suite whose import graph reaches
+ * `src/services/paywall/index.ts` dies the moment `add-paywall.sh` has run.
+ * Same failure shape as #100, fixed here before it can bite.
+ *
+ * `virtual: true` for the same reason as the `expo-sqlite` mock above:
+ * `react-native-purchases` is not a dependency of the template as shipped —
+ * `scripts/add-paywall.sh` installs it — and a non-virtual mock of an
+ * unresolvable module fails outright. Virtual makes this inert in the un-wired
+ * template and a real mock once it isn't.
+ *
+ * A virtual mock keeps applying after the package is installed: Jest keys
+ * `_virtualMocks` by the bare specifier and short-circuits module resolution
+ * before it ever reaches the real file. So no ordinary suite loads the real
+ * package.
+ *
+ * `templates/paywall/revenuecat.test.ts` declares its own richer, non-virtual
+ * `jest.mock` of the same specifier. That resolves to the same module ID and
+ * simply overwrites this factory, so the contract test wins with no ordering
+ * hazard — and it is also the one suite that calls `requireActual` to read the
+ * real `PURCHASES_ERROR_CODE`, which is why `react-native-purchases` and
+ * `@revenuecat` still have to appear in `ESM_PACKAGES` in `jest.config.js`.
+ */
+jest.mock(
+  "react-native-purchases",
+  () => ({
+    __esModule: true,
+    default: {
+      configure: jest.fn(),
+      getCustomerInfo: jest.fn().mockResolvedValue({ entitlements: { active: {} } }),
+      getOfferings: jest.fn().mockResolvedValue({ current: null }),
+      purchasePackage: jest.fn(),
+      restorePurchases: jest.fn().mockResolvedValue({ entitlements: { active: {} } }),
+      addCustomerInfoUpdateListener: jest.fn(() => jest.fn()),
+      removeCustomerInfoUpdateListener: jest.fn(),
+      logIn: jest.fn().mockResolvedValue({ customerInfo: { entitlements: { active: {} } } }),
+      logOut: jest.fn().mockResolvedValue({ entitlements: { active: {} } }),
+      setLogLevel: jest.fn(),
+    },
+    LOG_LEVEL: { DEBUG: "DEBUG", INFO: "INFO", WARN: "WARN", ERROR: "ERROR" },
+    PACKAGE_TYPE: { MONTHLY: "MONTHLY", ANNUAL: "ANNUAL", LIFETIME: "LIFETIME" },
+    // The adapter reads this at module scope, so it has to exist here even
+    // though only `revenuecat.test.ts` (which replaces this factory with one
+    // spreading `requireActual`) asserts against the real values.
+    PURCHASES_ERROR_CODE: { LOG_OUT_ANONYMOUS_USER_ERROR: "22" },
+  }),
+  { virtual: true }
+);
+
+/**
  * `app/_layout.tsx` renders `<StatusBar>` unconditionally. Left unmocked, it
  * is harmless on its own (a screen test that never mounts a tab navigator —
  * e.g. the reference `home-screen.test.tsx`, which renders `(tabs)/index`

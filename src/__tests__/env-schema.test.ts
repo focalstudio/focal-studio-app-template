@@ -11,8 +11,10 @@
 
 import {
   BACKEND_VARS,
+  PAYWALL_VARS,
   EVERY_BACKEND_CONFIGURED,
   type BackendName,
+  type PaywallName,
 } from "./support/backendEnv";
 
 const ENV_MODULE = "../../env.js";
@@ -34,35 +36,67 @@ describe("env.js schema", () => {
     expect(() => loadEnv(EVERY_BACKEND_CONFIGURED)).not.toThrow();
   });
 
-  // The minimal case: exactly the wired backend's variables and nothing else.
-  // Previously hardcoded to Supabase's, which asserted `not.toThrow()` on an
-  // environment that is — correctly — invalid once Firebase is the backend (#100).
-  it("accepts exactly the selected backend's variables and nothing else", () => {
-    const { BACKEND } = loadEnv(EVERY_BACKEND_CONFIGURED) as { BACKEND: BackendName };
+  /*
+   * The minimal case: exactly what the wired providers need and nothing else.
+   *
+   * Reads BOTH selectors, not just BACKEND. This was hardcoded to Supabase once
+   * and broke when Firebase could be selected (#100); it then read only BACKEND
+   * and broke again the moment `add-paywall.sh` could set PAYWALL. Anything that
+   * promotes variables from optional to required has to appear here.
+   */
+  it("accepts exactly the selected providers' variables and nothing else", () => {
+    const { BACKEND, PAYWALL } = loadEnv(EVERY_BACKEND_CONFIGURED) as {
+      BACKEND: BackendName;
+      PAYWALL: PaywallName;
+    };
 
-    expect(() => loadEnv({ ...BACKEND_VARS[BACKEND] })).not.toThrow();
+    expect(() =>
+      loadEnv({ ...BACKEND_VARS[BACKEND], ...PAYWALL_VARS[PAYWALL] })
+    ).not.toThrow();
   });
 
-  it("exposes validated values and the selected backend", () => {
-    const { env, BACKEND } = loadEnv({
+  it("exposes validated values and both selectors", () => {
+    const { env, BACKEND, PAYWALL } = loadEnv({
       ...EVERY_BACKEND_CONFIGURED,
       EXPO_PUBLIC_POSTHOG_KEY: "phc_abc",
     });
     expect(env.EXPO_PUBLIC_POSTHOG_KEY).toBe("phc_abc");
     expect(["none", "supabase", "firebase"]).toContain(BACKEND);
+    expect(["none", "revenuecat"]).toContain(PAYWALL);
   });
 
-  // The rule that makes BACKEND load-bearing: selecting a provider promotes its
-  // variables from optional to required. Asserted against whichever backend is
-  // actually wired, so it holds in the template and in a generated app alike.
-  it("requires the selected backend's variables, and only then", () => {
-    const { BACKEND } = loadEnv(EVERY_BACKEND_CONFIGURED);
+  // The rule that makes BACKEND and PAYWALL load-bearing: selecting a provider
+  // promotes its variables from optional to required. Asserted against whatever
+  // is actually wired, so it holds in the template and in a generated app alike.
+  it("requires the selected providers' variables, and only then", () => {
+    const { BACKEND, PAYWALL } = loadEnv(EVERY_BACKEND_CONFIGURED);
 
-    if (BACKEND === "none") {
+    if (BACKEND === "none" && PAYWALL === "none") {
       expect(() => loadEnv({})).not.toThrow();
-    } else {
-      expect(() => loadEnv({})).toThrow(new RegExp(BACKEND));
+      return;
     }
+
+    expect(() => loadEnv({})).toThrow(new RegExp(BACKEND === "none" ? PAYWALL : BACKEND));
+  });
+
+  /*
+   * Swapping the Apple and Google RevenueCat keys is the classic mistake, and at
+   * runtime it surfaces as an opaque "invalid credentials" with nothing pointing
+   * at the cause. The prefix check is what turns that into a build failure.
+   */
+  it.each([
+    ["EXPO_PUBLIC_REVENUECAT_IOS_API_KEY", "goog_wrongplatform"],
+    ["EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY", "appl_wrongplatform"],
+  ])("rejects a %s carrying the other platform's prefix", (key, value) => {
+    expect(() => loadEnv({ ...EVERY_BACKEND_CONFIGURED, [key]: value })).toThrow(
+      new RegExp(key)
+    );
+  });
+
+  it("accepts correctly prefixed RevenueCat keys", () => {
+    expect(() =>
+      loadEnv({ ...EVERY_BACKEND_CONFIGURED, ...PAYWALL_VARS.revenuecat })
+    ).not.toThrow();
   });
 
   // The common real-world failure: one variable gets copied out of the

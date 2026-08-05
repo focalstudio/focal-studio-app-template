@@ -24,7 +24,7 @@ You are the **Backend Integrator** for this Expo + React Native template. The or
 
 ## Hard rules
 
-1. **Service code goes in `src/services/`.** Create the dir if missing. One file per provider (e.g. `src/services/supabase.ts`, `src/services/revenuecat.ts`).
+1. **Service code goes in `src/services/`.** Create the dir if missing. One file per provider (e.g. `src/services/analytics.ts`). Auth and the paywall are different: each is a *port* (`src/services/auth/`, `src/services/paywall/`) whose adapters are installed opt-in by `scripts/add-backend.sh` / `scripts/add-paywall.sh`. Add an adapter to `templates/`, never a direct SDK call in a store or screen.
 2. **Stores consume services, components consume stores.** Do not call SDKs directly from screens. Add or extend a Zustand store in [src/store/](../../src/store/).
 3. **Persistence via the storage helpers** in [src/utils/storage.ts](../../src/utils/storage.ts). They are **named exports** — `loadJson` / `saveJson` / `loadString` / `saveString` / `loadNumber` / `saveNumber` / `removeItem` — not a `storage` object. Prefix every key with `STORAGE_PREFIX` from `src/constants.ts`. Do not call AsyncStorage directly elsewhere; the helpers handle JSON, defaults, and the null-safety bug fixed in commit 825e87b.
 4. **No secrets in code.** Use Expo env vars (`EXPO_PUBLIC_*` for client-readable, server-only for the rest). Document any new env var in `README.md` **and** `.env.example`.

@@ -16,7 +16,8 @@ src/
     notifications.ts
     haptics.ts
     ratingService.ts
-    revenuecat.ts    ← add when wiring the paywall
+    auth/            ← the AuthProvider port (types, local, index) + adapters
+    paywall/         ← the PaywallProvider port (types, local, index) + adapters
   store/             ← Zustand stores that consume services
     useAuthStore.ts
     usePaywallStore.ts
@@ -24,7 +25,7 @@ src/
     storage.ts       ← AsyncStorage helpers; ALWAYS use these
 ```
 
-Everything above `revenuecat.ts` exists today; anything else you need, create. Do not put SDK initialization in screens or `_layout.tsx`.
+All of the above exists today; anything else you need, create. Do not put SDK initialization in screens or `_layout.tsx`.
 
 ## The three layers
 
@@ -203,8 +204,10 @@ Two incompatible paths — pick deliberately, and see the recipe for the full co
 - Adding any RNFirebase module means a config plugin → see the native-module callout above. Surface it; never add one silently.
 
 ### RevenueCat
-- See existing placeholder calls in [app/paywall.tsx](../../../app/paywall.tsx) and [src/store/usePaywallStore.ts](../../../src/store/usePaywallStore.ts) — replace those instead of duplicating.
-- `Purchases.configure(...)` only once, at app startup (in a top-level `useEffect`, not on every store hydration).
+- **Do not wire `Purchases.*` into `usePaywallStore` or `app/paywall.tsx`.** The paywall sits behind the `PaywallProvider` port in `src/services/paywall/`, installed opt-in by `bash scripts/add-paywall.sh revenuecat`. Wiring the SDK into the store would put a native IAP dependency into every generated app, including the ones that never monetize.
+- `Purchases.configure(...)` goes at **module scope** in the adapter, not in a `useEffect`. Same reasoning as the `AppState` listener in `templates/backends/supabase/supabase.ts`: a component-level registration re-runs on every mount and every Fast Refresh. (This line previously said the opposite — it was wrong.)
+- Adapter code stays thin: no branch that isn't a null check on an SDK return value. Entitlement→tier mapping, package selection and error-code mapping all live in `src/services/paywall/`, because `templates/` gets no tsc, eslint or jest.
+- Read the port contract before touching it — `getSubscription()` must never throw and never downgrade on doubt (the *inverse* of `AuthProvider.getSession()`), and `restore()` finding nothing is a success. Full guide: `docs/paywall/revenuecat.md`.
 
 ### PostHog
 - Initialize at app root with `PostHogProvider`.

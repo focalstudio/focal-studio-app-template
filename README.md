@@ -132,6 +132,7 @@ scripts/
 | `npm run bump-version` | Bump version in package.json + app.json + constants.ts |
 | `bash scripts/add-backend.sh supabase` | Wire Supabase auth (or `firebase`) — see [Backend](#backend) |
 | `bash scripts/add-social-auth.sh` | Add Apple + Google sign-in to a Supabase or Firebase app (adds native code) |
+| `bash scripts/add-paywall.sh revenuecat` | Wire in-app purchases — see [Paywall](#paywall) (adds native code) |
 
 ---
 
@@ -168,6 +169,39 @@ Don't edit `useAuthStore` or the `(auth)` screens — they're provider-agnostic.
 
 ---
 
+## Paywall
+
+Same shape as the backend, and orthogonal to it: the template ships with **no paywall
+provider and no in-app-purchase dependency**, so an app that never monetizes carries no
+native IAP module, no extra EAS rebuild, and no store key at boot.
+
+`app/paywall.tsx` renders and is fully designable out of the box; prices show `—` and any
+purchase attempt throws `not_wired`.
+
+```bash
+bash scripts/add-paywall.sh revenuecat
+```
+
+**This adds native code.** Purchases do not work in Expo Go — RevenueCat falls back to its
+Preview API Mode there, which returns stub offerings and cannot complete a purchase. Build a
+dev client (`npx expo prebuild && npx expo run:ios`) before testing.
+
+Once wired, the paywall renders **store-localized prices and trial copy** fetched through the
+port, so no price is ever hardcoded in the app — a literal `$4.99` is wrong in every non-USD
+storefront and wrong the day you change it in App Store Connect (App Store guideline 3.1.2).
+
+| Provider | Guide | Notes |
+|---|---|---|
+| RevenueCat | [docs/paywall/revenuecat.md](docs/paywall/revenuecat.md) | No config plugin — autolinked, nothing to add to `app.json`. Ships contract tests that verify the entitlement→tier mapping against the real SDK enum. |
+
+**Writing your own?** Implement the `PaywallProvider` port in
+[`src/services/paywall/types.ts`](src/services/paywall/types.ts) and change one export line.
+Don't edit `usePaywallStore` or `app/paywall.tsx` — they're provider-agnostic. Read the
+contract first: `getSubscription()` must never throw and never downgrade on doubt, and
+`restore()` finding nothing is a success rather than an error.
+
+---
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in the values:
@@ -183,6 +217,8 @@ cp .env.example .env.local
 | `EXPO_PUBLIC_SUPABASE_URL` | Only if using Supabase | Project URL from the Supabase dashboard |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only if using Supabase | Publishable key (`sb_publishable_…`; older docs call it the anon key) |
 | `EXPO_PUBLIC_FIREBASE_*` | Only if using the Firebase JS SDK | API key, auth domain, project ID, app ID — see `.env.example` |
+| `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` | Only if using RevenueCat | Public Apple SDK key (`appl_…`, not the secret API key) |
+| `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY` | No | Public Google SDK key (`goog_…`) — only needed for a Play build |
 | `EXPO_PUBLIC_DEV_BYPASS_EMAIL` | No | Dev sign-in bypass account — **never set in production** |
 | `EXPO_PUBLIC_DEV_BYPASS_PASSWORD` | No | Password for that account — **never set in production** |
 

@@ -1,15 +1,6 @@
-import { STORAGE_PREFIX } from "../../constants";
-import { loadJson, saveJson, removeItem } from "../../utils/storage";
-import { PaywallError, FREE_SUBSCRIPTION, storedSubscriptionSchema } from "./types";
+import { PaywallError, FREE_SUBSCRIPTION } from "./types";
+import { loadCachedSubscription, cacheSubscription, clearCachedSubscription } from "./cache";
 import type { PaywallProvider, PaywallSubscription } from "./types";
-
-/**
- * Unchanged from the pre-port store, deliberately: a device that already holds a
- * `{ tier: "annual" }` blob under this key must read back as annual, not as
- * free. `storedSubscriptionSchema`'s per-field `.catch()` is what completes the
- * older shape into a full subscription.
- */
-const SUBSCRIPTION_KEY = `${STORAGE_PREFIX}subscription`;
 
 function notWired(action: string): PaywallError {
   return new PaywallError(
@@ -39,7 +30,7 @@ export const localPaywallProvider: PaywallProvider = {
    * rules of the port contract are satisfied trivially here.
    */
   async getSubscription(): Promise<PaywallSubscription> {
-    return loadJson(SUBSCRIPTION_KEY, FREE_SUBSCRIPTION, storedSubscriptionSchema);
+    return loadCachedSubscription();
   },
 
   /**
@@ -83,10 +74,10 @@ export const localPaywallProvider: PaywallProvider = {
 export async function seedLocalSubscription(
   subscription: PaywallSubscription = { ...FREE_SUBSCRIPTION, tier: "annual" }
 ): Promise<void> {
-  await saveJson(SUBSCRIPTION_KEY, subscription);
+  await cacheSubscription(subscription);
 }
 
 /** Companion to `seedLocalSubscription`, so a test can return to a clean slate. */
 export async function clearLocalSubscription(): Promise<void> {
-  await removeItem(SUBSCRIPTION_KEY);
+  await clearCachedSubscription();
 }
