@@ -65,8 +65,22 @@ const initialState = usePaywallStore.getState();
 const teardowns: (() => void)[] = [];
 function startInit(): () => void {
   const stop = usePaywallStore.getState().init();
-  teardowns.push(stop);
-  return stop;
+
+  // One-shot: a test that tears down explicitly (and one below does, to assert
+  // cleanup works) would otherwise have `afterEach` unsubscribe a second time.
+  // Zustand tolerates that today, but the teardown also calls a *provider's*
+  // unsubscribe, and the port never promised idempotence — so a fake whose
+  // unsubscribe counts calls, or a real adapter that throws on a double
+  // removal, would fail here for a reason that has nothing to do with the test.
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    stop();
+  };
+
+  teardowns.push(once);
+  return once;
 }
 
 beforeEach(() => {

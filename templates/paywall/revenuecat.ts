@@ -17,7 +17,7 @@
  */
 
 import { Platform } from "react-native";
-import Purchases from "react-native-purchases";
+import Purchases, { PURCHASES_ERROR_CODE } from "react-native-purchases";
 import type { CustomerInfo, PurchasesEntitlementInfo } from "react-native-purchases";
 
 import { requireEnv } from "../../env";
@@ -213,11 +213,18 @@ export const revenuecatPaywallProvider: PaywallProvider = {
     try {
       await applyCustomerInfo(await Purchases.logOut());
     } catch (err) {
-      const mapped = toPaywallError(err, "Could not unlink your purchases.");
-      // LOG_OUT_ANONYMOUS_USER_ERROR: already anonymous, so the postcondition
-      // this method exists to establish is already true. Not a failure.
-      if (String((err as { code?: unknown })?.code) === "22") return;
-      throw mapped;
+      // Already anonymous, so the postcondition this method exists to establish
+      // is already true — not a failure. Surfacing it would break sign-out for
+      // anyone who never signed in.
+      //
+      // Compared against the SDK's own enum rather than the literal "22": this
+      // is the adapter, so it may import the SDK, and `errors.ts` cannot (it
+      // lives in src/ for CI coverage, where the SDK is not a dependency). A
+      // hardcoded numeral here would be the one copy that drifts silently.
+      const code = (err as { code?: unknown })?.code;
+      if (String(code) === String(PURCHASES_ERROR_CODE.LOG_OUT_ANONYMOUS_USER_ERROR)) return;
+
+      throw toPaywallError(err, "Could not unlink your purchases.");
     }
   },
 };

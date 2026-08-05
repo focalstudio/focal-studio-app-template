@@ -191,6 +191,10 @@ jest.mock(
     },
     LOG_LEVEL: { DEBUG: "DEBUG", INFO: "INFO", WARN: "WARN", ERROR: "ERROR" },
     PACKAGE_TYPE: { MONTHLY: "MONTHLY", ANNUAL: "ANNUAL", LIFETIME: "LIFETIME" },
+    // The adapter reads this at module scope, so it has to exist here even
+    // though only `revenuecat.test.ts` (which replaces this factory with one
+    // spreading `requireActual`) asserts against the real values.
+    PURCHASES_ERROR_CODE: { LOG_OUT_ANONYMOUS_USER_ERROR: "22" },
   }),
   { virtual: true }
 );
