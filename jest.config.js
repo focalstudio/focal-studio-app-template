@@ -14,15 +14,27 @@ const preset = require("jest-expo/jest-preset");
  * Packages that ship untranspiled ESM and so must be transformed rather than
  * ignored.
  *
- * `firebase` / `@firebase` are NOT dependencies of the template as shipped —
- * `scripts/add-backend.sh firebase` installs them. They are listed
- * unconditionally anyway: the pattern simply never matches when the package is
- * absent, and the alternative is `add-backend.sh` patching Jest config, which
- * is far worse. Without this, every suite whose import graph reaches
+ * None of these are dependencies of the template as shipped — the `add-*.sh`
+ * scripts install them. They are listed unconditionally anyway: the pattern
+ * simply never matches when the package is absent, and the alternative is a
+ * shell script patching Jest config, which is far worse.
+ *
+ * `firebase` / `@firebase`: without this, every suite whose import graph reaches
  * `src/services/auth/index.ts` dies at parse time with "Cannot use import
  * statement outside a module" the moment the Firebase backend is wired (#100).
+ *
+ * `react-native-purchases` / `@revenuecat`: needed for exactly ONE suite, and
+ * the reason is worth stating because it looks redundant. `jest.setup.js` mocks
+ * `react-native-purchases` virtually, which short-circuits module resolution —
+ * so no ordinary suite ever loads the real package or its dependencies. But
+ * `templates/paywall/revenuecat.test.ts` deliberately calls
+ * `jest.requireActual("react-native-purchases")` to read the real
+ * `PURCHASES_ERROR_CODE` enum, which is the only way to prove
+ * `src/services/paywall/errors.ts`'s table has not drifted from it. That
+ * `requireActual` pulls in `@revenuecat/purchases-js-hybrid-mappings`, which
+ * ships untranspiled modern syntax and fails to parse without this.
  */
-const ESM_PACKAGES = ["firebase", "@firebase"];
+const ESM_PACKAGES = ["firebase", "@firebase", "react-native-purchases", "@revenuecat"];
 
 /**
  * jest-expo expresses its allowlist as a single negative lookahead —

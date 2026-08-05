@@ -211,9 +211,12 @@ Before shipping, run the **Data safety checklist** in `.claude/reference/store-s
 verify `deleteAccount()` genuinely deletes the remote account and throws when it cannot.
 
 Paywall:
-- Install [RevenueCat](https://www.revenuecat.com/docs/getting-started/installation/react-native): `npx expo install react-native-purchases`
-- Follow the RevenueCat Expo guide to configure your offerings.
-- Replace the placeholder in `app/paywall.tsx` and `src/store/usePaywallStore.ts`.
+- Run `bash scripts/add-paywall.sh revenuecat` — it installs the SDK, drops the adapter behind
+  the `PaywallProvider` port, and prints the RevenueCat dashboard steps.
+- Do **not** wire `Purchases.*` into `usePaywallStore` or `app/paywall.tsx`; both are
+  provider-agnostic and need no changes.
+- Adds native code, so purchases need a dev client rather than Expo Go.
+- Full guide: [docs/paywall/revenuecat.md](docs/paywall/revenuecat.md).
 
 ---
 

@@ -5,7 +5,7 @@ import {
   clearLocalSubscription,
 } from "../local";
 import { FREE_SUBSCRIPTION, PaywallError } from "../types";
-import { STORAGE_PREFIX } from "../../../constants";
+import { SUBSCRIPTION_KEY } from "../cache";
 import type { PaywallSubscription } from "../types";
 
 /**
@@ -18,8 +18,6 @@ import type { PaywallSubscription } from "../types";
  * Importing the module directly also keeps this suite free of an adapter's
  * native imports, which cannot load under Jest.
  */
-
-const SUBSCRIPTION_KEY = `${STORAGE_PREFIX}subscription`;
 
 const paid: PaywallSubscription = {
   tier: "annual",

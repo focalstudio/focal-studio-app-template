@@ -21,11 +21,15 @@ export type AppEnv = {
   EXPO_PUBLIC_FIREBASE_PROJECT_ID?: string;
   EXPO_PUBLIC_FIREBASE_APP_ID?: string;
   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?: string;
+  EXPO_PUBLIC_REVENUECAT_IOS_API_KEY?: string;
+  EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY?: string;
   EXPO_PUBLIC_DEV_BYPASS_EMAIL?: string;
   EXPO_PUBLIC_DEV_BYPASS_PASSWORD?: string;
 };
 
 export type Backend = "none" | "supabase" | "firebase";
+
+export type Paywall = "none" | "revenuecat";
 
 /**
  * Jest and any other non-Expo runtime have no manifest, so fall back to
@@ -47,6 +51,8 @@ function readEnv(): AppEnv {
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
     EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
     EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
+    EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
     // EXPO_PUBLIC_DEV_BYPASS_* is deliberately absent, and must stay absent.
     // Babel inlines every `process.env.EXPO_PUBLIC_*` expression it sees into
     // the bundle at build time, so listing the bypass password here would bake
@@ -60,6 +66,10 @@ export const env: AppEnv = readEnv();
 /** Which backend `scripts/add-backend.sh` wired in, if any. */
 export const backend: Backend =
   (Constants.expoConfig?.extra?.backend as Backend | undefined) ?? "none";
+
+/** Which paywall provider `scripts/add-paywall.sh` wired in, if any. */
+export const paywall: Paywall =
+  (Constants.expoConfig?.extra?.paywall as Paywall | undefined) ?? "none";
 
 /**
  * The branch this build was cut from, baked into the manifest by

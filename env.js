@@ -19,6 +19,20 @@ const { z } = require("zod");
  */
 const BACKEND = "none";
 
+/**
+ * Whether this app has a paywall provider wired. `scripts/add-paywall.sh`
+ * rewrites this line.
+ *
+ * Deliberately its own constant rather than another value of BACKEND: the two
+ * are orthogonal. A Firebase app can sell subscriptions, so can an app with no
+ * backend at all, and a Supabase app may never monetize. Separate constants also
+ * mean the two scripts' regexes cannot clobber one another — the smoke-test
+ * workflow asserts exactly that.
+ *
+ * @type {"none" | "revenuecat"}
+ */
+const PAYWALL = "none";
+
 const schema = z
   .object({
     // Analytics — optional by design. Empty disables PostHog entirely.
@@ -53,6 +67,19 @@ const schema = z
       )
       .optional(),
 
+    // RevenueCat. The prefixes are load-bearing: swapping the Apple and Google
+    // keys is the classic RevenueCat mistake, and at runtime it surfaces as an
+    // opaque "invalid credentials" with nothing pointing at the cause. Catching
+    // it at build time costs one regex.
+    EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: z
+      .string()
+      .regex(/^appl_/, 'must start with "appl_" — this is the Apple key, not the Google one')
+      .optional(),
+    EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: z
+      .string()
+      .regex(/^goog_/, 'must start with "goog_" — this is the Google key, not the Apple one')
+      .optional(),
+
     // Dev-only sign-in bypass credentials — see
     // src/components/dev/DevBypassSignInButton.tsx. A throwaway test account,
     // never a real user's. Never set these for a production EAS environment
@@ -63,25 +90,36 @@ const schema = z
     EXPO_PUBLIC_DEV_BYPASS_PASSWORD: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
-    const require = (key) => {
+    const require = (key, reason) => {
       if (!env[key]) {
         ctx.addIssue({
           code: "custom",
           path: [key],
-          message: `${key} is required because this app uses the "${BACKEND}" backend.`,
+          message: `${key} is required because ${reason}.`,
         });
       }
     };
+    const requireForBackend = (key) =>
+      require(key, `this app uses the "${BACKEND}" backend`);
 
     if (BACKEND === "supabase") {
-      require("EXPO_PUBLIC_SUPABASE_URL");
-      require("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+      requireForBackend("EXPO_PUBLIC_SUPABASE_URL");
+      requireForBackend("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
     }
 
     if (BACKEND === "firebase") {
-      require("EXPO_PUBLIC_FIREBASE_API_KEY");
-      require("EXPO_PUBLIC_FIREBASE_PROJECT_ID");
-      require("EXPO_PUBLIC_FIREBASE_APP_ID");
+      requireForBackend("EXPO_PUBLIC_FIREBASE_API_KEY");
+      requireForBackend("EXPO_PUBLIC_FIREBASE_PROJECT_ID");
+      requireForBackend("EXPO_PUBLIC_FIREBASE_APP_ID");
+    }
+
+    // Only the Apple key is required. The Google one stays optional and
+    // `revenuecat.ts` calls requireEnv() at the point of use — the same
+    // reasoning EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID carries above. This template is
+    // iOS-first and Android is opt-in via android-release.yml, so requiring a
+    // Play key would fail the build of every iOS-only app that adds a paywall.
+    if (PAYWALL === "revenuecat") {
+      require("EXPO_PUBLIC_REVENUECAT_IOS_API_KEY", 'this app uses the "revenuecat" paywall');
     }
 
     // A half-configured pair is the common failure: one variable gets copied,
@@ -120,8 +158,9 @@ if (!parsed.success) {
   throw new Error(
     `\n❌ Invalid environment variables:\n\n${details}\n\n` +
       `Copy .env.example to .env.local and fill in the values.\n` +
-      `Backend currently selected in env.js: "${BACKEND}".\n`
+      `Backend currently selected in env.js: "${BACKEND}".\n` +
+      `Paywall currently selected in env.js: "${PAYWALL}".\n`
   );
 }
 
-module.exports = { env: parsed.data, BACKEND };
+module.exports = { env: parsed.data, BACKEND, PAYWALL };
