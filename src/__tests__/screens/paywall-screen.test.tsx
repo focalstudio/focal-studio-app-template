@@ -186,9 +186,15 @@ describe("PaywallScreen — a provider with an offering", () => {
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
-  // A dismissed sheet is swallowed by the store, so the screen simply closes —
-  // no alert for a tap the user took back.
-  it("shows no alert when the user cancels", async () => {
+  /*
+   * A dismissed sheet raises no alert — and must not close the paywall either.
+   *
+   * This test previously asserted only the alert, which is why the navigation
+   * bug shipped: the store swallowed the cancellation, `purchase()` resolved,
+   * and `router.back()` ran regardless. Someone who changed their mind in the
+   * StoreKit sheet was returned to the app as though they had bought.
+   */
+  it("neither alerts nor navigates when the user cancels", async () => {
     provider.purchase.mockRejectedValue(new PaywallError("cancelled", "dismissed"));
     renderRouter({ index: PaywallScreen }, { initialUrl: "/" });
 
@@ -197,6 +203,8 @@ describe("PaywallScreen — a provider with an offering", () => {
 
     await waitFor(() => expect(provider.purchase).toHaveBeenCalled());
     expect(alertSpy).not.toHaveBeenCalled();
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(usePaywallStore.getState().isPro).toBe(false);
   });
 
   /*

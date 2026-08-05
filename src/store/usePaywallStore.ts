@@ -21,7 +21,8 @@ type PaywallState = {
   hydrate: () => Promise<void>;
   init: () => () => void;
   loadOffering: () => Promise<void>;
-  purchase: (tier: SubscriptionTier) => Promise<void>;
+  /** Resolves false when the user dismissed the sheet — a non-event, not a failure. */
+  purchase: (tier: SubscriptionTier) => Promise<boolean>;
   /** Resolves false when there was nothing to restore — a success, not a failure. */
   restore: () => Promise<boolean>;
 };
@@ -144,6 +145,16 @@ export const usePaywallStore = create<PaywallState>((set) => ({
     }
   },
 
+  /**
+   * Resolves **true** when the store granted something, **false** when the user
+   * dismissed the sheet.
+   *
+   * The boolean matters. Swallowing a cancellation keeps the red alert away from
+   * a tap the user took back, but a caller that cannot tell the difference
+   * treats the dismissal as a completed purchase — which closed the paywall on
+   * anyone who changed their mind. Same shape as `restore()` for the same
+   * reason: "nothing happened" is an outcome, not an error.
+   */
   purchase: async (tier) => {
     set({ isSubmitting: true });
     try {
@@ -152,10 +163,12 @@ export const usePaywallStore = create<PaywallState>((set) => ({
       // The tier the STORE granted, not the button that was pressed — a user can
       // be upgraded, or land on a different plan than the card they tapped.
       Analytics.subscriptionStarted(next.tier);
+      return true;
     } catch (err) {
       // `payment_pending` is deliberately NOT swallowed: it propagates so the
       // screen can show its own "we'll unlock this when approved" copy.
       if (!isCancellation(err)) throw err;
+      return false;
     } finally {
       set({ isSubmitting: false });
     }

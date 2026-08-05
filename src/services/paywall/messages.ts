@@ -35,10 +35,12 @@ export function paywallErrorMessage(err: unknown): string {
       case "store_problem":
         return "The App Store is having trouble right now. Please try again in a few minutes.";
       // A developer-facing state that a user can still land on if the app ships
-      // misconfigured, so it needs copy that isn't a lie. It deliberately does
-      // not say "try again" — retrying a missing offering never works.
+      // misconfigured, so it needs copy that isn't a lie. Deliberately no
+      // invitation to retry: a missing entitlement or offering is fixed in a
+      // dashboard, never by tapping again, and "try again later" would send the
+      // user into a loop that cannot succeed.
       case "not_configured":
-        return "Purchases aren't available right now. Please try again later.";
+        return "Purchases aren't available in this app right now.";
       case "unknown":
         return "Something went wrong. Please try again.";
     }
