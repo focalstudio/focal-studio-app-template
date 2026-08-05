@@ -9,6 +9,50 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **`PaywallProvider` port in `src/services/paywall/` (#112)** — the paywall now sits behind the same
+  port/adapter shape as `src/services/auth/`: `types.ts` declares the contract, `local.ts` is the
+  committed default, and `index.ts` holds the single assignment a future `scripts/add-paywall.sh`
+  rewrites. Nothing new is installed — a generated app that never monetizes still carries no in-app
+  purchase dependency, no native rebuild, and no store key at boot. The contract states the two
+  semantics that get quietly wrong: `getSubscription()` must **never throw and never downgrade on
+  doubt** (the inverse of `AuthProvider.getSession()`, because the failure mode here is revoking
+  access someone paid for, not trusting an unverified session), and `restore()` resolving "nothing
+  found" is a **success**, not an error — while it must still throw when offline, since silently
+  telling a paying user they own nothing is the worst outcome of a Restore button.
+- **`payment_pending` as a first-class state** — Ask-to-Buy, SCA and slow Play payment methods are
+  neither success nor failure. The purchase sheet dismisses, nothing is granted, the copy does not
+  apologise, and the entitlement arrives later through the provider's subscription. `app/_layout.tsx`
+  now opens that subscription via `usePaywallStore.init()`, which is the only path by which an
+  approved deferred purchase can ever reach the app.
+- **Pure, CI-covered mapping logic** — `entitlement.ts` (entitlement → tier), `offerings.ts`
+  (package selection and ISO-8601 intro-offer copy), `errors.ts` (provider codes → `PaywallErrorCode`)
+  and `messages.ts` live under `src/services/` rather than in a future `templates/` directory, so tsc,
+  eslint and jest all see them — the same rule that pulled `oauthCallback.ts` and `appleName.ts` out
+  of `templates/social/`. `resolveTier` carries one invariant with a test per input class: an active
+  entitlement never resolves to `free`.
+
+### Changed
+- **`app/paywall.tsx` renders store-localized prices** — the hardcoded `$4.99` / `$29.99` / `$79.99`
+  are gone. A literal USD price is wrong in every non-USD storefront and wrong the day it changes in
+  App Store Connect, which is an App Store Guideline 3.1.2 problem the template shipped by default.
+  With no provider wired the cards show `—` placeholders and stay fully designable. `handleSubscribe`
+  and `handleRestore` no longer throw or `TODO` — they go through the store, so the paywall buttons
+  are exercised by tests for the first time.
+
+### Breaking
+- **`usePaywallStore.setSubscription()` has been removed.** It was a public, synchronous method that
+  granted Pro with no payment and persisted it — the entitlement twin of the fake-signup scaffold this
+  repo already deleted from auth, and safe until now only because `app/paywall.tsx` threw before
+  reaching it. Use `purchase(tier)`, which goes through the port. For tests and dev builds,
+  `seedLocalSubscription()` in `src/services/paywall/local.ts` is the replacement seam (not exported
+  from the barrel, and inert once a real provider is wired). `isPro` and `tier` are unchanged, so no
+  screen that only reads entitlement state needs touching.
+- **`storedSubscriptionSchema` moved** from `src/types/schemas.ts` to `src/services/paywall/types.ts`
+  — it is paywall-domain, the same reasoning `authSessionSchema` gives. `subscriptionTierSchema` stays
+  where it was. A device holding the old bare `{ tier }` blob still reads back correctly: every field
+  in the new schema carries its own `.catch()`, so the update does not downgrade a paying user.
+
 ---
 
 ## [0.11.0] — 2026-08-04

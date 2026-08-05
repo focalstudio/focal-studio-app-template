@@ -35,6 +35,11 @@ export default function RootLayout() {
   // becomes this effect's cleanup — see "Cleanup contracts" in expo-services.
   useEffect(() => useAuthStore.getState().init(), []);
 
+  // Same contract for entitlements: renewals, expiries, a purchase made on
+  // another device, and — the one with no other path back into the app — a
+  // deferred (Ask-to-Buy) purchase finally being approved.
+  useEffect(() => usePaywallStore.getState().init(), []);
+
   // Feeds app-state changes to React Query, which otherwise waits on browser
   // window focus events that never fire on native.
   useEffect(() => initQueryFocusBridge(), []);

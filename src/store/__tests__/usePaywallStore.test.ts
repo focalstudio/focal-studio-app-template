@@ -1,76 +1,270 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePaywallStore } from "../usePaywallStore";
-import { STORAGE_PREFIX } from "../../constants";
+import { paywallProvider, PaywallError, FREE_SUBSCRIPTION } from "../../services/paywall";
+import { Analytics } from "../../services/analytics";
+import type { PaywallSubscription, PaywallOffering } from "../../services/paywall";
 
-const PAYWALL_KEY = `${STORAGE_PREFIX}subscription`;
+/**
+ * Faked at the PORT, never at an SDK — `docs/testing.md`, "Two levels of
+ * mocking". The store's job is to translate port answers into UI state, so the
+ * port is exactly the seam to control.
+ *
+ * These used to reach the real scaffold through storage. That only held while
+ * the template had no provider: once `scripts/add-paywall.sh` swaps the barrel's
+ * export, the store talks to RevenueCat and every storage assertion would have
+ * become false. `services/paywall/__tests__/local.test.ts` covers the scaffold.
+ */
+jest.mock("../../services/paywall", () => {
+  const actual = jest.requireActual("../../services/paywall");
+  return {
+    ...actual,
+    paywallProvider: {
+      name: "fake",
+      getSubscription: jest.fn(),
+      getOfferings: jest.fn(),
+      purchase: jest.fn(),
+      restore: jest.fn(),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  };
+});
+
+const provider = jest.mocked(paywallProvider);
+
+const paid: PaywallSubscription = {
+  tier: "annual",
+  expiresAt: 1_800_000_000,
+  willRenew: true,
+  isTrial: false,
+  productId: "com.example.app.pro.annual",
+};
+
+const offering: PaywallOffering = {
+  id: "default",
+  packages: [
+    {
+      id: "$rc_annual",
+      tier: "annual",
+      priceString: "$29.99",
+      price: 29.99,
+      currencyCode: "USD",
+      introOffer: "7 days free",
+    },
+  ],
+};
 
 const initialState = usePaywallStore.getState();
 
-beforeEach(async () => {
-  await AsyncStorage.clear();
+beforeEach(() => {
+  jest.clearAllMocks();
   usePaywallStore.setState(initialState, true);
+  provider.getSubscription.mockResolvedValue(FREE_SUBSCRIPTION);
+  provider.getOfferings.mockResolvedValue(null);
+  provider.subscribe.mockReturnValue(jest.fn());
 });
 
-describe("usePaywallStore", () => {
-  it("setSubscription('free') results in isPro false", () => {
-    usePaywallStore.getState().setSubscription("free");
-    expect(usePaywallStore.getState().isPro).toBe(false);
-    expect(usePaywallStore.getState().tier).toBe("free");
-  });
-
-  it.each(["monthly", "annual", "lifetime"] as const)(
-    "setSubscription('%s') results in isPro true",
-    (tier) => {
-      usePaywallStore.getState().setSubscription(tier);
-      expect(usePaywallStore.getState().isPro).toBe(true);
-      expect(usePaywallStore.getState().tier).toBe(tier);
-    }
-  );
-
-  it("hydrate restores a valid persisted tier and derives isPro", async () => {
-    await AsyncStorage.setItem(PAYWALL_KEY, JSON.stringify({ tier: "annual" }));
+describe("hydrate", () => {
+  it("derives isPro and tier from the port's answer", async () => {
+    provider.getSubscription.mockResolvedValue(paid);
     await usePaywallStore.getState().hydrate();
+
     const state = usePaywallStore.getState();
     expect(state.tier).toBe("annual");
     expect(state.isPro).toBe(true);
+    expect(state.subscription).toEqual(paid);
     expect(state.isLoading).toBe(false);
   });
 
-  const invalidTiers: [string, unknown][] = [
-    ["an unknown string", "pro"],
-    ["null", null],
-    ["a number", 1],
-  ];
+  it("leaves isPro false for the free subscription", async () => {
+    await usePaywallStore.getState().hydrate();
+    const state = usePaywallStore.getState();
+    expect(state.isPro).toBe(false);
+    expect(state.tier).toBe("free");
+    expect(state.isLoading).toBe(false);
+  });
 
-  it.each(invalidTiers)(
-    "hydrate falls back to free (and isPro false) for invalid tier (%s)",
-    async (_desc, rawTier) => {
-      await AsyncStorage.setItem(PAYWALL_KEY, JSON.stringify({ tier: rawTier }));
-      await usePaywallStore.getState().hydrate();
-      const state = usePaywallStore.getState();
-      expect(state.tier).toBe("free");
-      expect(state.isPro).toBe(false);
-      expect(state.isLoading).toBe(false);
+  it.each(["monthly", "annual", "lifetime"] as const)("treats %s as entitled", async (tier) => {
+    provider.getSubscription.mockResolvedValue({ ...FREE_SUBSCRIPTION, tier });
+    await usePaywallStore.getState().hydrate();
+    expect(usePaywallStore.getState().isPro).toBe(true);
+    expect(usePaywallStore.getState().tier).toBe(tier);
+  });
+
+  /*
+   * The port contract says getSubscription() never throws. If a custom provider
+   * breaks it, hydrate must still clear isLoading — a throw escaping here would
+   * leave the user behind a splash screen that never lifts. That is the same
+   * class of bug the previous suite's "persisted null container" regression
+   * guarded, now expressed at the port.
+   */
+  it("clears isLoading even if a provider violates the contract and throws", async () => {
+    provider.getSubscription.mockRejectedValue(new Error("provider bug"));
+    await expect(usePaywallStore.getState().hydrate()).resolves.toBeUndefined();
+    expect(usePaywallStore.getState().isLoading).toBe(false);
+  });
+
+  // Never downgrade on doubt: a thrown read must not actively clear an
+  // entitlement the store already knows about.
+  it("does not downgrade an existing entitlement when a provider throws", async () => {
+    provider.getSubscription.mockResolvedValue(paid);
+    await usePaywallStore.getState().hydrate();
+
+    provider.getSubscription.mockRejectedValue(new Error("provider bug"));
+    await usePaywallStore.getState().hydrate();
+
+    expect(usePaywallStore.getState().isPro).toBe(true);
+    expect(usePaywallStore.getState().tier).toBe("annual");
+  });
+});
+
+describe("init", () => {
+  it("returns the provider's unsubscribe", () => {
+    const unsubscribe = jest.fn();
+    provider.subscribe.mockReturnValue(unsubscribe);
+    expect(usePaywallStore.getState().init()).toBe(unsubscribe);
+  });
+
+  /*
+   * The out-of-band path. A deferred (Ask-to-Buy) purchase being approved has no
+   * other route back into the app — without this the user is charged and never
+   * unlocked.
+   */
+  it("applies an entitlement delivered out of band", () => {
+    usePaywallStore.getState().init();
+    const onChange = provider.subscribe.mock.calls[0][0];
+
+    onChange(paid);
+
+    expect(usePaywallStore.getState().isPro).toBe(true);
+    expect(usePaywallStore.getState().tier).toBe("annual");
+  });
+
+  it("applies an expiry delivered out of band", () => {
+    usePaywallStore.setState({ ...usePaywallStore.getState(), subscription: paid, tier: "annual", isPro: true });
+    usePaywallStore.getState().init();
+
+    provider.subscribe.mock.calls[0][0](FREE_SUBSCRIPTION);
+
+    expect(usePaywallStore.getState().isPro).toBe(false);
+    expect(usePaywallStore.getState().tier).toBe("free");
+  });
+});
+
+describe("loadOffering", () => {
+  it("stores the offering and clears its loading flag", async () => {
+    provider.getOfferings.mockResolvedValue(offering);
+    await usePaywallStore.getState().loadOffering();
+
+    expect(usePaywallStore.getState().offering).toEqual(offering);
+    expect(usePaywallStore.getState().isLoadingOffering).toBe(false);
+  });
+
+  // A screen whose job is to sell something should show placeholder copy, not an
+  // error, when prices cannot be fetched.
+  it("leaves the offering null and clears the flag when the fetch fails", async () => {
+    provider.getOfferings.mockRejectedValue(new PaywallError("network", "offline"));
+    await expect(usePaywallStore.getState().loadOffering()).resolves.toBeUndefined();
+
+    expect(usePaywallStore.getState().offering).toBeNull();
+    expect(usePaywallStore.getState().isLoadingOffering).toBe(false);
+  });
+});
+
+describe("purchase", () => {
+  it("applies the subscription the store granted", async () => {
+    provider.purchase.mockResolvedValue(paid);
+    await usePaywallStore.getState().purchase("annual");
+
+    expect(provider.purchase).toHaveBeenCalledWith("annual");
+    expect(usePaywallStore.getState().isPro).toBe(true);
+    expect(usePaywallStore.getState().isSubmitting).toBe(false);
+  });
+
+  /*
+   * The store wins over the button. A user can be upgraded, or land on a
+   * different plan than the card they tapped — reporting the requested tier
+   * would quietly corrupt revenue analytics.
+   */
+  it("reports the granted tier to analytics, not the requested one", async () => {
+    const spy = jest.spyOn(Analytics, "subscriptionStarted").mockImplementation(() => {});
+    provider.purchase.mockResolvedValue({ ...paid, tier: "lifetime" });
+
+    await usePaywallStore.getState().purchase("monthly");
+
+    expect(spy).toHaveBeenCalledWith("lifetime");
+    spy.mockRestore();
+  });
+
+  // Nobody sees a red error for a tap they took back.
+  it("swallows a cancellation and grants nothing", async () => {
+    provider.purchase.mockRejectedValue(new PaywallError("cancelled", "dismissed"));
+    await expect(usePaywallStore.getState().purchase("annual")).resolves.toBeUndefined();
+
+    expect(usePaywallStore.getState().isPro).toBe(false);
+    expect(usePaywallStore.getState().isSubmitting).toBe(false);
+  });
+
+  /*
+   * payment_pending must NOT be swallowed: the screen needs it to show its own
+   * "we'll unlock this when approved" copy. And it must grant nothing — the
+   * entitlement arrives later through subscribe().
+   */
+  it("propagates payment_pending without granting entitlement", async () => {
+    provider.purchase.mockRejectedValue(new PaywallError("payment_pending", "awaiting approval"));
+    await expect(usePaywallStore.getState().purchase("annual")).rejects.toMatchObject({
+      code: "payment_pending",
+    });
+
+    expect(usePaywallStore.getState().isPro).toBe(false);
+    expect(usePaywallStore.getState().isSubmitting).toBe(false);
+  });
+
+  it.each(["already_owned", "network", "store_problem", "not_configured", "unknown"] as const)(
+    "propagates %s and resets isSubmitting",
+    async (code) => {
+      provider.purchase.mockRejectedValue(new PaywallError(code, "nope"));
+      await expect(usePaywallStore.getState().purchase("annual")).rejects.toMatchObject({ code });
+      expect(usePaywallStore.getState().isSubmitting).toBe(false);
     }
   );
 
-  // Regression: the allow-list check this replaced read `data.tier` off whatever
-  // came back, so a literal `null` threw out of hydrate() — and because the throw
-  // escaped, isLoading stayed true forever behind a stuck spinner.
-  it("hydrate survives a persisted null container and clears isLoading", async () => {
-    await AsyncStorage.setItem(PAYWALL_KEY, "null");
-    await expect(usePaywallStore.getState().hydrate()).resolves.toBeUndefined();
-    const state = usePaywallStore.getState();
-    expect(state.tier).toBe("free");
-    expect(state.isPro).toBe(false);
-    expect(state.isLoading).toBe(false);
+  it("sets isSubmitting while in flight", async () => {
+    let resolvePurchase: (s: PaywallSubscription) => void = () => {};
+    provider.purchase.mockReturnValue(
+      new Promise<PaywallSubscription>((resolve) => {
+        resolvePurchase = resolve;
+      })
+    );
+
+    const pending = usePaywallStore.getState().purchase("annual");
+    expect(usePaywallStore.getState().isSubmitting).toBe(true);
+
+    resolvePurchase(paid);
+    await pending;
+    expect(usePaywallStore.getState().isSubmitting).toBe(false);
+  });
+});
+
+describe("restore", () => {
+  it("resolves true and applies the entitlement when something is found", async () => {
+    provider.restore.mockResolvedValue(paid);
+    await expect(usePaywallStore.getState().restore()).resolves.toBe(true);
+    expect(usePaywallStore.getState().isPro).toBe(true);
   });
 
-  it("hydrate with no stored key defaults to free and clears isLoading", async () => {
-    await usePaywallStore.getState().hydrate();
-    const state = usePaywallStore.getState();
-    expect(state.tier).toBe("free");
-    expect(state.isPro).toBe(false);
-    expect(state.isLoading).toBe(false);
+  /*
+   * Nothing to restore is a SUCCESSFUL answer, not an error — the common case is
+   * a user checking. Throwing there would paint a red alert over a correct
+   * result.
+   */
+  it("resolves false rather than throwing when there is nothing to restore", async () => {
+    provider.restore.mockResolvedValue(FREE_SUBSCRIPTION);
+    await expect(usePaywallStore.getState().restore()).resolves.toBe(false);
+    expect(usePaywallStore.getState().isPro).toBe(false);
+  });
+
+  it("propagates a real failure and resets isSubmitting", async () => {
+    provider.restore.mockRejectedValue(new PaywallError("network", "offline"));
+    await expect(usePaywallStore.getState().restore()).rejects.toMatchObject({ code: "network" });
+    expect(usePaywallStore.getState().isSubmitting).toBe(false);
   });
 });
