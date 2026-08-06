@@ -64,6 +64,7 @@ Changes to any of these define a new SDK generation and require running `npx exp
 | `@react-native/jest-preset` | `^0.85.3` |
 | `@testing-library/react-native` | `^13.1.0` |
 | `@types/jest` | `^29.5.12` |
+| `@types/node` | `^25.9.1` |
 | `@types/react` | `~19.2.14` |
 | `react-test-renderer` | `^19.2.3` |
 

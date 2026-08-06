@@ -14,10 +14,16 @@ import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME, APP_VERSION, PRIVACY_POLICY_URL, SUPPORT_EMAIL } from "@/constants";
 import type { Theme } from "@/types";
 
-const THEMES: { label: string; value: Theme }[] = [
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-  { label: "System", value: "device" },
+/**
+ * `testID` is spelled out per entry rather than built from `value`, so that a
+ * grep for `theme-dark` finds this file — `src/__tests__/e2e-contract.test.ts`
+ * greps for exactly that. These are E2E seams: see "The seams the flows depend
+ * on" in docs/testing.md.
+ */
+const THEMES: { label: string; value: Theme; testID: string }[] = [
+  { label: "Light", value: "light", testID: "theme-light" },
+  { label: "Dark", value: "dark", testID: "theme-dark" },
+  { label: "System", value: "device", testID: "theme-device" },
 ];
 
 
@@ -26,15 +32,19 @@ function Row({
   onPress,
   destructive,
   disabled,
+  testID,
 }: {
   label: string;
   onPress: () => void;
   destructive?: boolean;
   disabled?: boolean;
+  /** Addresses this row in an E2E flow, independently of its label copy. */
+  testID?: string;
 }) {
   const { colors } = useTheme();
   return (
     <Pressable
+      testID={testID}
       style={[styles.row, disabled && styles.rowDisabled]}
       onPress={disabled ? undefined : onPress}
     >
@@ -129,7 +139,9 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Settings</Text>
+        <Text testID="settings-title" style={[styles.pageTitle, { color: colors.text }]}>
+          Settings
+        </Text>
 
         {/* Appearance */}
         <Card>
@@ -137,7 +149,7 @@ export default function SettingsScreen() {
           {THEMES.map((t, i) => (
             <View key={t.value}>
               <Toggle
-                testID={`theme-${t.value}`}
+                testID={t.testID}
                 label={t.label}
                 value={theme === t.value}
                 onValueChange={() => handleTheme(t.value)}
@@ -189,7 +201,13 @@ export default function SettingsScreen() {
         {/* Danger Zone */}
         <Card>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Danger Zone</Text>
+          {/*
+            E2E seam: the flow scrolls to and taps this row by id. It used to
+            match on "Delete Account.*" — the wildcard was there to absorb the
+            trailing chevron the row renders into its accessible label.
+          */}
           <Row
+            testID="settings-delete-account"
             label="Delete Account"
             destructive
             disabled={isDeleting}

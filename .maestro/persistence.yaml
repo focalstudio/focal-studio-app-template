@@ -19,8 +19,10 @@ appId: ${APP_ID}
 # covered by Jest (`src/__tests__/schemas.test.ts`) until one exists.
 #
 # `APP_ID` is passed in via `maestro test -e` from .github/workflows/maestro-e2e.yml.
-# Same whole-label regex matching rule as full-journey.yaml — read its header
-# before editing a selector here.
+#
+# Every selector here is a `testID`, never screen copy — read the contract in
+# full-journey.yaml's header, and the seam table in docs/testing.md, before
+# editing one.
 
 - launchApp:
     clearState: true
@@ -28,29 +30,41 @@ appId: ${APP_ID}
 # Onboarding. Only the slide count matters here, so it skips the per-slide
 # assertions full-journey.yaml makes — that flow owns onboarding coverage.
 - extendedWaitUntil:
-    visible: "Welcome to.*"
+    visible:
+      id: "onboarding-slide-1"
     timeout: 60000
 - swipe:
     direction: LEFT
 - swipe:
     direction: LEFT
-- tapOn: "Get Started"
+- tapOn:
+    id: "onboarding-cta"
 
 # Auth wall — bypassed with the dev-only seed-session seam, which writes a real
 # session blob through saveJson. Present only because BACKEND=none; if a
 # backend is wired this button is absent and the flow fails loudly here.
-- assertVisible: "Sign In"
+- assertVisible:
+    id: "login-submit"
 - tapOn:
     id: "dev-seed-session"
 - extendedWaitUntil:
-    visible: "Welcome"
+    visible:
+      id: "tab-home"
     timeout: 10000
 
 # Write a non-default theme. "device" is the default, so tapping Dark is a
 # change that must be readable back as a change — picking Light or System
 # would leave a pass that a broken read could still produce by falling back.
-- tapOn: "Settings, tab.*"
-- assertVisible: "Settings.*"
+#
+# `checked` is safe to assert on here because the template's picker drives each
+# switch from the *store* (`value={theme === t.value}`). A single Dark Mode
+# switch driven by the *resolved* appearance would not be: it reads the
+# simulator's own light/dark setting, so assert such a switch on its stored-value
+# description instead.
+- tapOn:
+    id: "tab-settings"
+- assertVisible:
+    id: "settings-title"
 - tapOn:
     id: "theme-dark"
 - assertVisible:
@@ -66,13 +80,17 @@ appId: ${APP_ID}
 # means the session was. Both are exactly what the schemas are there to keep
 # from happening silently.
 - extendedWaitUntil:
-    visible: "Welcome"
+    visible:
+      id: "tab-home"
     timeout: 60000
-- assertNotVisible: "Welcome to.*"
-- assertNotVisible: "Sign In"
+- assertNotVisible:
+    id: "onboarding-slide-1"
+- assertNotVisible:
+    id: "login-submit"
 
 # ...and the theme survived the round trip rather than falling back to "device".
-- tapOn: "Settings, tab.*"
+- tapOn:
+    id: "tab-settings"
 - assertVisible:
     id: "theme-dark"
     checked: true

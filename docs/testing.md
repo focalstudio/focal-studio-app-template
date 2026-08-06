@@ -287,6 +287,61 @@ Two flows in [`.maestro/`](../.maestro/) drive a real iOS Simulator:
 Run them locally — it costs nothing and is far tighter than waiting on CI. Both flows pass in
 **under a minute** on a warm simulator, against a build that takes ~10 minutes the first time.
 
+### The seams the flows depend on
+
+**Read this before you redesign a screen.** The flows address every element by `testID`, never by
+its on-screen copy. Copy is the first thing your app replaces; these ids are the contract it has
+to keep.
+
+| id | Defined in | What it marks |
+|---|---|---|
+| `onboarding-slide-1` / `-2` / `-3` | `app/onboarding.tsx` — the `SLIDES` array | each slide's title, so the flow can prove a swipe advanced the pager |
+| `onboarding-cta` | `app/onboarding.tsx` | the Next / Get Started button |
+| `login-submit` | `app/(auth)/login.tsx` | "we are at the auth wall" — asserted on the way in *and* after account deletion |
+| `dev-seed-session` | `src/components/dev/DevSeedSessionButton.tsx` | the dev-only seam that bypasses the auth wall (#79) |
+| `tab-home` | `app/(tabs)/_layout.tsx` — `tabBarButtonTestID` | **"we are signed in and inside the app"** |
+| `tab-settings` | same | navigates to Settings |
+| `paywall-title` / `paywall-close` | `app/paywall.tsx` | the paywall arrived / dismiss it |
+| `settings-title` | `app/(tabs)/settings.tsx` | Settings rendered |
+| `settings-delete-account` | same | the Danger Zone row the two-step deletion starts from |
+| `theme-light` / `theme-dark` / `theme-device` | same — the `THEMES` array | the appearance switches whose stored value `persistence.yaml` round-trips |
+
+Two things follow from this that are easy to get wrong:
+
+- **`tab-home` is the signed-in marker, not anything on the home screen.** The flows used to
+  assert on the placeholder home card's `"Welcome"` title, in two places. Building a real app
+  deleted that card on day one and broke both flows (#126). Rewrite the home screen freely.
+- **Ids are written out as literal strings**, not built with a template literal — `testID:
+  "theme-dark"` in the `THEMES` array rather than `` testID={`theme-${t.value}`} ``. That is so a
+  grep for the id finds the file, which is exactly what the guard test below does.
+
+**Three text selectors survive**, because nothing can give them a `testID`:
+
+- `"Continue"` and `"Delete Account"` — buttons inside a native `Alert.alert`, which has no React
+  Native tree to attach one to. Their copy lives in `handleDeleteAccount` in
+  `app/(tabs)/settings.tsx`; **reword it there and you must update the flows in the same commit.**
+- `"Open"` — iOS's own "Open in \<App\>?" scheme-handoff dialog. Not app copy at all.
+
+For those three, Maestro's matching rule applies: a text selector is a regex that must match the
+element's **whole** accessibility label, not a substring. `"Welcome to"` does not match
+"Welcome to MyApp" — `"Welcome to.*"` does. All three above are exact labels on a native button,
+so none needs a wildcard, and matching loosely would risk hitting the view behind the alert.
+
+#### The guard test
+
+[`src/__tests__/e2e-contract.test.ts`](../src/__tests__/e2e-contract.test.ts) reads every `id:`
+selector out of `.maestro/*.yaml` and fails if it is not defined somewhere under `app/` or `src/`.
+It also fails on any text selector outside the three exceptions above. It is static — no
+rendering, no mocks — and `ci.yml` runs it on **every** branch, so a removed seam fails the PR
+that removed it rather than an E2E run weeks later.
+
+That gap is not hypothetical: E2E does not run on PRs to `dev` (see
+[Opt-in E2E on a PR](#opt-in-e2e-on-a-pr)), and a `"Start Free Trial"` assertion sat dead in
+`full-journey.yaml` for a whole release after the paywall stopped rendering that button.
+
+If you genuinely need to move a seam, change both sides. The guard tells you when you have only
+changed one.
+
 ### One-time setup
 
 ```bash
@@ -377,6 +432,6 @@ On this template repo the job checks out, installs, then hits the bootstrap gate
 ```bash
 npm test            # Jest
 npm run test:coverage # Jest + coverage thresholds (what CI enforces)
-npm run type-check  # TypeScript — tsconfig already declares "types": ["jest"]
+npm run type-check  # TypeScript — tsconfig already declares "types": ["jest", "node"]
 npm run lint        # ESLint
 ```

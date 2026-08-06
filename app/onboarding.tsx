@@ -19,21 +19,35 @@ import { APP_NAME } from "@/constants";
 
 const { width } = Dimensions.get("window");
 
+/**
+ * Rewrite the copy freely — that is what these slides are for. Keep the
+ * `testID`s: they are E2E seams the Maestro flows step through, and they are
+ * written out in full rather than derived from `id` so that a grep for
+ * `onboarding-slide-2` finds this file. See "The seams the flows depend on" in
+ * docs/testing.md, and `src/__tests__/e2e-contract.test.ts`, which fails if one
+ * goes missing.
+ *
+ * If your app needs a different number of slides, change the flows to match —
+ * they swipe once per slide.
+ */
 const SLIDES = [
   {
     id: "1",
+    testID: "onboarding-slide-1",
     title: `Welcome to ${APP_NAME}`,
     subtitle: "[Slide 1: Describe what your app does and why it matters.]",
     emoji: "👋",
   },
   {
     id: "2",
+    testID: "onboarding-slide-2",
     title: "Your Key Feature",
     subtitle: "[Slide 2: Highlight the main benefit that makes your app unique.]",
     emoji: "✨",
   },
   {
     id: "3",
+    testID: "onboarding-slide-3",
     title: "Start Today",
     subtitle: "[Slide 3: Your call to action or a key outcome users can expect.]",
     emoji: "🚀",
@@ -84,7 +98,14 @@ export default function OnboardingScreen() {
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
             <Text style={styles.emoji}>{item.emoji}</Text>
-            <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+            {/*
+              The seam rides on the title `Text`, not the slide `View`: a plain
+              container is a weak target in Maestro's iOS hierarchy, while a
+              `Text` is an accessibility element in its own right.
+            */}
+            <Text testID={item.testID} style={[styles.title, { color: colors.text }]}>
+              {item.title}
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               {item.subtitle}
             </Text>
@@ -110,6 +131,7 @@ export default function OnboardingScreen() {
         </View>
 
         <Button
+          testID="onboarding-cta"
           label={activeIndex === SLIDES.length - 1 ? "Get Started" : "Next"}
           onPress={handleNext}
           style={styles.cta}

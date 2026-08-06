@@ -122,12 +122,20 @@ export default function PaywallScreen() {
 
   return (
     <Screen edges={["top", "bottom"]}>
-      <Pressable style={styles.closeRow} onPress={() => router.back()}>
+      {/*
+        `paywall-close` and `paywall-title` are E2E seams — see docs/testing.md,
+        "The seams the flows depend on". The flow used to wait on a "Start Free
+        Trial" button that this screen stopped rendering when it moved onto the
+        PaywallProvider port, and nothing noticed for a release.
+      */}
+      <Pressable testID="paywall-close" style={styles.closeRow} onPress={() => router.back()}>
         <Text style={[styles.close, { color: colors.textSecondary }]}>Close</Text>
       </Pressable>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: colors.text }]}>Unlock {APP_NAME} Pro</Text>
+        <Text testID="paywall-title" style={[styles.title, { color: colors.text }]}>
+          Unlock {APP_NAME} Pro
+        </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Choose the plan that fits you. Cancel anytime.
         </Text>
