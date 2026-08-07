@@ -65,6 +65,19 @@ Versioning: [Semantic Versioning](https://semver.org/)
   sources off disk with `fs`.
 
 ### Changed
+- **One Dark Mode switch replaces the three-Toggle appearance picker (#129)** — Settings rendered
+  Light / Dark / System as three `Toggle`s behaving as radio buttons, a control that fights the
+  platform: an iOS switch means on/off, not "selected". Every generated app inherited it. It is now
+  a single **Dark Mode** switch, ported from `focalstudio/tick` where it was verified on device.
+  The `Theme` type, `themeSchema`, `setTheme` and the `hydrate` fallback are all unchanged —
+  `"device"` stays the persisted default and simply stops being *selectable*, becoming the
+  pre-touch state: the switch mirrors the device until first touch, and that flip writes an
+  explicit `"light"`/`"dark"` that persists and wins from then on. There is deliberately no way
+  back to following the device once touched. Because the switch is now bound to the *resolved*
+  appearance, its position depends on the device's own setting, so `.maestro/persistence.yaml`
+  round-trips the switch's stored-value description (`theme-following-device` /
+  `theme-set-manually`) instead of asserting `checked:` on `theme-dark` — see the seam table in
+  `docs/testing.md`. `Toggle` gained a `descriptionTestID` prop to carry that seam.
 - **`maestro-e2e.yml` checks the `[APP_SLUG]` bootstrap gate before installing anything (#128)** —
   it ran after `setup-node` and `npm ci`, so every skipped run still paid ~3 minutes of macOS
   runner to decide it had nothing to do. On this template repo that is *every* run, and the weekly

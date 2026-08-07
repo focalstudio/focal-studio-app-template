@@ -52,24 +52,27 @@ appId: ${APP_ID}
       id: "tab-home"
     timeout: 10000
 
-# Write a non-default theme. "device" is the default, so tapping Dark is a
-# change that must be readable back as a change — picking Light or System
-# would leave a pass that a broken read could still produce by falling back.
+# Write an explicit theme. "device" is both the default and what
+# `themeSchema.catch("device")` falls back to on any bad read — so "no longer
+# device" is exactly the property a broken round trip cannot fake.
 #
-# `checked` is safe to assert on here because the template's picker drives each
-# switch from the *store* (`value={theme === t.value}`). A single Dark Mode
-# switch driven by the *resolved* appearance would not be: it reads the
-# simulator's own light/dark setting, so assert such a switch on its stored-value
-# description instead.
+# Asserted on the description's id, never the switch's `checked` state. The
+# Dark Mode switch is bound to the *resolved* appearance (`useTheme().isDark`),
+# so which way it starts depends on the simulator's own light/dark setting, and
+# a `checked:` assertion here would pass or fail on that. The description is
+# driven by the stored value (`THEME_STATE` in app/(tabs)/settings.tsx) and says
+# "following the device" only until the first touch — so this proves the value
+# changed whichever way the switch happened to start.
 - tapOn:
     id: "tab-settings"
 - assertVisible:
     id: "settings-title"
-- tapOn:
-    id: "theme-dark"
 - assertVisible:
-    id: "theme-dark"
-    checked: true
+    id: "theme-following-device"
+- tapOn:
+    id: "theme-dark-mode"
+- assertVisible:
+    id: "theme-set-manually"
 
 # Force-quit, then cold-start against what the app just wrote.
 - stopApp
@@ -89,11 +92,11 @@ appId: ${APP_ID}
     id: "login-submit"
 
 # ...and the theme survived the round trip rather than falling back to "device".
+# A failed read would put the description back to "following the device", which
+# is the whole point of asserting on it in both directions.
 - tapOn:
     id: "tab-settings"
 - assertVisible:
-    id: "theme-dark"
-    checked: true
-- assertVisible:
-    id: "theme-device"
-    checked: false
+    id: "theme-set-manually"
+- assertNotVisible:
+    id: "theme-following-device"
