@@ -40,12 +40,38 @@ Versioning: [Semantic Versioning](https://semver.org/)
   selector outside the three documented exceptions. Static, so it runs in under a second on every
   branch in `ci.yml` — E2E itself only runs on PRs to `main` or behind the `e2e` label, which is
   how the dead assertion above survived a release unnoticed.
+- **A weekly Maestro run on `dev` (#128)** — `maestro-e2e.yml` now also runs on a Monday cron. The
+  guard test above runs on every PR and fails the moment a seam is *deleted*, but it cannot see a
+  `testID` that is still in the source while the element carrying it stopped being rendered or
+  reachable — a screen dropped from the navigator, a row moved behind a new gate. Only a real
+  device run finds that, and nothing ran one against `dev`: E2E fires on PRs to `main`, behind the
+  `e2e` label, and post-release, so flow rot on the integration branch stayed invisible until
+  release time. Note `schedule:` only ever runs the workflow file from the **default** branch and
+  checks that branch out, so the job now names `ref: dev` explicitly — without it the weekly run
+  would test `main`, which release PRs already cover. Weekly rather than nightly because a run is
+  15–25 minutes of macOS and a generated app may be private, where the 10x multiplier bites.
+- **Two more checks in `src/__tests__/e2e-contract.test.ts` (#128)** — the two *app-owned* text
+  selectors must still exist in the source, and the flows must swipe once per onboarding slide.
+  `"Continue"` and `"Delete Account"` are `Alert.alert` buttons no `testID` can reach and were the
+  one part of the contract nothing verified; rewrite that alert and both flows tap a button that
+  no longer exists. And an app shipping more slides than the template keeps every slide id valid
+  while the flows swipe the wrong number of times — the id check cannot see it, and the flow dies
+  on a timeout 20 minutes into a macOS run. `"Open"` stays exempt from the first check: it is
+  iOS's own dialog, not app copy. Both checks skip rather than guess when an app restructures;
+  `docs/testing.md` lists exactly when.
 - **`@types/node` as a devDependency**, and `"node"` added to `tsconfig.json`'s `types`. Types
   only, no runtime and no bundle impact; the package was already installed transitively via
   `jest-environment-node`. Needed because the guard test above reads `.maestro/` and the app
   sources off disk with `fs`.
 
 ### Changed
+- **`maestro-e2e.yml` checks the `[APP_SLUG]` bootstrap gate before installing anything (#128)** —
+  it ran after `setup-node` and `npm ci`, so every skipped run still paid ~3 minutes of macOS
+  runner to decide it had nothing to do. On this template repo that is *every* run, and the weekly
+  cron above adds 52 more a year. The gate needs only the checkout, and every later step already
+  carried the same `if:`, so nothing about which steps execute has changed. The workflow also
+  gained a `concurrency` group keyed on the event, so a new commit supersedes an in-flight PR run
+  without a PR ever being able to cancel the post-release run from `release.yml`.
 - **`package-lock.json` records the current version again** — it still said `0.7.0`, because
   `scripts/bump-version.sh` writes `package.json` and `app.json` but never the lockfile. Picked up
   incidentally by the `npm install --package-lock-only` for the devDependency above.
