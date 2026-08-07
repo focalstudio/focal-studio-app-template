@@ -15,9 +15,22 @@ type Props = {
    * match — and an unmatched `tapOn` reports COMPLETED while tapping nothing.
    */
   testID?: string;
+  /**
+   * Addresses the description text in an E2E flow. Needed when the description
+   * is the only thing reflecting a stored value that the switch itself does not
+   * — see the Dark Mode switch in app/(tabs)/settings.tsx.
+   */
+  descriptionTestID?: string;
 };
 
-export function Toggle({ value, onValueChange, label, description, testID }: Props) {
+export function Toggle({
+  value,
+  onValueChange,
+  label,
+  description,
+  testID,
+  descriptionTestID,
+}: Props) {
   const { colors } = useTheme();
   return (
     <View style={styles.row}>
@@ -27,7 +40,10 @@ export function Toggle({ value, onValueChange, label, description, testID }: Pro
             <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
           )}
           {description && (
-            <Text style={[styles.description, { color: colors.textSecondary }]}>
+            <Text
+              testID={descriptionTestID}
+              style={[styles.description, { color: colors.textSecondary }]}
+            >
               {description}
             </Text>
           )}

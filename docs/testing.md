@@ -304,16 +304,23 @@ to keep.
 | `paywall-title` / `paywall-close` | `app/paywall.tsx` | the paywall arrived / dismiss it |
 | `settings-title` | `app/(tabs)/settings.tsx` | Settings rendered |
 | `settings-delete-account` | same | the Danger Zone row the two-step deletion starts from |
-| `theme-light` / `theme-dark` / `theme-device` | same — the `THEMES` array | the appearance switches whose stored value `persistence.yaml` round-trips |
+| `theme-dark-mode` | same | the Dark Mode switch |
+| `theme-following-device` / `theme-set-manually` | same — the `THEME_STATE` map | the switch's description, which is what `persistence.yaml` round-trips |
 
-Two things follow from this that are easy to get wrong:
+Three things follow from this that are easy to get wrong:
 
 - **`tab-home` is the signed-in marker, not anything on the home screen.** The flows used to
   assert on the placeholder home card's `"Welcome"` title, in two places. Building a real app
   deleted that card on day one and broke both flows (#126). Rewrite the home screen freely.
 - **Ids are written out as literal strings**, not built with a template literal — `testID:
-  "theme-dark"` in the `THEMES` array rather than `` testID={`theme-${t.value}`} ``. That is so a
-  grep for the id finds the file, which is exactly what the guard test below does.
+  "theme-set-manually"` in the `THEME_STATE` map rather than `` testID={`theme-${key}`} ``. That is
+  so a grep for the id finds the file, which is exactly what the guard test below does.
+- **The theme seam is on the description, not on the switch.** The Dark Mode switch is bound to the
+  *resolved* appearance (`useTheme().isDark`), so on a dark simulator it reads "on" before anything
+  has ever been stored — a `checked:` assertion would pass or fail on the simulator's own setting.
+  The description underneath it is driven by the stored value and says "Following your device
+  appearance." only until the first touch, so `persistence.yaml` asserts on *that* and proves the
+  value changed whichever way the switch happened to start (#129).
 
 **Three text selectors survive**, because nothing can give them a `testID`:
 
