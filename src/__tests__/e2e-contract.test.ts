@@ -49,6 +49,22 @@ const flowFiles = fs
   .filter((name) => name.endsWith(".yaml") || name.endsWith(".yml"));
 
 /**
+ * A flow's commands, with comment lines dropped.
+ *
+ * Both headers here are long and quote selectors while explaining them, so
+ * without this a comment could invent a required id, or trip the text-selector
+ * check with an example of the thing it is warning you not to do. Whole-line
+ * comments only — a `#` inside a quoted selector is not one.
+ */
+function commandsOf(flowFile: string): string {
+  return fs
+    .readFileSync(path.join(FLOW_DIR, flowFile), "utf8")
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+}
+
+/**
  * Every `id:` selector in a flow, as `[id, flow file]`.
  *
  * The leading `(?:^|\s)` is load-bearing: without it this also matches the
@@ -63,12 +79,11 @@ const ID_SELECTOR = /(?:^|\s)id:\s*"([^"]+)"/gm;
  */
 const referencedIds: [string, string][] = [
   ...new Map(
-    flowFiles.flatMap((name) => {
-      const contents = fs.readFileSync(path.join(FLOW_DIR, name), "utf8");
-      return [...contents.matchAll(ID_SELECTOR)].map(
+    flowFiles.flatMap((name) =>
+      [...commandsOf(name).matchAll(ID_SELECTOR)].map(
         (match) => [`${name}::${match[1]}`, [match[1], name] as [string, string]] as const
-      );
-    })
+      )
+    )
   ).values(),
 ];
 
@@ -105,11 +120,24 @@ describe("Maestro flow → app source contract", () => {
     // native `Alert.alert` (no RN tree to attach one to), and "Open" belongs to
     // iOS's own scheme-handoff dialog rather than to the app.
     const ALLOWED_TEXT_SELECTORS = ["Open", "Continue", "Delete Account"];
-    const TEXT_SELECTOR = /(?:^|\s)(?:tapOn|assertVisible|assertNotVisible|visible):\s*"([^"]+)"/gm;
+    /**
+     * Both selector shapes Maestro accepts, or this check has a hole big enough
+     * to walk the original bug back through:
+     *
+     *   - tapOn: "Welcome"        ← the shorthand
+     *   - tapOn:
+     *       text: "Welcome"       ← the object form, same brittle selector
+     *
+     * `text` therefore sits in the same alternation as the commands, since in
+     * the object form it is the key carrying the copy. `scrollUntilVisible`'s
+     * `element:` and `extendedWaitUntil`'s `visible:` nest one level deeper and
+     * are covered by the same `text` case.
+     */
+    const TEXT_SELECTOR =
+      /(?:^|\s)(?:tapOn|assertVisible|assertNotVisible|visible|text):\s*"([^"]+)"/gm;
 
     const offenders = flowFiles.flatMap((name) => {
-      const contents = fs.readFileSync(path.join(FLOW_DIR, name), "utf8");
-      return [...contents.matchAll(TEXT_SELECTOR)]
+      return [...commandsOf(name).matchAll(TEXT_SELECTOR)]
         .map((match) => match[1])
         .filter((text) => !ALLOWED_TEXT_SELECTORS.includes(text))
         .map((text) => `${name}: "${text}"`);
