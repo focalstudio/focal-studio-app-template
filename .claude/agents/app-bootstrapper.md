@@ -103,6 +103,12 @@ gh label list --repo "$GITHUB_REPO"
 
 If `gh auth status` fails, stop and tell the user: "GitHub CLI is not authenticated. Run `gh auth login` and then re-trigger the bootstrap." Do not proceed with issue creation.
 
+`init.sh` applies `.github/labels.tsv` when it creates the repo, so `gh label list` should show 18 labels. If it shows fewer (label sync failed, or the repo pre-dates #127), re-apply it before creating issues — otherwise every `--label` below is rejected:
+
+```bash
+bash scripts/sync-labels.sh --repo "$GITHUB_REPO"
+```
+
 For each feature in the IDEA.md feature table, create one issue:
 
 ```bash

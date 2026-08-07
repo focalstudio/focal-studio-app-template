@@ -10,6 +10,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Fixed
+- **`init.sh` created 4 of 18 issue labels (#127)** — it hardcoded `open-beta`, `public`,
+  `post-release` and `chore`, and assumed GitHub's default set was already there. It is not
+  reliably created for a repo made with `gh repo create --source=.`, so a generated app started
+  life with four labels and could not follow the one-type + one-priority + one-milestone
+  convention it ships with in `.claude/reference/issue-labels.md`. Worse, `e2e` was absent, so the
+  Maestro opt-in gate in `maestro-e2e.yml` — the escape hatch designed in #113 for PRs to `dev` —
+  could never be applied in any app but this one. The set now lives in one manifest,
+  `.github/labels.tsv`, applied by the new `scripts/sync-labels.sh` (idempotent, `--dry-run`
+  supported); `init.sh` calls it at bootstrap, and an app generated before this can self-heal with
+  `bash scripts/sync-labels.sh`. The four labels' colours also now match this repo's rather than
+  drifting from them.
 - **Maestro flows no longer assert on template screen copy (#126)** — both flows in `.maestro/`
   addressed elements by their placeholder text: the onboarding slide titles, the home card's
   `"Welcome"`, the settings page title. Every one of those is the first thing a generated app

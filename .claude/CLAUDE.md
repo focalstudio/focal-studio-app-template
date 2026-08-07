@@ -299,7 +299,8 @@ File naming, frontmatter, callout/emoji conventions, and the Kanban board format
 Always apply labels when creating issues: one **type** (`bug` / `enhancement` / `chore` /
 `documentation` / `question`), one **priority** (`critical` / `high` / `medium` / `low`), and
 one **milestone** (`open-beta` / `public` / `post-release`). Run
-`gh label list --repo [GITHUB_REPO]` first to confirm they exist.
+`gh label list --repo [GITHUB_REPO]` first to confirm they exist — if any are missing, run
+`bash scripts/sync-labels.sh` to re-apply the manifest in `.github/labels.tsv`.
 
 Full tables and typical combinations: [.claude/reference/issue-labels.md](reference/issue-labels.md).
 
