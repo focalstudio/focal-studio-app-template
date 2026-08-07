@@ -324,12 +324,13 @@ if [[ "$INIT_GITHUB" == "true" && "$INIT_GIT" == "true" ]]; then
     git checkout dev
     git push -u origin dev || echo "  ⚠️  Could not push dev — see the error above, then push manually."
 
-    # Create milestone labels not present on a default GitHub repo
-    echo "  Creating milestone labels..."
-    gh label create "open-beta"     --color "0075ca" --description "Required for open beta launch"  --repo "$GITHUB_REPO" 2>/dev/null || true
-    gh label create "public"        --color "e4e669" --description "Required for public v1 launch"   --repo "$GITHUB_REPO" 2>/dev/null || true
-    gh label create "post-release"  --color "d93f0b" --description "Follow-up after release ships"  --repo "$GITHUB_REPO" 2>/dev/null || true
-    gh label create "chore"         --color "fef2c0" --description "Maintenance, tooling, CI"        --repo "$GITHUB_REPO" 2>/dev/null || true
+    # Create the full issue label set. This used to hardcode four labels and assume
+    # GitHub's defaults were already there — they are not reliably created for a repo
+    # made with `gh repo create --source=.`, so generated apps ended up with 4 of 18
+    # and could not follow the issue convention they ship with, nor apply `e2e` (#127).
+    echo "  Syncing issue labels..."
+    bash "$(dirname "${BASH_SOURCE[0]}")/sync-labels.sh" --repo "$GITHUB_REPO" \
+      || echo "  ⚠️  Label sync failed — run: bash scripts/sync-labels.sh --repo $GITHUB_REPO"
     echo "  GitHub repo ready."
   else
     echo "  ⚠️  gh CLI not found — skipping GitHub repo creation. Push manually."

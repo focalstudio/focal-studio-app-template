@@ -12,6 +12,8 @@ on:
     branches: ["**"]
     paths:
       - "scripts/init.sh"
+      - "scripts/sync-labels.sh"
+      - ".github/labels.tsv"
       - "IDEA.md"
       - "app.json"
       - "package.json"
@@ -27,6 +29,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Deliberately ungated: unlike the placeholder assertions below, the label
+      # manifest is equally valid either side of bootstrap, and a generated app that
+      # edits it wants the same check. --dry-run needs no gh auth and touches nothing.
+      # Guards the parse — a stray space instead of a tab silently truncates a
+      # description or drops a label, which is how a repo ends up short again (#127).
+      - name: Assert label manifest parses to the full set
+        run: |
+          set -e
+          EXPECTED=$(grep -cvE '^\s*(#|$)' .github/labels.tsv)
+          ACTUAL=$(bash scripts/sync-labels.sh --dry-run --repo focalstudio/smoke-test-app \
+            | grep -cE '^  \S.*#[0-9a-f]{6}')
+          if [ "$ACTUAL" -ne "$EXPECTED" ]; then
+            echo "::error::sync-labels.sh applied $ACTUAL of $EXPECTED manifest rows — check .github/labels.tsv is tab-separated"
+            bash scripts/sync-labels.sh --dry-run --repo focalstudio/smoke-test-app
+            exit 1
+          fi
+          echo "Label manifest parses cleanly: $ACTUAL labels."
 
       # This workflow verifies that init.sh replaces placeholders. A generated app
       # has none left, so init.sh correctly exits early, app.json keeps the real app
