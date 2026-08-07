@@ -9,6 +9,36 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **Maestro flows no longer assert on template screen copy (#126)** — both flows in `.maestro/`
+  addressed elements by their placeholder text: the onboarding slide titles, the home card's
+  `"Welcome"`, the settings page title. Every one of those is the first thing a generated app
+  replaces, so the flows shipped green in the template and failed the first time anyone built
+  their own product. Every selector is now a `testID`, including the tab bar (via
+  `tabBarButtonTestID`), which replaces the home-screen copy as the "we are signed in" marker and
+  survives a home-screen rewrite. Only three text selectors remain — the two native
+  `Alert.alert` buttons in the account-deletion flow and iOS's own scheme-handoff dialog — and
+  the flow headers say why. The full seam list is in `docs/testing.md`.
+- **A dead assertion in `full-journey.yaml`** — it waited on a `"Start Free Trial"` button the
+  paywall stopped rendering when it moved onto the `PaywallProvider` port in 0.12.0. Found by the
+  audit above; nothing connected the two, which is what the new guard test is for.
+
+### Added
+- **`src/__tests__/e2e-contract.test.ts`** — reads every `id:` selector out of `.maestro/*.yaml`
+  and fails if it is not defined as a `testID` under `app/` or `src/`, and fails on any text
+  selector outside the three documented exceptions. Static, so it runs in under a second on every
+  branch in `ci.yml` — E2E itself only runs on PRs to `main` or behind the `e2e` label, which is
+  how the dead assertion above survived a release unnoticed.
+- **`@types/node` as a devDependency**, and `"node"` added to `tsconfig.json`'s `types`. Types
+  only, no runtime and no bundle impact; the package was already installed transitively via
+  `jest-environment-node`. Needed because the guard test above reads `.maestro/` and the app
+  sources off disk with `fs`.
+
+### Changed
+- **`package-lock.json` records the current version again** — it still said `0.7.0`, because
+  `scripts/bump-version.sh` writes `package.json` and `app.json` but never the lockfile. Picked up
+  incidentally by the `npm install --package-lock-only` for the devDependency above.
+
 ## [0.12.0] — 2026-08-05
 
 ### Added

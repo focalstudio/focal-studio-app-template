@@ -7,17 +7,29 @@ appId: ${APP_ID}
 # calling workflow (.github/workflows/maestro-e2e.yml), resolved at run time
 # from app.json so this flow works whatever the bootstrapped app is named.
 #
-# Text assertions use fixed literal strings rather than app.json's APP_NAME, so
-# the flow needs no extra env var to stay app-name-agnostic.
+# ── The contract ──────────────────────────────────────────────────────────────
+# Every selector below is a `testID`, never screen copy. Copy is the first thing
+# your app replaces; the ids are the seams it must keep. They are listed, with
+# where each one lives, under "The seams the flows depend on" in docs/testing.md,
+# and `src/__tests__/e2e-contract.test.ts` fails on every PR if a flow references
+# an id that no longer exists in `app/` or `src/`.
 #
-# Matching rule, verified against Maestro 2.8.0 on an iOS Simulator: a selector
-# is a regex that must match the element's WHOLE accessibility label — it is not
-# a substring match. `"Welcome to"` therefore does NOT match "Welcome to MyApp";
-# it needs `"Welcome to.*"`. Bare titles are kept wherever the label is exactly
-# that title, and `.*` is added only where iOS decorates the label:
-#   - tab bar items       → "Settings, tab, 2 of 2"
-#   - settings rows       → "Delete Account, ›"  (trailing chevron)
-#   - app-name interpolation → "Welcome to MyApp"
+# Redesign any screen you like. If you genuinely need to move a seam, change both
+# sides — the guard test tells you when you have only changed one.
+#
+# ── The two exceptions, and why ───────────────────────────────────────────────
+# Three text selectors survive, because no `testID` can reach them:
+#   - "Continue" / "Delete Account" — buttons inside a native `Alert.alert`,
+#     which has no React Native tree to attach a testID to. Their copy lives in
+#     `handleDeleteAccount` in app/(tabs)/settings.tsx; reword it there and these
+#     two lines must change with it.
+#   - "Open" — iOS's own scheme-handoff dialog. Not app copy at all.
+#
+# Matching rule for those three, verified against Maestro 2.8.0 on an iOS
+# Simulator: a text selector is a regex that must match the element's WHOLE
+# accessibility label — it is not a substring match. All three are exact labels
+# on a native button, so none of them needs a wildcard, and matching them loosely
+# would risk hitting the view behind the alert instead of the button in it.
 # Getting this wrong fails loudly on assertions, but a `tapOn` against an
 # unmatched-but-present element can report COMPLETED while tapping nothing.
 
@@ -25,6 +37,8 @@ appId: ${APP_ID}
     clearState: true
 
 # Onboarding — swipe through all three slides, then complete on the last one.
+# The slide count is app-specific: change the swipes if your app ships more or
+# fewer than the template's three.
 #
 # The first assertion after launch gets a generous explicit wait rather than
 # bare `assertVisible`: cold start has to mount the native runtime, load the JS
@@ -32,25 +46,35 @@ appId: ${APP_ID}
 # default assertion timeout is far too short for that, so a bare assertVisible
 # here fails against an app that is merely still booting.
 - extendedWaitUntil:
-    visible: "Welcome to.*"
+    visible:
+      id: "onboarding-slide-1"
     timeout: 60000
 - swipe:
     direction: LEFT
-- assertVisible: "Your Key Feature"
+- assertVisible:
+    id: "onboarding-slide-2"
 - swipe:
     direction: LEFT
-- assertVisible: "Start Today"
-- tapOn: "Get Started"
+- assertVisible:
+    id: "onboarding-slide-3"
+- tapOn:
+    id: "onboarding-cta"
 
 # Auth wall — bypass with the dev-only seed-session seam (#79). Only present
 # because BACKEND=none in an unbootstrapped/no-backend build; if a real
 # backend is wired this button won't exist and the flow should fail loudly
 # here rather than silently skip the rest of the journey.
-- assertVisible: "Sign In"
+- assertVisible:
+    id: "login-submit"
 - tapOn:
     id: "dev-seed-session"
+# The tab bar is the "we are signed in" marker, not anything on the home screen
+# itself — a generated app rewrites that screen on day one. This assertion used
+# to read `visible: "Welcome"`, the placeholder home card's title, in this file
+# and in persistence.yaml. Both broke the first time a real app was built (#126).
 - extendedWaitUntil:
-    visible: "Welcome"
+    visible:
+      id: "tab-home"
     timeout: 10000
 
 # Paywall — not linked from any in-app affordance in the template yet, so
@@ -66,34 +90,35 @@ appId: ${APP_ID}
     commands:
       - tapOn: "Open"
 - extendedWaitUntil:
-    visible: "Start Free Trial"
+    visible:
+      id: "paywall-title"
     timeout: 15000
-- tapOn: "Close"
+- tapOn:
+    id: "paywall-close"
 
 # Settings — two-step account deletion. Both native confirmation alerts must
 # be walked; a single confirmation must not delete the account.
-# iOS labels a tab bar item "<title>, tab, N of M", so the bare title cannot
-# match it — see the regex note in the header comment.
-- tapOn: "Settings, tab.*"
-- assertVisible: "Settings.*"
+- tapOn:
+    id: "tab-settings"
+- assertVisible:
+    id: "settings-title"
 # DANGER ZONE sits below the fold, and an off-screen row is still in the
 # accessibility tree — so a bare tapOn reports COMPLETED while landing on
 # nothing. Scroll it into view first, or the two-step deletion below silently
 # never starts.
 - scrollUntilVisible:
     element:
-      text: "Delete Account.*"
+      id: "settings-delete-account"
     direction: DOWN
-# The settings row renders a trailing chevron inside its accessible label
-# ("Delete Account, ›"), so it needs the wildcard. The two alert buttons below
-# are exact — matching them loosely would risk re-tapping the row behind the
-# alert instead of the button in it.
-- tapOn: "Delete Account.*"
+- tapOn:
+    id: "settings-delete-account"
+# Native alert buttons — see "the two exceptions" in the header.
 - tapOn: "Continue"
 - tapOn: "Delete Account"
 
 # Back to auth — Stack.Protected in app/_layout.tsx redirects here on its own
 # once isAuthenticated flips false; no manual navigation to assert against.
 - extendedWaitUntil:
-    visible: "Sign In"
+    visible:
+      id: "login-submit"
     timeout: 10000

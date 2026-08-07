@@ -109,7 +109,13 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
+        {/*
+          `login-submit` is an E2E seam — the Maestro flows use it to assert
+          "we are at the auth wall", both on the way in and after account
+          deletion. See docs/testing.md, "The seams the flows depend on".
+        */}
         <Button
+          testID="login-submit"
           label="Sign In"
           onPress={handleLogin}
           loading={pending === "password"}
