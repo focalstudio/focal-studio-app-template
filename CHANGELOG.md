@@ -10,6 +10,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Fixed
+- **`SETUP.md` cloned the template from the old owner (#130)** — both bootstrap paths, Option A
+  and Option B, pointed at `fpmartinez10/focal-studio-app-template`. The repo now lives at
+  `focalstudio/focal-studio-app-template`, and the old path resolved only through GitHub's
+  rename redirect — which is not a guarantee, and disappears if that account is renamed again or
+  anything else claims the path. Since it is the literal first command a new user runs, a stale
+  URL would fail at the worst possible moment. Both lines now use the canonical owner.
 - **`init.sh` created 4 of 18 issue labels (#127)** — it hardcoded `open-beta`, `public`,
   `post-release` and `chore`, and assumed GitHub's default set was already there. It is not
   reliably created for a repo made with `gh repo create --source=.`, so a generated app started
