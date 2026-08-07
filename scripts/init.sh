@@ -2,10 +2,17 @@
 # Usage: bash scripts/init.sh --name "My App" --slug "my-app" --id "com.focalstudio.myapp" \
 #                              --color "#007AFF" --color-dark "#0A84FF" \
 #                              --tagline "The app that does X" \
-#                              --repo "focallstudio/my-app" [--no-git] [--no-github] [--force]
+#                              --repo "focalstudio/my-app" [--no-git] [--no-github] [--force]
 #
-# Replaces all [APP_*] and [GITHUB_REPO] placeholders across the project, renames
+# Replaces every APP_* and GITHUB_REPO placeholder across the project, renames
 # Obsidian template files, initialises git, and creates the GitHub repo.
+#
+# The two token names above are deliberately written WITHOUT their surrounding
+# brackets. This script is a *.sh file and so is caught by its own --include
+# filter, meaning replace() rewrites this file on disk mid-run — a bracketed
+# token here would be substituted into the generated app's copy, leaving it
+# reading "Replaces all [APP_*] and acme/my-app placeholders". Same hazard the
+# heredocs further down already guard against.
 #
 # Safe to re-run: exits early when placeholders are already gone (override with --force).
 
@@ -291,11 +298,31 @@ if [[ "$INIT_GITHUB" == "true" && "$INIT_GIT" == "true" ]]; then
     gh repo create "$GITHUB_REPO" --private --source=. --remote=origin 2>/dev/null || \
       echo "  ⚠️  gh repo create failed — repo may already exist, or you may need to push manually."
 
-    # Push both branches
+    # Align the remote with however `gh` actually authenticates.
+    #
+    # `gh repo create --source=.` can leave an SSH remote even when
+    # `gh config get git_protocol` is https — and on a machine that authenticates
+    # to GitHub through gh's HTTPS token with no SSH key registered, every push
+    # below then dies with "Permission denied (publickey)". The repo is created
+    # but stays empty, which is exactly how this was found.
+    if [[ "$(gh config get git_protocol 2>/dev/null)" == "https" ]]; then
+      REMOTE_URL="$(git remote get-url origin 2>/dev/null || echo "")"
+      if [[ "$REMOTE_URL" == git@github.com:* ]]; then
+        echo "  Switching origin to HTTPS to match your gh auth..."
+        git remote set-url origin "https://github.com/${GITHUB_REPO}.git"
+      fi
+    fi
+
+    # Push both branches.
+    #
+    # stderr is deliberately NOT sent to /dev/null. It was, and a failed push
+    # printed only "push manually" with no reason — the actual cause (an SSH
+    # remote, a missing key, a name collision) was invisible, leaving an empty
+    # repo and no way to tell why.
     git checkout main
-    git push -u origin main 2>/dev/null || echo "  ⚠️  Could not push main — push manually."
+    git push -u origin main || echo "  ⚠️  Could not push main — see the error above, then push manually."
     git checkout dev
-    git push -u origin dev 2>/dev/null || echo "  ⚠️  Could not push dev — push manually."
+    git push -u origin dev || echo "  ⚠️  Could not push dev — see the error above, then push manually."
 
     # Create milestone labels not present on a default GitHub repo
     echo "  Creating milestone labels..."
@@ -312,7 +339,24 @@ fi
 # ── Verification ──────────────────────────────────────────────────────────────
 echo ""
 echo "Verification:"
-REMAINING=$(grep -r "\[APP_" . "${EXTS[@]}" 2>/dev/null \
+# Match a REAL placeholder — `[APP_NAME]` — and not the many places that merely
+# talk about one.
+#
+# The old pattern was the bare prefix `\[APP_`, which also matched every escaped
+# mention in documentation and in this script itself: SETUP.md's worked example,
+# `.claude/agents/app-bootstrapper.md`, the grep instruction in
+# store-listing/play-store-listing.md, and 14 lines of init.sh. A clean bootstrap
+# reported "23 placeholder line(s) still found" and the ✅ branch was unreachable
+# — while app-bootstrapper.md instructs the agent to treat exactly that as a
+# blocker and investigate before continuing.
+#
+# Requiring the closing `]` unescaped is what separates the two: a documented
+# mention is written `\[APP_NAME\]`, so the literal `[APP_NAME]` never appears in
+# it. Verified both ways — 130 hits against the un-bootstrapped template, 0
+# against a freshly bootstrapped app.
+PLACEHOLDER_RE='\[APP_[A-Z_]+\]'
+
+REMAINING=$(grep -rE "$PLACEHOLDER_RE" . "${EXTS[@]}" 2>/dev/null \
   | grep -v node_modules | grep -v "\.git/" | grep -v package-lock.json \
   | wc -l | tr -d ' ')
 
@@ -320,7 +364,7 @@ if [[ "$REMAINING" -eq 0 ]]; then
   echo "  ✅ No [APP_*] placeholders remaining."
 else
   echo "  ⚠️  $REMAINING placeholder line(s) still found:"
-  grep -r "\[APP_" . "${EXTS[@]}" 2>/dev/null \
+  grep -rE "$PLACEHOLDER_RE" . "${EXTS[@]}" 2>/dev/null \
     | grep -v node_modules | grep -v "\.git/" | grep -v package-lock.json | head -10
 fi
 
