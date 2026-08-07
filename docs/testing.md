@@ -320,7 +320,10 @@ Two things follow from this that are easy to get wrong:
 - `"Continue"` and `"Delete Account"` — buttons inside a native `Alert.alert`, which has no React
   Native tree to attach one to. Their copy lives in `handleDeleteAccount` in
   `app/(tabs)/settings.tsx`; **reword it there and you must update the flows in the same commit.**
-- `"Open"` — iOS's own "Open in \<App\>?" scheme-handoff dialog. Not app copy at all.
+  The guard test below now fails if either string disappears from `app/`+`src/` entirely, so a
+  wholesale rewrite of the Danger Zone is caught.
+- `"Open"` — iOS's own "Open in \<App\>?" scheme-handoff dialog. Not app copy at all, which is why
+  it is exempt from that presence check: it appears nowhere in this repo and never will.
 
 For those three, Maestro's matching rule applies: a text selector is a regex that must match the
 element's **whole** accessibility label, not a substring. `"Welcome to"` does not match
@@ -329,15 +332,43 @@ so none needs a wildcard, and matching loosely would risk hitting the view behin
 
 #### The guard test
 
-[`src/__tests__/e2e-contract.test.ts`](../src/__tests__/e2e-contract.test.ts) reads every `id:`
-selector out of `.maestro/*.yaml` and fails if it is not defined somewhere under `app/` or `src/`.
-It also fails on any text selector outside the three exceptions above. It is static — no
-rendering, no mocks — and `ci.yml` runs it on **every** branch, so a removed seam fails the PR
-that removed it rather than an E2E run weeks later.
+[`src/__tests__/e2e-contract.test.ts`](../src/__tests__/e2e-contract.test.ts) checks four things:
 
-That gap is not hypothetical: E2E does not run on PRs to `dev` (see
-[Opt-in E2E on a PR](#opt-in-e2e-on-a-pr)), and a `"Start Free Trial"` assertion sat dead in
-`full-journey.yaml` for a whole release after the paywall stopped rendering that button.
+1. Every `id:` selector in `.maestro/*.yaml` is defined somewhere under `app/` or `src/`.
+2. No text selector appears outside the three exceptions above.
+3. Those of the three that are *app* copy — `"Continue"` and `"Delete Account"` — are still
+   present in the source.
+4. The flows swipe once per onboarding slide.
+
+It is static — no rendering, no mocks — and `ci.yml` runs it on **every** branch, so a removed
+seam fails the PR that removed it rather than an E2E run weeks later. That gap is not
+hypothetical: a `"Start Free Trial"` assertion sat dead in `full-journey.yaml` for a whole release
+after the paywall stopped rendering that button.
+
+Check 4 exists because check 1 cannot see it. An app shipping **five** slides still defines
+`onboarding-slide-1..5`, so every id the flows name resolves and the guard goes green — while the
+flows swipe twice, land on slide 3, and tap `onboarding-cta`, which on a non-final slide is
+labelled "Next" and just advances the pager. The flow then waits for the auth wall from inside
+onboarding and dies on a timeout 20 minutes into a macOS run.
+
+**Checks 3 and 4 are deliberately loose**, because a generated app is allowed to restructure. If
+one false-fails on your app, that is the escape hatch, not a bug to work around:
+
+| Your app | Result |
+|---|---|
+| Alert copy moved to a constant or another file | passes — the check greps all of `app/`+`src/` |
+| Alert copy behind i18n or a template literal | **false-fails** → drop the string from `APP_TEXT_SELECTORS`, or drop the text selector from the flows |
+| Onboarding driven by taps rather than swipes | skipped |
+| Onboarding slides renamed off `onboarding-slide-N` | skipped |
+| A non-onboarding swipe before the onboarding CTA | false-fails (rare — the count stops at the first `onboarding-cta` tap) |
+
+Check 3's looseness also costs a false negative: `"Continue"` is a Button label in
+`app/paywall.tsx` too, so rewording *only* the alert still passes. It catches deletion and
+wholesale rewrite, which is the failure that actually happens.
+
+What no static check can see is a `testID` still in the source whose element stopped being
+rendered or reachable — a screen dropped from the navigator, a row moved behind a new gate. The
+[weekly run on `dev`](#in-ci) is what catches that.
 
 If you genuinely need to move a seam, change both sides. The guard tells you when you have only
 changed one.
@@ -413,8 +444,19 @@ spot a step that "passed" without doing anything.
 
 ### In CI
 
-Post-release via `workflow_call` from `release.yml`, on PRs to `main`, and on any PR labelled
-`e2e` (see [Opt-in E2E on a PR](#opt-in-e2e-on-a-pr) below).
+Post-release via `workflow_call` from `release.yml`, on PRs to `main`, on any PR labelled `e2e`
+(see [Opt-in E2E on a PR](#opt-in-e2e-on-a-pr) below), and **weekly on `dev`** — a Monday cron,
+`17 6 * * 1`.
+
+The weekly run is the backstop for runtime rot, not a substitute for the label: it tells you
+within seven days that a flow broke, but it cannot tell you *which PR* broke it. For a risky
+change, still opt in pre-merge.
+
+Two things about that cron are worth knowing before you edit it. GitHub only ever runs the
+**default branch's** copy of a workflow file on a schedule, so a change here does nothing until it
+reaches `main` — and the run then executes `main`'s steps against `dev`'s code, which is why the
+checkout step names `ref: dev` explicitly. And GitHub disables scheduled workflows after 60 days
+of repository inactivity; a dormant app simply gets no weekly signal.
 
 ### Opt-in E2E on a PR
 
@@ -423,7 +465,9 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, installs, then hits the bootstrap gate and skips — the signal only becomes real in an app generated from it.
+On this template repo the job checks out, hits the bootstrap gate and skips in seconds — the gate
+runs before any toolchain setup for exactly that reason. The signal only becomes real in an app
+generated from it.
 
 ---
 
