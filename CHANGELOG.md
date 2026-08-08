@@ -41,6 +41,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
   audit above; nothing connected the two, which is what the new guard test is for.
 
 ### Added
+- **E2E runs now name the simulator's own crashes (#131)** — Apple's `SpringBoard` segfaults on the
+  iOS Simulator during Maestro runs, three times in four days on one machine. Its
+  `launchApp`/`stopApp` cycling provokes it, and `.maestro/persistence.yaml` does that on purpose:
+  force-quit then cold-start is how it proves zod-schema'd state survives a real restart, so the
+  flow cannot stop doing it. Nothing in this repo causes the crash or can fix it — what it costs is
+  diagnosis, because the flow fails with no visible reason and every screenshot from that point
+  shows the iOS home screen instead of the app. That reads as an app navigation bug and once cost
+  an hour. The new `scripts/check-simulator-crashes.sh` now runs after every local `npm run e2e`
+  and as its own step in `maestro-e2e.yml`, comparing crash-report mtimes against a marker touched
+  immediately before the flows; it prints a block naming the crash, warns and writes to the job
+  summary in CI, and copies the `.ips` reports into the debug artifact. It is advisory only and
+  never changes an exit code — a simulator crash and a real assertion failure can happen in the
+  same run. Processes that crashed *inside* the simulator but are not SpringBoard are listed
+  separately and deliberately excluded from that verdict: if the app under test crashed, that
+  failure is real. Run it with no argument (`bash scripts/check-simulator-crashes.sh`) to scan the
+  last hour after a confusing red run. Retrying a failed run and cycling the simulator between
+  flows were both considered and rejected; #131 records why.
 - **`src/__tests__/e2e-contract.test.ts`** — reads every `id:` selector out of `.maestro/*.yaml`
   and fails if it is not defined as a `testID` under `app/` or `src/`, and fails on any text
   selector outside the three documented exceptions. Static, so it runs in under a second on every
