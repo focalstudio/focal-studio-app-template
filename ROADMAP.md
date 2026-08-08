@@ -30,6 +30,8 @@
 - [x] Social sign-in module contract tests (#114)
 - [x] `scripts/e2e.sh` preflight; `npm run e2e` validated end-to-end against a real simulator (#113)
 - [x] Maestro E2E gated pre-merge on PRs to `main`, plus an opt-in `e2e` label (#113)
+- [x] Maestro flows addressed by `testID`, guarded by a static contract test (#126, #128)
+- [x] Weekly Maestro run on `dev`, plus simulator-crash attribution (#128, #131)
 - [ ] E2E job exercised against a real simulator **in CI** — only reachable from a generated app,
       since every run on the template itself skips at the `[APP_SLUG]` gate
 
