@@ -214,12 +214,77 @@ jobs:
       # later is picked up without touching this workflow. Every flow starts by
       # clearing state, so they are order-independent; `APP_SCHEME` is consumed
       # only by full-journey.yaml and harmlessly unused by the others.
+      #
+      # The marker dates the crash scan in the step below (#131). It is touched
+      # here rather than at job start deliberately: booting the simulator and
+      # installing the app in the step above produces crash reports of its own —
+      # 13 backboardd reports inside one four-minute window on the machine that
+      # filed that issue — and the scan should only ever speak about the flows.
       - name: Run Maestro flows
         if: steps.bootstrap_check.outputs.skip == 'false'
         run: |
+          touch "$RUNNER_TEMP/e2e-start.marker"
           maestro test .maestro/ \
             -e APP_ID="${{ steps.app_ids.outputs.app_id }}" \
             -e APP_SCHEME="${{ steps.app_ids.outputs.app_scheme }}"
+
+      # Apple's SpringBoard segfaults on the simulator during Maestro's
+      # launchApp/stopApp cycling (#131) — which .maestro/persistence.yaml does on
+      # purpose and cannot stop doing, since force-quit-then-cold-start IS the
+      # test. When it happens the flow fails for no visible reason and the
+      # screenshots show the iOS home screen rather than the app, which reads
+      # exactly like a navigation bug in the app under test. This step prevents
+      # none of that; it exists so the red run says whose bug it is.
+      #
+      # `!cancelled()` rather than `always()`: a crash that did not fail the run is
+      # still worth a warning (a screenshot may be of the home screen), but a
+      # cancelled run needs nothing. Any status function in an `if:` replaces the
+      # implicit `success()` that every other step here relies on, so the bootstrap
+      # guard has to be restated explicitly — without it this would be the one step
+      # that runs on the template repo, where the job otherwise skips entirely.
+      - name: Check for simulator crash reports
+        if: ${{ !cancelled() && steps.bootstrap_check.outputs.skip == 'false' }}
+        env:
+          # Copies the .ips files into the artifact the two steps below upload.
+          # Nothing else is needed to get them there: this path is inside the
+          # directory `Upload Maestro debug output` already takes wholesale.
+          E2E_CRASH_COPY_DIR: ${{ runner.temp }}/maestro-debug/crash-reports
+        run: |
+          set -uo pipefail
+          # An earlier step failing (Metro never ready, the native build) means
+          # there was no Maestro run, so there is no window to scan.
+          if [ ! -f "$RUNNER_TEMP/e2e-start.marker" ]; then
+            echo "No Maestro run reached — nothing to scan."
+            exit 0
+          fi
+
+          rc=0
+          bash scripts/check-simulator-crashes.sh "$RUNNER_TEMP/e2e-start.marker" \
+            | tee "$RUNNER_TEMP/crash-scan.txt" || rc=$?
+
+          if [ "$rc" -eq 1 ]; then
+            echo "::warning title=Simulator crashed during this run::Apple's SpringBoard crashed while the Maestro flows were running. A failure here is likely the simulator's bug (#131), not the app — the crash reports are in the maestro-debug-output artifact."
+            {
+              echo "### The iOS Simulator crashed during this run"
+              echo
+              echo "Apple's \`SpringBoard\` — the simulator's home screen and app launcher —"
+              echo "crashed while the Maestro flows were running. This is a known simulator bug,"
+              echo "tracked in **#131**, and nothing in this repo causes it or can fix it."
+              echo
+              echo "**Read any failure above with that in mind**, and re-run before believing it."
+              echo "Screenshots taken after the crash show the iOS home screen rather than the app,"
+              echo "which reads exactly like an app navigation bug and is not one."
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/crash-scan.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Never fails the job. The flows' own result is the verdict; this step
+          # only annotates it. A simulator crash and a real assertion failure can
+          # happen in the same run, so this must not be able to change either way.
+          exit 0
 
       # Maestro's view hierarchies are the only practical way to diagnose a CI-only
       # failure — they are what identified four of the six flow defects fixed in #92.

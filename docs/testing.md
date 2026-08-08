@@ -420,7 +420,8 @@ npm run e2e -- .maestro/persistence.yaml     # or just one flow
 otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
 out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
 the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
-still holds its unreplaced template placeholders.
+still holds its unreplaced template placeholders. After the run it scans for the simulator crash
+described in [When it is the simulator, not the app](#when-it-is-the-simulator-not-the-app) below.
 
 ### Metro must be on port 8081
 
@@ -448,6 +449,39 @@ Screenshots and view hierarchies are written to `~/.maestro/tests/<run>` — rea
 because a `tapOn` against an unmatched-but-present element reports COMPLETED while tapping
 nothing. `commands.json` in that directory gives every step's status, which is the fastest way to
 spot a step that "passed" without doing anything.
+
+### When it is the simulator, not the app
+
+One failure mode looks like an app bug and is not. Apple's **SpringBoard** — the iOS home screen
+and app launcher — segfaults on the simulator during Maestro runs (`EXC_BAD_ACCESS` at `0x20`,
+seen three times in four days on macOS 26.5.2 / iOS 26.4). Maestro's `launchApp` / `stopApp`
+cycling appears to provoke it, and [`persistence.yaml`](../.maestro/persistence.yaml) does exactly
+that on purpose: force-quit, cold-start, assert the persisted state came back. That flow is not
+changeable — it *is* the test.
+
+The fingerprint is unmistakable once you know it: a flow fails partway with no visible cause, and
+**every screenshot from that point shows the iOS home screen instead of the app**. That reads
+exactly like a navigation bug in the app. It is not one, and it once cost an hour.
+
+`npm run e2e` scans for it automatically after every run and prints a block naming it, without
+changing the exit code — a simulator crash and a real assertion failure can happen in the same
+run, so a red run stays red. To check after the fact — a CI run, or a run you did not start from
+`npm run e2e`:
+
+```bash
+bash scripts/check-simulator-crashes.sh    # scans the last hour
+```
+
+Anything that crashed *inside* the simulator but is not SpringBoard is listed separately and
+deliberately does not count as infrastructure. **If one of those is the app under test, that
+failure is real.**
+
+In CI the same scan runs as its own step, warns on the run, writes a job summary, and copies the
+`.ips` reports into the `maestro-debug-output` artifact.
+
+Nothing in this repo causes the crash and nothing here can fix it. Re-run the flow before
+believing the failure. Tracked in **#131**, which also records the mitigations considered and
+rejected — retrying a failed run, and cycling the simulator between flows.
 
 ### In CI
 

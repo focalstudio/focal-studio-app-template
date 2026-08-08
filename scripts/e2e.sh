@@ -124,5 +124,44 @@ fi
 
 echo "▸ Maestro $(maestro --version 2>/dev/null | tail -1) → $APP_ID (Metro :$METRO_PORT)"
 
+# ── Run, then triage ──────────────────────────────────────────────────────────
+# This deliberately no longer `exec`s Maestro. The whole point of keeping it as a
+# child process is the seam after it: Apple's SpringBoard segfaults on the
+# simulator during Maestro's launchApp/stopApp cycling (#131) — which
+# .maestro/persistence.yaml does on purpose and cannot stop doing, since
+# force-quit-then-cold-start IS the test. When it happens the flow fails with no
+# visible cause and every screenshot from that point shows the iOS home screen
+# instead of the app, which reads exactly like an app navigation bug. Nothing here
+# causes it and nothing here can fix it; the check below only puts a name on it.
+#
+# The marker is what dates the scan. `find -newer` takes a file rather than a
+# timestamp, so comparing mtimes avoids parsing the .ips header's own
+# timezone-suffixed timestamp — `date`'s parsing flags differ irreconcilably
+# between BSD and GNU. mktemp rather than a fixed path so two concurrent runs
+# cannot share a marker.
+MARKER="$(mktemp "${TMPDIR:-/tmp}/e2e-start.XXXXXX")"
+trap 'rm -f "$MARKER"' EXIT
+
 # "$@" so a single flow can be run directly: npm run e2e -- .maestro/persistence.yaml
-exec maestro test "${@:-.maestro/}" -e APP_ID="$APP_ID" -e APP_SCHEME="$APP_SCHEME"
+#
+# `|| status=$?` because `set -e` would otherwise treat a failed run as the end of
+# the script and skip the triage — which is precisely the run that needs it.
+# Neither piped nor captured: Maestro draws its own progress UI, and a pipe would
+# strip it as well as putting the exit code we are preserving behind pipefail.
+#
+# Ctrl-C is not trapped. Bash takes the SIGINT along with Maestro and may exit
+# before the check runs; the EXIT trap still removes the marker, and a run you
+# interrupted yourself is not one that needs explaining.
+status=0
+maestro test "${@:-.maestro/}" -e APP_ID="$APP_ID" -e APP_SCHEME="$APP_SCHEME" || status=$?
+
+# Advisory, always. It runs on a green run too — a crash that did not fail the run
+# still means a screenshot may be of the home screen — prints nothing when the scan
+# is clean, and never changes the exit code. A SpringBoard crash and a genuine
+# assertion failure can happen in the same run, and turning a red run green here
+# would be worse than the confusion it exists to fix.
+#
+# A repo-relative path is correct: line 18 already cd'd to the repo root.
+bash scripts/check-simulator-crashes.sh "$MARKER" || true
+
+exit "$status"
