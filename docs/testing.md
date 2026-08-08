@@ -287,6 +287,99 @@ Two flows in [`.maestro/`](../.maestro/) drive a real iOS Simulator:
 Run them locally — it costs nothing and is far tighter than waiting on CI. Both flows pass in
 **under a minute** on a warm simulator, against a build that takes ~10 minutes the first time.
 
+### The seams the flows depend on
+
+**Read this before you redesign a screen.** The flows address every element by `testID`, never by
+its on-screen copy. Copy is the first thing your app replaces; these ids are the contract it has
+to keep.
+
+| id | Defined in | What it marks |
+|---|---|---|
+| `onboarding-slide-1` / `-2` / `-3` | `app/onboarding.tsx` — the `SLIDES` array | each slide's title, so the flow can prove a swipe advanced the pager |
+| `onboarding-cta` | `app/onboarding.tsx` | the Next / Get Started button |
+| `login-submit` | `app/(auth)/login.tsx` | "we are at the auth wall" — asserted on the way in *and* after account deletion |
+| `dev-seed-session` | `src/components/dev/DevSeedSessionButton.tsx` | the dev-only seam that bypasses the auth wall (#79) |
+| `tab-home` | `app/(tabs)/_layout.tsx` — `tabBarButtonTestID` | **"we are signed in and inside the app"** |
+| `tab-settings` | same | navigates to Settings |
+| `paywall-title` / `paywall-close` | `app/paywall.tsx` | the paywall arrived / dismiss it |
+| `settings-title` | `app/(tabs)/settings.tsx` | Settings rendered |
+| `settings-delete-account` | same | the Danger Zone row the two-step deletion starts from |
+| `theme-dark-mode` | same | the Dark Mode switch |
+| `theme-following-device` / `theme-set-manually` | same — the `THEME_STATE` map | the switch's description, which is what `persistence.yaml` round-trips |
+
+Three things follow from this that are easy to get wrong:
+
+- **`tab-home` is the signed-in marker, not anything on the home screen.** The flows used to
+  assert on the placeholder home card's `"Welcome"` title, in two places. Building a real app
+  deleted that card on day one and broke both flows (#126). Rewrite the home screen freely.
+- **Ids are written out as literal strings**, not built with a template literal — `testID:
+  "theme-set-manually"` in the `THEME_STATE` map rather than `` testID={`theme-${key}`} ``. That is
+  so a grep for the id finds the file, which is exactly what the guard test below does.
+- **The theme seam is on the description, not on the switch.** The Dark Mode switch is bound to the
+  *resolved* appearance (`useTheme().isDark`), so on a dark simulator it reads "on" before anything
+  has ever been stored — a `checked:` assertion would pass or fail on the simulator's own setting.
+  The description underneath it is driven by the stored value and says "Following your device
+  appearance." only until the first touch, so `persistence.yaml` asserts on *that* and proves the
+  value changed whichever way the switch happened to start (#129).
+
+**Three text selectors survive**, because nothing can give them a `testID`:
+
+- `"Continue"` and `"Delete Account"` — buttons inside a native `Alert.alert`, which has no React
+  Native tree to attach one to. Their copy lives in `handleDeleteAccount` in
+  `app/(tabs)/settings.tsx`; **reword it there and you must update the flows in the same commit.**
+  The guard test below now fails if either string disappears from `app/`+`src/` entirely, so a
+  wholesale rewrite of the Danger Zone is caught.
+- `"Open"` — iOS's own "Open in \<App\>?" scheme-handoff dialog. Not app copy at all, which is why
+  it is exempt from that presence check: it appears nowhere in this repo and never will.
+
+For those three, Maestro's matching rule applies: a text selector is a regex that must match the
+element's **whole** accessibility label, not a substring. `"Welcome to"` does not match
+"Welcome to MyApp" — `"Welcome to.*"` does. All three above are exact labels on a native button,
+so none needs a wildcard, and matching loosely would risk hitting the view behind the alert.
+
+#### The guard test
+
+[`src/__tests__/e2e-contract.test.ts`](../src/__tests__/e2e-contract.test.ts) checks four things:
+
+1. Every `id:` selector in `.maestro/*.yaml` is defined somewhere under `app/` or `src/`.
+2. No text selector appears outside the three exceptions above.
+3. Those of the three that are *app* copy — `"Continue"` and `"Delete Account"` — are still
+   present in the source.
+4. The flows swipe once per onboarding slide.
+
+It is static — no rendering, no mocks — and `ci.yml` runs it on **every** branch, so a removed
+seam fails the PR that removed it rather than an E2E run weeks later. That gap is not
+hypothetical: a `"Start Free Trial"` assertion sat dead in `full-journey.yaml` for a whole release
+after the paywall stopped rendering that button.
+
+Check 4 exists because check 1 cannot see it. An app shipping **five** slides still defines
+`onboarding-slide-1..5`, so every id the flows name resolves and the guard goes green — while the
+flows swipe twice, land on slide 3, and tap `onboarding-cta`, which on a non-final slide is
+labelled "Next" and just advances the pager. The flow then waits for the auth wall from inside
+onboarding and dies on a timeout 20 minutes into a macOS run.
+
+**Checks 3 and 4 are deliberately loose**, because a generated app is allowed to restructure. If
+one false-fails on your app, that is the escape hatch, not a bug to work around:
+
+| Your app | Result |
+|---|---|
+| Alert copy moved to a constant or another file | passes — the check greps all of `app/`+`src/` |
+| Alert copy behind i18n or a template literal | **false-fails** → drop the string from `APP_TEXT_SELECTORS`, or drop the text selector from the flows |
+| Onboarding driven by taps rather than swipes | skipped |
+| Onboarding slides renamed off `onboarding-slide-N` | skipped |
+| A non-onboarding swipe before the onboarding CTA | false-fails (rare — the count stops at the first `onboarding-cta` tap) |
+
+Check 3's looseness also costs a false negative: `"Continue"` is a Button label in
+`app/paywall.tsx` too, so rewording *only* the alert still passes. It catches deletion and
+wholesale rewrite, which is the failure that actually happens.
+
+What no static check can see is a `testID` still in the source whose element stopped being
+rendered or reachable — a screen dropped from the navigator, a row moved behind a new gate. The
+[weekly run on `dev`](#in-ci) is what catches that.
+
+If you genuinely need to move a seam, change both sides. The guard tells you when you have only
+changed one.
+
 ### One-time setup
 
 ```bash
@@ -327,7 +420,8 @@ npm run e2e -- .maestro/persistence.yaml     # or just one flow
 otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
 out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
 the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
-still holds its unreplaced template placeholders.
+still holds its unreplaced template placeholders. After the run it scans for the simulator crash
+described in [When it is the simulator, not the app](#when-it-is-the-simulator-not-the-app) below.
 
 ### Metro must be on port 8081
 
@@ -356,10 +450,54 @@ because a `tapOn` against an unmatched-but-present element reports COMPLETED whi
 nothing. `commands.json` in that directory gives every step's status, which is the fastest way to
 spot a step that "passed" without doing anything.
 
+### When it is the simulator, not the app
+
+One failure mode looks like an app bug and is not. Apple's **SpringBoard** — the iOS home screen
+and app launcher — segfaults on the simulator during Maestro runs (`EXC_BAD_ACCESS` at `0x20`,
+seen three times in four days on macOS 26.5.2 / iOS 26.4). Maestro's `launchApp` / `stopApp`
+cycling appears to provoke it, and [`persistence.yaml`](../.maestro/persistence.yaml) does exactly
+that on purpose: force-quit, cold-start, assert the persisted state came back. That flow is not
+changeable — it *is* the test.
+
+The fingerprint is unmistakable once you know it: a flow fails partway with no visible cause, and
+**every screenshot from that point shows the iOS home screen instead of the app**. That reads
+exactly like a navigation bug in the app. It is not one, and it once cost an hour.
+
+`npm run e2e` scans for it automatically after every run and prints a block naming it, without
+changing the exit code — a simulator crash and a real assertion failure can happen in the same
+run, so a red run stays red. To check after the fact — a CI run, or a run you did not start from
+`npm run e2e`:
+
+```bash
+bash scripts/check-simulator-crashes.sh    # scans the last hour
+```
+
+Anything that crashed *inside* the simulator but is not SpringBoard is listed separately and
+deliberately does not count as infrastructure. **If one of those is the app under test, that
+failure is real.**
+
+In CI the same scan runs as its own step, warns on the run, writes a job summary, and copies the
+`.ips` reports into the `maestro-debug-output` artifact.
+
+Nothing in this repo causes the crash and nothing here can fix it. Re-run the flow before
+believing the failure. Tracked in **#131**, which also records the mitigations considered and
+rejected — retrying a failed run, and cycling the simulator between flows.
+
 ### In CI
 
-Post-release via `workflow_call` from `release.yml`, on PRs to `main`, and on any PR labelled
-`e2e` (see [Opt-in E2E on a PR](#opt-in-e2e-on-a-pr) below).
+Post-release via `workflow_call` from `release.yml`, on PRs to `main`, on any PR labelled `e2e`
+(see [Opt-in E2E on a PR](#opt-in-e2e-on-a-pr) below), and **weekly on `dev`** — a Monday cron,
+`17 6 * * 1`.
+
+The weekly run is the backstop for runtime rot, not a substitute for the label: it tells you
+within seven days that a flow broke, but it cannot tell you *which PR* broke it. For a risky
+change, still opt in pre-merge.
+
+Two things about that cron are worth knowing before you edit it. GitHub only ever runs the
+**default branch's** copy of a workflow file on a schedule, so a change here does nothing until it
+reaches `main` — and the run then executes `main`'s steps against `dev`'s code, which is why the
+checkout step names `ref: dev` explicitly. And GitHub disables scheduled workflows after 60 days
+of repository inactivity; a dormant app simply gets no weekly signal.
 
 ### Opt-in E2E on a PR
 
@@ -368,7 +506,9 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, installs, then hits the bootstrap gate and skips — the signal only becomes real in an app generated from it.
+On this template repo the job checks out, hits the bootstrap gate and skips in seconds — the gate
+runs before any toolchain setup for exactly that reason. The signal only becomes real in an app
+generated from it.
 
 ---
 
@@ -377,6 +517,6 @@ On this template repo the job checks out, installs, then hits the bootstrap gate
 ```bash
 npm test            # Jest
 npm run test:coverage # Jest + coverage thresholds (what CI enforces)
-npm run type-check  # TypeScript — tsconfig already declares "types": ["jest"]
+npm run type-check  # TypeScript — tsconfig already declares "types": ["jest", "node"]
 npm run lint        # ESLint
 ```

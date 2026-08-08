@@ -1,22 +1,26 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-05_
+_Updated: 2026-08-08_
 
-**Version:** 0.12.0   **Stage:** Template / pre-app
+**Version:** 0.13.0   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
-**0.12.0 is the monetization release**, carrying the two halves of #112 from `dev` to `main`:
-#120 put the paywall behind a `PaywallProvider` port (the same port/adapter shape as
-`src/services/auth/`), and #121 added `scripts/add-paywall.sh` plus the RevenueCat adapter behind
-it. Nothing is installed by default — an app that never monetizes still carries no in-app purchase
-dependency, no native rebuild and no store key at boot. `app/paywall.tsx` now renders
-store-localized prices: the hardcoded `$4.99`/`$29.99`/`$79.99` were wrong in every non-USD
-storefront and wrong the day a price changed in App Store Connect, an App Store Guideline 3.1.2
-exposure the template shipped by default. One breaking change —
-`usePaywallStore.setSubscription()` is gone; it granted Pro with no payment and persisted it, the
-entitlement twin of the fake-signup scaffold already deleted from auth. Use `purchase(tier)`, or
-`seedLocalSubscription()` for tests and dev builds.
+**0.13.0 is the test-and-CI hardening release**, carrying #126–#131 from `dev` to `main`. Its
+theme is the gap between "the template's own checks are green" and "a *generated* app's checks
+are green". Both Maestro flows addressed elements by placeholder copy — onboarding slide titles,
+the home card's `"Welcome"`, the settings page title — so they shipped green here and failed the
+first time anyone wrote their own product (#126); every selector is now a `testID`, and
+`src/__tests__/e2e-contract.test.ts` fails statically, in under a second on every branch, if one
+goes missing. The same blind spot had already let a dead `"Start Free Trial"` assertion survive a
+release. `init.sh` created 4 of 18 issue labels, so a generated app could not follow the labelling
+convention it ships with and could never apply the `e2e` opt-in gate (#127) — the set now lives in
+`.github/labels.tsv` behind `scripts/sync-labels.sh`, and an older generated app can self-heal by
+running it. A weekly Maestro run on `dev` covers the rot a static check cannot see (#128), and
+`scripts/check-simulator-crashes.sh` now names the simulator's own SpringBoard segfaults instead of
+letting them read as app navigation bugs (#131). One user-facing change: Settings' three-Toggle
+appearance picker is a single **Dark Mode** switch (#129) — `"device"` stays the persisted default
+and the `hydrate` fallback, it just stops being selectable.
 
 ## Next
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
@@ -28,11 +32,16 @@ entitlement twin of the fake-signup scaffold already deleted from auth. Use `pur
 ## Blockers
 None.
 
-Three things worth carrying forward, none of them blocking:
+Four things worth carrying forward, none of them blocking:
 
-- **#112 stays open until 0.12.0 lands on `main`.** `Closes` only fires on merges to the default
-  branch and template PRs target `dev`, so the work shipped while the issue stayed open — the same
-  mechanic that held #113 and #114 open through 0.11.0. The release PR closes it.
+- **#126–#131 stay open until 0.13.0 lands on `main`.** `Closes` only fires on merges to the
+  default branch and template PRs target `dev`, so the work shipped while the issues stayed open —
+  the same mechanic that held #113/#114 open through 0.11.0 and #112 through 0.12.0. The release PR
+  closes all six.
+- **The E2E job has still never run against a real simulator in CI.** Every run on this repo skips
+  at the `[APP_SLUG]` bootstrap gate, including the new weekly `dev` cron, so what 0.13.0 added is
+  static coverage of the flows plus a scheduled slot that only starts doing work in a generated
+  app. The gap is the open Phase 2 box, and it closes from the app side, not from here.
 - **The RevenueCat adapter has never run against a live RevenueCat project.** CI proves the wiring
   (`Wire RevenueCat Paywall` and `Wire Supabase Backend + RevenueCat Paywall` both green, the
   latter being the only check that catches one `add-*.sh` clobbering the other's selector), and the

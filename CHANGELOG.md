@@ -9,6 +9,111 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-08
+
+### Added
+- **E2E runs now name the simulator's own crashes (#131)** — Apple's `SpringBoard` segfaults on the
+  iOS Simulator during Maestro runs, three times in four days on one machine. Its
+  `launchApp`/`stopApp` cycling provokes it, and `.maestro/persistence.yaml` does that on purpose:
+  force-quit then cold-start is how it proves zod-schema'd state survives a real restart, so the
+  flow cannot stop doing it. Nothing in this repo causes the crash or can fix it — what it costs is
+  diagnosis, because the flow fails with no visible reason and every screenshot from that point
+  shows the iOS home screen instead of the app. That reads as an app navigation bug and once cost
+  an hour. The new `scripts/check-simulator-crashes.sh` now runs after every local `npm run e2e`
+  and as its own step in `maestro-e2e.yml`, comparing crash-report mtimes against a marker touched
+  immediately before the flows; it prints a block naming the crash, warns and writes to the job
+  summary in CI, and copies the `.ips` reports into the debug artifact. It is advisory only and
+  never changes an exit code — a simulator crash and a real assertion failure can happen in the
+  same run. Processes that crashed *inside* the simulator but are not SpringBoard are listed
+  separately and deliberately excluded from that verdict: if the app under test crashed, that
+  failure is real. Run it with no argument (`bash scripts/check-simulator-crashes.sh`) to scan the
+  last hour after a confusing red run. Retrying a failed run and cycling the simulator between
+  flows were both considered and rejected; #131 records why.
+- **`src/__tests__/e2e-contract.test.ts`** — reads every `id:` selector out of `.maestro/*.yaml`
+  and fails if it is not defined as a `testID` under `app/` or `src/`, and fails on any text
+  selector outside the three documented exceptions. Static, so it runs in under a second on every
+  branch in `ci.yml` — E2E itself only runs on PRs to `main` or behind the `e2e` label, which is
+  how the dead assertion under **Fixed** below survived a release unnoticed.
+- **A weekly Maestro run on `dev` (#128)** — `maestro-e2e.yml` now also runs on a Monday cron. The
+  guard test above runs on every PR and fails the moment a seam is *deleted*, but it cannot see a
+  `testID` that is still in the source while the element carrying it stopped being rendered or
+  reachable — a screen dropped from the navigator, a row moved behind a new gate. Only a real
+  device run finds that, and nothing ran one against `dev`: E2E fires on PRs to `main`, behind the
+  `e2e` label, and post-release, so flow rot on the integration branch stayed invisible until
+  release time. Note `schedule:` only ever runs the workflow file from the **default** branch and
+  checks that branch out, so the job now names `ref: dev` explicitly — without it the weekly run
+  would test `main`, which release PRs already cover. Weekly rather than nightly because a run is
+  15–25 minutes of macOS and a generated app may be private, where the 10x multiplier bites.
+- **Two more checks in `src/__tests__/e2e-contract.test.ts` (#128)** — the two *app-owned* text
+  selectors must still exist in the source, and the flows must swipe once per onboarding slide.
+  `"Continue"` and `"Delete Account"` are `Alert.alert` buttons no `testID` can reach and were the
+  one part of the contract nothing verified; rewrite that alert and both flows tap a button that
+  no longer exists. And an app shipping more slides than the template keeps every slide id valid
+  while the flows swipe the wrong number of times — the id check cannot see it, and the flow dies
+  on a timeout 20 minutes into a macOS run. `"Open"` stays exempt from the first check: it is
+  iOS's own dialog, not app copy. Both checks skip rather than guess when an app restructures;
+  `docs/testing.md` lists exactly when.
+- **`@types/node` as a devDependency**, and `"node"` added to `tsconfig.json`'s `types`. Types
+  only, no runtime and no bundle impact; the package was already installed transitively via
+  `jest-environment-node`. Needed because the guard test above reads `.maestro/` and the app
+  sources off disk with `fs`.
+
+### Changed
+- **One Dark Mode switch replaces the three-Toggle appearance picker (#129)** — Settings rendered
+  Light / Dark / System as three `Toggle`s behaving as radio buttons, a control that fights the
+  platform: an iOS switch means on/off, not "selected". Every generated app inherited it. It is now
+  a single **Dark Mode** switch, ported from `focalstudio/tick` where it was verified on device.
+  The `Theme` type, `themeSchema`, `setTheme` and the `hydrate` fallback are all unchanged —
+  `"device"` stays the persisted default and simply stops being *selectable*, becoming the
+  pre-touch state: the switch mirrors the device until first touch, and that flip writes an
+  explicit `"light"`/`"dark"` that persists and wins from then on. There is deliberately no way
+  back to following the device once touched. Because the switch is now bound to the *resolved*
+  appearance, its position depends on the device's own setting, so `.maestro/persistence.yaml`
+  round-trips the switch's stored-value description (`theme-following-device` /
+  `theme-set-manually`) instead of asserting `checked:` on `theme-dark` — see the seam table in
+  `docs/testing.md`. `Toggle` gained a `descriptionTestID` prop to carry that seam.
+- **`maestro-e2e.yml` checks the `[APP_SLUG]` bootstrap gate before installing anything (#128)** —
+  it ran after `setup-node` and `npm ci`, so every skipped run still paid ~3 minutes of macOS
+  runner to decide it had nothing to do. On this template repo that is *every* run, and the weekly
+  cron above adds 52 more a year. The gate needs only the checkout, and every later step already
+  carried the same `if:`, so nothing about which steps execute has changed. The workflow also
+  gained a `concurrency` group keyed on the event, so a new commit supersedes an in-flight PR run
+  without a PR ever being able to cancel the post-release run from `release.yml`.
+- **`package-lock.json` records the current version again** — it still said `0.7.0`, because
+  `scripts/bump-version.sh` writes `package.json` and `app.json` but never the lockfile. Picked up
+  incidentally by the `npm install --package-lock-only` for the devDependency above.
+
+### Fixed
+- **`SETUP.md` cloned the template from the old owner (#130)** — both bootstrap paths, Option A
+  and Option B, pointed at `fpmartinez10/focal-studio-app-template`. The repo now lives at
+  `focalstudio/focal-studio-app-template`, and the old path resolved only through GitHub's
+  rename redirect — which is not a guarantee, and disappears if that account is renamed again or
+  anything else claims the path. Since it is the literal first command a new user runs, a stale
+  URL would fail at the worst possible moment. Both lines now use the canonical owner.
+- **`init.sh` created 4 of 18 issue labels (#127)** — it hardcoded `open-beta`, `public`,
+  `post-release` and `chore`, and assumed GitHub's default set was already there. It is not
+  reliably created for a repo made with `gh repo create --source=.`, so a generated app started
+  life with four labels and could not follow the one-type + one-priority + one-milestone
+  convention it ships with in `.claude/reference/issue-labels.md`. Worse, `e2e` was absent, so the
+  Maestro opt-in gate in `maestro-e2e.yml` — the escape hatch designed in #113 for PRs to `dev` —
+  could never be applied in any app but this one. The set now lives in one manifest,
+  `.github/labels.tsv`, applied by the new `scripts/sync-labels.sh` (idempotent, `--dry-run`
+  supported); `init.sh` calls it at bootstrap, and an app generated before this can self-heal with
+  `bash scripts/sync-labels.sh`. The four labels' colours also now match this repo's rather than
+  drifting from them.
+- **Maestro flows no longer assert on template screen copy (#126)** — both flows in `.maestro/`
+  addressed elements by their placeholder text: the onboarding slide titles, the home card's
+  `"Welcome"`, the settings page title. Every one of those is the first thing a generated app
+  replaces, so the flows shipped green in the template and failed the first time anyone built
+  their own product. Every selector is now a `testID`, including the tab bar (via
+  `tabBarButtonTestID`), which replaces the home-screen copy as the "we are signed in" marker and
+  survives a home-screen rewrite. Only three text selectors remain — the two native
+  `Alert.alert` buttons in the account-deletion flow and iOS's own scheme-handoff dialog — and
+  the flow headers say why. The full seam list is in `docs/testing.md`.
+- **A dead assertion in `full-journey.yaml`** — it waited on a `"Start Free Trial"` button the
+  paywall stopped rendering when it moved onto the `PaywallProvider` port in 0.12.0. Found by the
+  audit above; nothing connected the two, which is what the new guard test is for.
+
 ## [0.12.0] — 2026-08-05
 
 ### Added

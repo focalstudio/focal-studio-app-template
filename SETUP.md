@@ -18,7 +18,7 @@ Claude conducts a Q&A, replaces all placeholders, creates the GitHub repo, seeds
 
 1. **Clone and detach from the template remote:**
    ```bash
-   git clone https://github.com/fpmartinez10/focal-studio-app-template.git <your-app-slug>
+   git clone https://github.com/focalstudio/focal-studio-app-template.git <your-app-slug>
    cd <your-app-slug>
    rm -rf .git
    ```
@@ -62,7 +62,7 @@ Before starting, install:
 ### 1.1 Clone the template
 
 ```bash
-git clone https://github.com/fpmartinez10/focal-studio-app-template.git <your-app-slug>
+git clone https://github.com/focalstudio/focal-studio-app-template.git <your-app-slug>
 cd <your-app-slug>
 rm -rf .git
 git init

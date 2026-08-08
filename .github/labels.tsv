@@ -1,0 +1,41 @@
+# Issue label manifest — the single source of truth for this repo's label set and
+# for every app bootstrapped from this template.
+#
+# Format: name<TAB>color<TAB>description   (tab-separated, exactly three fields)
+# Lines starting with # and blank lines are ignored. Colors are 6-digit hex, no leading '#'.
+#
+# Apply with:  bash scripts/sync-labels.sh [--repo owner/name]
+# scripts/init.sh runs that for you when it creates the GitHub repo.
+#
+# Keep in sync with the tables in .claude/reference/issue-labels.md.
+
+# ── GitHub defaults ───────────────────────────────────────────────────────────
+# Listed explicitly, not assumed: a repo created by `gh repo create --source=.`
+# does not reliably arrive with the default set (#127).
+bug	d73a4a	Something isn't working
+documentation	0075ca	Improvements or additions to documentation
+duplicate	cfd3d7	This issue or pull request already exists
+enhancement	a2eeef	New feature or request
+good first issue	7057ff	Good for newcomers
+help wanted	008672	Extra attention is needed
+invalid	e4e669	This doesn't seem right
+question	d876e3	Further information is requested
+wontfix	ffffff	This will not be worked on
+
+# ── Type (pick one per issue) — bug / enhancement / documentation / question above
+chore	cfd3d7	Maintenance, dependencies, CI, tooling
+
+# ── Priority (pick one per issue) ─────────────────────────────────────────────
+critical	b60205	Must ship before the current stage gate / release
+high	d93f0b	Important, should not slip
+medium	fbca04	Planned for the milestone, can slip
+low	0e8a16	Nice to have
+
+# ── Milestone (pick one per issue) ────────────────────────────────────────────
+open-beta	5319e7	Required for open beta launch
+public	1d76db	Required for public v1 launch
+post-release	bfdadc	Follow-up work after a release ships
+
+# ── Workflow ──────────────────────────────────────────────────────────────────
+# Opts a PR to dev into the Maestro E2E suite — see .github/workflows/maestro-e2e.yml.
+e2e	ededed	Run the Maestro E2E suite on this PR

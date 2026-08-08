@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from "react-native";
+import { Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Screen } from "@/components/layout/Screen";
 import { Card } from "@/components/ui/Card";
@@ -12,13 +12,31 @@ import { setAnalyticsEnabled, Analytics } from "@/services/analytics";
 import { maybeRequestRating } from "@/services/ratingService";
 import { FontSize, FontWeight, Spacing } from "@/theme";
 import { APP_NAME, APP_VERSION, PRIVACY_POLICY_URL, SUPPORT_EMAIL } from "@/constants";
-import type { Theme } from "@/types";
 
-const THEMES: { label: string; value: Theme }[] = [
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-  { label: "System", value: "device" },
-];
+/**
+ * What the Dark Mode switch says underneath itself, keyed by whether the stored
+ * theme is still the `"device"` default.
+ *
+ * The switch is bound to the *resolved* appearance (`useTheme().isDark`), so its
+ * position cannot tell you what was stored — on a dark device it reads "on"
+ * before anything has ever been written. This description can, which is why
+ * `.maestro/persistence.yaml` round-trips it rather than the switch state.
+ *
+ * `testID` is spelled out per entry rather than built from the key, so that a
+ * grep for `theme-set-manually` finds this file — `src/__tests__/e2e-contract.test.ts`
+ * greps for exactly that. These are E2E seams: see "The seams the flows depend
+ * on" in docs/testing.md.
+ */
+const THEME_STATE = {
+  device: {
+    description: "Following your device appearance.",
+    testID: "theme-following-device",
+  },
+  manual: {
+    description: "Set manually.",
+    testID: "theme-set-manually",
+  },
+} as const;
 
 
 function Row({
@@ -26,15 +44,19 @@ function Row({
   onPress,
   destructive,
   disabled,
+  testID,
 }: {
   label: string;
   onPress: () => void;
   destructive?: boolean;
   disabled?: boolean;
+  /** Addresses this row in an E2E flow, independently of its label copy. */
+  testID?: string;
 }) {
   const { colors } = useTheme();
   return (
     <Pressable
+      testID={testID}
       style={[styles.row, disabled && styles.rowDisabled]}
       onPress={disabled ? undefined : onPress}
     >
@@ -47,9 +69,10 @@ function Row({
 }
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { theme, setTheme, analyticsEnabled, setAnalyticsEnabled: setStoreAnalytics } =
     useAppStore();
+  const themeState = theme === "device" ? THEME_STATE.device : THEME_STATE.manual;
   const { signOut, deleteAccount } = useAuthStore();
   const [isDeleting, setIsDeleting] = useState(false);
   const isMountedRef = useRef(true);
@@ -65,10 +88,6 @@ export default function SettingsScreen() {
       Analytics.screenViewed("settings");
     }, [])
   );
-
-  function handleTheme(t: Theme) {
-    setTheme(t);
-  }
 
   function handleAnalyticsToggle(v: boolean) {
     setStoreAnalytics(v);
@@ -129,22 +148,31 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Settings</Text>
+        <Text testID="settings-title" style={[styles.pageTitle, { color: colors.text }]}>
+          Settings
+        </Text>
 
         {/* Appearance */}
         <Card>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Appearance</Text>
-          {THEMES.map((t, i) => (
-            <View key={t.value}>
-              <Toggle
-                testID={`theme-${t.value}`}
-                label={t.label}
-                value={theme === t.value}
-                onValueChange={() => handleTheme(t.value)}
-              />
-              {i < THEMES.length - 1 && <Divider />}
-            </View>
-          ))}
+          {/*
+            One switch, not three. Three switches where at most one can be on is
+            a radio group wearing a control that means on/off on iOS (#129).
+
+            `"device"` stays the persisted default and the `hydrate` fallback —
+            it just stops being *selectable*. It is the pre-touch state: the
+            switch mirrors the device until first touch, and that flip writes an
+            explicit "light"/"dark" that wins from then on. There is deliberately
+            no way back to "device" once touched.
+          */}
+          <Toggle
+            testID="theme-dark-mode"
+            label="Dark Mode"
+            description={themeState.description}
+            descriptionTestID={themeState.testID}
+            value={isDark}
+            onValueChange={(v) => setTheme(v ? "dark" : "light")}
+          />
         </Card>
 
         {/* Privacy */}
@@ -189,7 +217,13 @@ export default function SettingsScreen() {
         {/* Danger Zone */}
         <Card>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Danger Zone</Text>
+          {/*
+            E2E seam: the flow scrolls to and taps this row by id. It used to
+            match on "Delete Account.*" — the wildcard was there to absorb the
+            trailing chevron the row renders into its accessible label.
+          */}
           <Row
+            testID="settings-delete-account"
             label="Delete Account"
             destructive
             disabled={isDeleting}

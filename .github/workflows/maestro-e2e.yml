@@ -29,6 +29,29 @@ on:
     # and the label would appear broken. Non-`e2e` labels still fire the event, but
     # the job-level `if:` below skips them without allocating a runner.
     types: [opened, synchronize, reopened, labeled]
+  # Weekly backstop for `dev` (#128). The static guard in
+  # src/__tests__/e2e-contract.test.ts runs on every PR and catches a *removed*
+  # seam in seconds. What it cannot catch is a `testID` that is still in the
+  # source while the element carrying it is no longer rendered or reachable — a
+  # screen dropped from the navigator, a row moved behind a new gate. Only a real
+  # run finds that, and until now nothing ran one against `dev`, so flow rot on
+  # the integration branch stayed invisible until release time.
+  #
+  # Three things about `schedule:` that are easy to get wrong:
+  #   1. It only ever runs the workflow file from the DEFAULT branch (`main`
+  #      here). Editing this block on `dev` changes nothing until it reaches
+  #      main — and the run then executes main's steps against dev's code.
+  #   2. It checks out the default branch too, which is not what this is for.
+  #      Hence the explicit `ref:` on the checkout step below.
+  #   3. GitHub disables scheduled workflows after 60 days of repository
+  #      inactivity. A dormant app gets no weekly signal, which is fine.
+  #
+  # Weekly, not nightly: a run is ~15-25 min of macOS, and a generated app may be
+  # private, where the 10x minute multiplier does bite (#113). Monday morning so a
+  # break is found at the start of a week, and deliberately off the hour — GitHub
+  # queues scheduled runs and :00 is the most congested slot.
+  schedule:
+    - cron: "17 6 * * 1"
   # Invoked by release.yml as a reusable workflow, in the same run, right after it
   # creates the vX.Y.Z tag.
   #
@@ -48,6 +71,19 @@ env:
   # runs. Keep this in sync with the "Maestro CLI" row in VERSIONS.md.
   MAESTRO_VERSION: '2.8.0'
 
+# One run per ref per event. The case that saves real macOS minutes is a new commit
+# on an `e2e`-labelled PR superseding a run already 20 minutes in.
+#
+# `github.event_name` is in the group key so the weekly run and the release-time
+# `workflow_call` can never cancel each other or be cancelled by a PR — inside a
+# called workflow that context holds the CALLER's event (`push`, from release.yml),
+# which is what keeps the release run in its own group. Do NOT simplify this to the
+# usual `${{ github.workflow }}-${{ github.ref }}`: that would let a PR run cancel
+# the post-release run.
+concurrency:
+  group: maestro-e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   e2e:
     name: Maestro E2E (iOS Simulator)
@@ -55,7 +91,8 @@ jobs:
     # `dev` PRs cost nothing. The non-`pull_request` clause is what keeps the
     # workflow_call path from release.yml and manual workflow_dispatch reruns
     # working — for those events `github.event.pull_request` is null and both of
-    # the other clauses would evaluate false.
+    # the other clauses would evaluate false. The weekly `schedule` run added in
+    # #128 is admitted by that same first clause, so it needs no clause of its own.
     if: >-
       github.event_name != 'pull_request'
       || github.event.pull_request.base.ref == 'main'
@@ -65,19 +102,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          # A scheduled run is triggered from — and would otherwise check out —
+          # the default branch, `main`. The point of that run is `dev`, so name
+          # it. Every other event wants the ref that triggered it, and `''` is
+          # exactly actions/checkout's default for that, so this expression is a
+          # no-op outside the cron.
+          #
+          # `dev` exists in every generated app: scripts/init.sh creates and
+          # pushes both branches at bootstrap. If you have deleted `dev`, delete
+          # the `schedule:` trigger above rather than editing this line.
+          ref: ${{ github.event_name == 'schedule' && 'dev' || '' }}
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
+      # First, before any toolchain setup: the gate needs only the checkout, and
+      # every step below already carries the same `if:`. On this template repo the
+      # gate always trips, so running it after `npm ci` meant paying ~3 minutes of
+      # macOS runner to decide there was nothing to do — 52 times a year more,
+      # now that the weekly cron exists.
       - name: Check if app is bootstrapped
         id: bootstrap_check
         run: |
+          # Echoed so the first real cron run self-verifies: `event=schedule` with
+          # `ref=refs/heads/main` and a `head` matching origin/dev is proof the
+          # workflow came from the default branch while the code came from dev.
+          echo "event=${{ github.event_name }} ref=${{ github.ref }} head=$(git rev-parse --short HEAD)"
           if grep -q '\[APP_SLUG\]' app.json; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Template placeholders still present — skipping Maestro E2E run."
@@ -85,6 +133,17 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Setup Node
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.bootstrap_check.outputs.skip == 'false'
+        run: npm ci --legacy-peer-deps
 
       # Maestro CLI requires Java 17+; macos-latest doesn't guarantee one is
       # present, so pin it explicitly rather than relying on the runner image.
@@ -155,12 +214,77 @@ jobs:
       # later is picked up without touching this workflow. Every flow starts by
       # clearing state, so they are order-independent; `APP_SCHEME` is consumed
       # only by full-journey.yaml and harmlessly unused by the others.
+      #
+      # The marker dates the crash scan in the step below (#131). It is touched
+      # here rather than at job start deliberately: booting the simulator and
+      # installing the app in the step above produces crash reports of its own —
+      # 13 backboardd reports inside one four-minute window on the machine that
+      # filed that issue — and the scan should only ever speak about the flows.
       - name: Run Maestro flows
         if: steps.bootstrap_check.outputs.skip == 'false'
         run: |
+          touch "$RUNNER_TEMP/e2e-start.marker"
           maestro test .maestro/ \
             -e APP_ID="${{ steps.app_ids.outputs.app_id }}" \
             -e APP_SCHEME="${{ steps.app_ids.outputs.app_scheme }}"
+
+      # Apple's SpringBoard segfaults on the simulator during Maestro's
+      # launchApp/stopApp cycling (#131) — which .maestro/persistence.yaml does on
+      # purpose and cannot stop doing, since force-quit-then-cold-start IS the
+      # test. When it happens the flow fails for no visible reason and the
+      # screenshots show the iOS home screen rather than the app, which reads
+      # exactly like a navigation bug in the app under test. This step prevents
+      # none of that; it exists so the red run says whose bug it is.
+      #
+      # `!cancelled()` rather than `always()`: a crash that did not fail the run is
+      # still worth a warning (a screenshot may be of the home screen), but a
+      # cancelled run needs nothing. Any status function in an `if:` replaces the
+      # implicit `success()` that every other step here relies on, so the bootstrap
+      # guard has to be restated explicitly — without it this would be the one step
+      # that runs on the template repo, where the job otherwise skips entirely.
+      - name: Check for simulator crash reports
+        if: ${{ !cancelled() && steps.bootstrap_check.outputs.skip == 'false' }}
+        env:
+          # Copies the .ips files into the artifact the two steps below upload.
+          # Nothing else is needed to get them there: this path is inside the
+          # directory `Upload Maestro debug output` already takes wholesale.
+          E2E_CRASH_COPY_DIR: ${{ runner.temp }}/maestro-debug/crash-reports
+        run: |
+          set -uo pipefail
+          # An earlier step failing (Metro never ready, the native build) means
+          # there was no Maestro run, so there is no window to scan.
+          if [ ! -f "$RUNNER_TEMP/e2e-start.marker" ]; then
+            echo "No Maestro run reached — nothing to scan."
+            exit 0
+          fi
+
+          rc=0
+          bash scripts/check-simulator-crashes.sh "$RUNNER_TEMP/e2e-start.marker" \
+            | tee "$RUNNER_TEMP/crash-scan.txt" || rc=$?
+
+          if [ "$rc" -eq 1 ]; then
+            echo "::warning title=Simulator crashed during this run::Apple's SpringBoard crashed while the Maestro flows were running. A failure here is likely the simulator's bug (#131), not the app — the crash reports are in the maestro-debug-output artifact."
+            {
+              echo "### The iOS Simulator crashed during this run"
+              echo
+              echo "Apple's \`SpringBoard\` — the simulator's home screen and app launcher —"
+              echo "crashed while the Maestro flows were running. This is a known simulator bug,"
+              echo "tracked in **#131**, and nothing in this repo causes it or can fix it."
+              echo
+              echo "**Read any failure above with that in mind**, and re-run before believing it."
+              echo "Screenshots taken after the crash show the iOS home screen rather than the app,"
+              echo "which reads exactly like an app navigation bug and is not one."
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/crash-scan.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Never fails the job. The flows' own result is the verdict; this step
+          # only annotates it. A simulator crash and a real assertion failure can
+          # happen in the same run, so this must not be able to change either way.
+          exit 0
 
       # Maestro's view hierarchies are the only practical way to diagnose a CI-only
       # failure — they are what identified four of the six flow defects fixed in #92.
