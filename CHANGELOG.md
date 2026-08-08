@@ -9,36 +9,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
-### Fixed
-- **`SETUP.md` cloned the template from the old owner (#130)** — both bootstrap paths, Option A
-  and Option B, pointed at `fpmartinez10/focal-studio-app-template`. The repo now lives at
-  `focalstudio/focal-studio-app-template`, and the old path resolved only through GitHub's
-  rename redirect — which is not a guarantee, and disappears if that account is renamed again or
-  anything else claims the path. Since it is the literal first command a new user runs, a stale
-  URL would fail at the worst possible moment. Both lines now use the canonical owner.
-- **`init.sh` created 4 of 18 issue labels (#127)** — it hardcoded `open-beta`, `public`,
-  `post-release` and `chore`, and assumed GitHub's default set was already there. It is not
-  reliably created for a repo made with `gh repo create --source=.`, so a generated app started
-  life with four labels and could not follow the one-type + one-priority + one-milestone
-  convention it ships with in `.claude/reference/issue-labels.md`. Worse, `e2e` was absent, so the
-  Maestro opt-in gate in `maestro-e2e.yml` — the escape hatch designed in #113 for PRs to `dev` —
-  could never be applied in any app but this one. The set now lives in one manifest,
-  `.github/labels.tsv`, applied by the new `scripts/sync-labels.sh` (idempotent, `--dry-run`
-  supported); `init.sh` calls it at bootstrap, and an app generated before this can self-heal with
-  `bash scripts/sync-labels.sh`. The four labels' colours also now match this repo's rather than
-  drifting from them.
-- **Maestro flows no longer assert on template screen copy (#126)** — both flows in `.maestro/`
-  addressed elements by their placeholder text: the onboarding slide titles, the home card's
-  `"Welcome"`, the settings page title. Every one of those is the first thing a generated app
-  replaces, so the flows shipped green in the template and failed the first time anyone built
-  their own product. Every selector is now a `testID`, including the tab bar (via
-  `tabBarButtonTestID`), which replaces the home-screen copy as the "we are signed in" marker and
-  survives a home-screen rewrite. Only three text selectors remain — the two native
-  `Alert.alert` buttons in the account-deletion flow and iOS's own scheme-handoff dialog — and
-  the flow headers say why. The full seam list is in `docs/testing.md`.
-- **A dead assertion in `full-journey.yaml`** — it waited on a `"Start Free Trial"` button the
-  paywall stopped rendering when it moved onto the `PaywallProvider` port in 0.12.0. Found by the
-  audit above; nothing connected the two, which is what the new guard test is for.
+## [0.13.0] — 2026-08-08
 
 ### Added
 - **E2E runs now name the simulator's own crashes (#131)** — Apple's `SpringBoard` segfaults on the
@@ -62,7 +33,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
   and fails if it is not defined as a `testID` under `app/` or `src/`, and fails on any text
   selector outside the three documented exceptions. Static, so it runs in under a second on every
   branch in `ci.yml` — E2E itself only runs on PRs to `main` or behind the `e2e` label, which is
-  how the dead assertion above survived a release unnoticed.
+  how the dead assertion under **Fixed** below survived a release unnoticed.
 - **A weekly Maestro run on `dev` (#128)** — `maestro-e2e.yml` now also runs on a Monday cron. The
   guard test above runs on every PR and fails the moment a seam is *deleted*, but it cannot see a
   `testID` that is still in the source while the element carrying it stopped being rendered or
@@ -111,6 +82,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - **`package-lock.json` records the current version again** — it still said `0.7.0`, because
   `scripts/bump-version.sh` writes `package.json` and `app.json` but never the lockfile. Picked up
   incidentally by the `npm install --package-lock-only` for the devDependency above.
+
+### Fixed
+- **`SETUP.md` cloned the template from the old owner (#130)** — both bootstrap paths, Option A
+  and Option B, pointed at `fpmartinez10/focal-studio-app-template`. The repo now lives at
+  `focalstudio/focal-studio-app-template`, and the old path resolved only through GitHub's
+  rename redirect — which is not a guarantee, and disappears if that account is renamed again or
+  anything else claims the path. Since it is the literal first command a new user runs, a stale
+  URL would fail at the worst possible moment. Both lines now use the canonical owner.
+- **`init.sh` created 4 of 18 issue labels (#127)** — it hardcoded `open-beta`, `public`,
+  `post-release` and `chore`, and assumed GitHub's default set was already there. It is not
+  reliably created for a repo made with `gh repo create --source=.`, so a generated app started
+  life with four labels and could not follow the one-type + one-priority + one-milestone
+  convention it ships with in `.claude/reference/issue-labels.md`. Worse, `e2e` was absent, so the
+  Maestro opt-in gate in `maestro-e2e.yml` — the escape hatch designed in #113 for PRs to `dev` —
+  could never be applied in any app but this one. The set now lives in one manifest,
+  `.github/labels.tsv`, applied by the new `scripts/sync-labels.sh` (idempotent, `--dry-run`
+  supported); `init.sh` calls it at bootstrap, and an app generated before this can self-heal with
+  `bash scripts/sync-labels.sh`. The four labels' colours also now match this repo's rather than
+  drifting from them.
+- **Maestro flows no longer assert on template screen copy (#126)** — both flows in `.maestro/`
+  addressed elements by their placeholder text: the onboarding slide titles, the home card's
+  `"Welcome"`, the settings page title. Every one of those is the first thing a generated app
+  replaces, so the flows shipped green in the template and failed the first time anyone built
+  their own product. Every selector is now a `testID`, including the tab bar (via
+  `tabBarButtonTestID`), which replaces the home-screen copy as the "we are signed in" marker and
+  survives a home-screen rewrite. Only three text selectors remain — the two native
+  `Alert.alert` buttons in the account-deletion flow and iOS's own scheme-handoff dialog — and
+  the flow headers say why. The full seam list is in `docs/testing.md`.
+- **A dead assertion in `full-journey.yaml`** — it waited on a `"Start Free Trial"` button the
+  paywall stopped rendering when it moved onto the `PaywallProvider` port in 0.12.0. Found by the
+  audit above; nothing connected the two, which is what the new guard test is for.
 
 ## [0.12.0] — 2026-08-05
 
