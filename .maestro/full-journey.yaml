@@ -49,14 +49,38 @@ appId: ${APP_ID}
     visible:
       id: "onboarding-slide-1"
     timeout: 60000
+# The slide title renders before the pager underneath it is ready to be panned.
+# Waiting on the CTA as well is the cheapest proof the whole screen has laid
+# out, and it is here because the first swipe was silently swallowed on a cold
+# CI runner — the flow then failed on `onboarding-slide-2` with the app sitting
+# on slide 1, first pager dot still lit. Locally it had never once missed.
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-cta"
+    timeout: 15000
+# `duration` is deliberately slower than Maestro's 400ms default. A fast flick
+# is the one a FlatList is most likely to drop under load; a 700ms pan reads
+# unambiguously as a drag.
+#
+# Every assertion after a swipe uses extendedWaitUntil rather than a bare
+# assertVisible, for the same reason the launch assertion above does: the
+# default assertion timeout assumes an idle device, and a macOS runner during a
+# cold first render is not one. This costs nothing on a healthy run — it returns
+# the moment the slide appears.
 - swipe:
     direction: LEFT
-- assertVisible:
-    id: "onboarding-slide-2"
+    duration: 700
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-slide-2"
+    timeout: 15000
 - swipe:
     direction: LEFT
-- assertVisible:
-    id: "onboarding-slide-3"
+    duration: 700
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-slide-3"
+    timeout: 15000
 - tapOn:
     id: "onboarding-cta"
 
@@ -64,8 +88,15 @@ appId: ${APP_ID}
 # because BACKEND=none in an unbootstrapped/no-backend build; if a real
 # backend is wired this button won't exist and the flow should fail loudly
 # here rather than silently skip the rest of the journey.
-- assertVisible:
-    id: "login-submit"
+#
+# extendedWaitUntil, not assertVisible: this lands one navigation after a tap.
+# See the rule at the top of the onboarding block — every assertion in this file
+# that follows a gesture waits, because the default assertion timeout assumes an
+# idle device.
+- extendedWaitUntil:
+    visible:
+      id: "login-submit"
+    timeout: 15000
 - tapOn:
     id: "dev-seed-session"
 # The tab bar is the "we are signed in" marker, not anything on the home screen
@@ -79,6 +110,14 @@ appId: ${APP_ID}
 
 # Paywall — not linked from any in-app affordance in the template yet, so
 # it's reached via its deep link rather than a tap path.
+#
+# What this step asserts, and deliberately does not: with no paywall provider
+# wired, `localPaywallProvider.getOfferings()` returns null and the screen
+# renders its placeholder cards with "—" for every price. The only honest claims
+# available are "the paywall arrived" and "it dismissed", so those are the two
+# this makes. Purchase and restore both throw `not_wired` here; asserting on
+# either would be asserting on the scaffold rather than on the product. The real
+# purchase leg belongs with whatever provider `scripts/add-paywall.sh` wires.
 - openLink: "${APP_SCHEME}://paywall"
 # iOS routes a scheme URL through the system opener, which puts up a native
 # "Open in <App>?" confirmation before handing off. It is not part of the app,
@@ -95,21 +134,51 @@ appId: ${APP_ID}
     timeout: 15000
 - tapOn:
     id: "paywall-close"
+# Proof the modal actually dismissed, and not just that a tap was dispatched.
+# `tapOn` reports COMPLETED against an element it never really hit — that is
+# exactly what went wrong at the Danger Zone below — and a paywall still
+# covering the screen would otherwise be discovered three steps later, as a
+# confusing failure on `settings-title`.
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: 10000
 
 # Settings — two-step account deletion. Both native confirmation alerts must
 # be walked; a single confirmation must not delete the account.
 - tapOn:
     id: "tab-settings"
-- assertVisible:
-    id: "settings-title"
+# Waits rather than asserting flat. Settings is lazily mounted by the tab
+# navigator, so the first switch to it renders a whole screen — this failed as a
+# bare assertVisible on a loaded machine, which is exactly the "assumes an idle
+# device" case.
+- extendedWaitUntil:
+    visible:
+      id: "settings-title"
+    timeout: 15000
 # DANGER ZONE sits below the fold, and an off-screen row is still in the
 # accessibility tree — so a bare tapOn reports COMPLETED while landing on
 # nothing. Scroll it into view first, or the two-step deletion below silently
 # never starts.
+#
+# `centerElement` is load-bearing, and was added after this flow failed in a
+# real app generated from this template. Without it, `scrollUntilVisible` judged
+# the off-screen row already visible — the same accessibility-tree blind spot
+# the paragraph above describes, which this command was supposed to be the cure
+# for — and completed having scrolled nothing. The tap that follows then fired
+# at the row's real centre, which was below the viewport, and landed on the TAB
+# BAR instead: the app switched to Home, no alert ever opened, and the two
+# `tapOn` steps below failed looking for alert buttons on the home screen. Every
+# step in between still reported COMPLETED, so the run blamed the delete-account
+# alert for a scroll that never happened.
+#
+# Centring forces a real scroll, which is the only thing that makes the tap
+# real. Verify with a screenshot, not with COMPLETED, if you ever change this.
 - scrollUntilVisible:
     element:
       id: "settings-delete-account"
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: "settings-delete-account"
 # Native alert buttons — see "the two exceptions" in the header.

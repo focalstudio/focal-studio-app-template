@@ -27,24 +27,54 @@ appId: ${APP_ID}
 - launchApp:
     clearState: true
 
-# Onboarding. Only the slide count matters here, so it skips the per-slide
-# assertions full-journey.yaml makes — that flow owns onboarding coverage.
+# Onboarding. This flow does not own onboarding coverage — full-journey.yaml
+# does — but it does have to get through it, and the slide ids below are how it
+# paces itself rather than what it is testing.
+#
+# The pacing is load-bearing. Consecutive swipes with nothing between them are
+# the fragile construct: the second fires while the first is still animating,
+# the pager settles on slide 2, and `onboarding-cta` there is labelled "Next"
+# and merely advances it. Onboarding is then still on screen and this flow fails
+# several steps later on `login-submit`, blaming the auth wall for a swipe that
+# raced.
+#
+# The CTA wait before the first swipe, and the 700ms duration, match
+# full-journey.yaml — see the reasoning there. Short version: a cold CI runner
+# swallowed the first swipe outright, with the app sitting on slide 1.
 - extendedWaitUntil:
     visible:
       id: "onboarding-slide-1"
     timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-cta"
+    timeout: 15000
 - swipe:
     direction: LEFT
+    duration: 700
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-slide-2"
+    timeout: 15000
 - swipe:
     direction: LEFT
+    duration: 700
+# The precondition the tap below actually needs: we are on the LAST slide, so
+# `onboarding-cta` completes onboarding instead of advancing the pager.
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-slide-3"
+    timeout: 15000
 - tapOn:
     id: "onboarding-cta"
 
 # Auth wall — bypassed with the dev-only seed-session seam, which writes a real
 # session blob through saveJson. Present only because BACKEND=none; if a
 # backend is wired this button is absent and the flow fails loudly here.
-- assertVisible:
-    id: "login-submit"
+- extendedWaitUntil:
+    visible:
+      id: "login-submit"
+    timeout: 15000
 - tapOn:
     id: "dev-seed-session"
 - extendedWaitUntil:
@@ -63,16 +93,27 @@ appId: ${APP_ID}
 # driven by the stored value (`THEME_STATE` in app/(tabs)/settings.tsx) and says
 # "following the device" only until the first touch — so this proves the value
 # changed whichever way the switch happened to start.
+#
+# Every assertion here that follows a tap waits rather than asserting flat —
+# same rule as full-journey.yaml. The tab navigator mounts Settings lazily, so
+# the first switch to it renders a whole screen, and the description below only
+# changes after the store write has re-rendered. `theme-following-device` is the
+# exception and is deliberately bare: it shares a screen with the assertion
+# above it, with no gesture in between.
 - tapOn:
     id: "tab-settings"
-- assertVisible:
-    id: "settings-title"
+- extendedWaitUntil:
+    visible:
+      id: "settings-title"
+    timeout: 15000
 - assertVisible:
     id: "theme-following-device"
 - tapOn:
     id: "theme-dark-mode"
-- assertVisible:
-    id: "theme-set-manually"
+- extendedWaitUntil:
+    visible:
+      id: "theme-set-manually"
+    timeout: 15000
 
 # Force-quit, then cold-start against what the app just wrote.
 - stopApp
@@ -86,6 +127,10 @@ appId: ${APP_ID}
     visible:
       id: "tab-home"
     timeout: 60000
+# These stay flat, and must. `assertNotVisible` is the claim being made —
+# waiting for something to be *absent* would pass the instant the screen has not
+# rendered yet, which is precisely the failure it is here to catch. The wait
+# above is what makes them safe: it holds until the app has actually rendered.
 - assertNotVisible:
     id: "onboarding-slide-1"
 - assertNotVisible:
@@ -96,7 +141,10 @@ appId: ${APP_ID}
 # is the whole point of asserting on it in both directions.
 - tapOn:
     id: "tab-settings"
-- assertVisible:
-    id: "theme-set-manually"
+- extendedWaitUntil:
+    visible:
+      id: "theme-set-manually"
+    timeout: 15000
+# Flat, for the reason given at the two assertNotVisible steps above.
 - assertNotVisible:
     id: "theme-following-device"
