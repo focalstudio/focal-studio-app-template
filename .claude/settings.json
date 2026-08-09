@@ -99,5 +99,19 @@
       "Bash(rm -r:*)",
       "Bash(sudo:*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/wrap-reminder.sh",
+            "timeout": 10,
+            "statusMessage": "Checking if /wrap is needed..."
+          }
+        ]
+      }
+    ]
   }
 }
