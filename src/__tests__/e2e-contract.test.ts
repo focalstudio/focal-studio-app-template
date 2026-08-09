@@ -138,6 +138,18 @@ const slideCount = new Set([...sources.matchAll(SLIDE_ID_DEFINITION)].map((match
 const SWIPE_COMMAND = /(?:^|\n)\s*-\s*swipe\b/g;
 
 /**
+ * A `- tapOn:` whose selector is the onboarding CTA.
+ *
+ * Deliberately not a plain `indexOf('id: "onboarding-cta"')`: both flows also
+ * *wait* on that id before the first swipe, as proof the pager has laid out
+ * before it is panned. An id search cuts there, counts zero swipes, and
+ * silently downgrades the whole check below to "not comparable" — green, with
+ * nothing checked. That is a worse failure than the one it guards against,
+ * because nothing reports it.
+ */
+const CTA_TAP = /(?:^|\n)[ \t]*-[ \t]*tapOn:[ \t]*\n[ \t]*id:[ \t]*"onboarding-cta"/;
+
+/**
  * How many times a flow swipes to get *through onboarding* — everything before
  * it first taps `onboarding-cta`.
  *
@@ -146,13 +158,14 @@ const SWIPE_COMMAND = /(?:^|\n)\s*-\s*swipe\b/g;
  * swipe like the onboarding ones and extremely common. Nothing after the
  * onboarding CTA can be part of onboarding, so the cut is exact and free.
  *
- * `null` means "not comparable", and there are two of those: a flow that never
- * completes onboarding, and one that taps its way through with the Next button
- * instead of swiping. Neither is wrong, so neither should fail.
+ * `null` means "not comparable", and there are three of those: a flow that
+ * never completes onboarding, one that taps its way through with the Next
+ * button instead of swiping, and one written in Maestro's inline-map form,
+ * which `CTA_TAP` does not match. None is wrong, so none should fail.
  */
 function onboardingSwipesOf(flowFile: string): number | null {
   const commands = commandsOf(flowFile);
-  const ctaAt = commands.indexOf('id: "onboarding-cta"');
+  const ctaAt = commands.search(CTA_TAP);
   if (ctaAt === -1) return null;
   const swipes = [...commands.slice(0, ctaAt).matchAll(SWIPE_COMMAND)].length;
   return swipes === 0 ? null : swipes;
