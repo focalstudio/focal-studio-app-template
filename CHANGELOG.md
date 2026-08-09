@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- `Stop` hook (`.claude/hooks/wrap-reminder.sh`, wired in `.claude/settings.json`) that blocks a
+  Claude Code session from ending while the branch has commits not yet reflected in `STATUS.md` /
+  `ROADMAP.md`, prompting `/wrap` first. Fires once per session. Backported from MealCart, where
+  it was written and never propagated upstream.
+
 ## [0.13.0] — 2026-08-08
 
 ### Added
