@@ -228,6 +228,51 @@ They are manual pre-submission items in
 
 ---
 
+## Free tier: the 7-day pause
+
+**A free project is auto-paused after 7 days without database activity.** You can unpause it from
+the dashboard for 90 days after that; past 90 days it is data export only. Pro removes auto-pause
+entirely.
+
+The dangerous window is not the one people expect. It is **between "app finished" and "app has
+users"** — a project sitting idle awaiting App Store review is the textbook case, and the moment
+you have least attention spare for a pause-warning email.
+
+`.github/workflows/supabase-keepalive.yml` prevents it, calling `keepalive_ping()` once a day.
+Two pieces of setup:
+
+1. **Apply `schema.sql`** — the function ships in it, under "Free-tier keep-alive". If you applied
+   the schema before this existed, re-apply it; it is idempotent.
+2. **Add two repository secrets** (Settings → Secrets and variables → Actions): `SUPABASE_URL` and
+   `SUPABASE_ANON_KEY`, the same two values as your `.env.local`. Without them the workflow skips
+   with a warning rather than failing — check the Actions tab if you are not sure it is running.
+
+**Do not replace the ping with a health-check endpoint.** This is the part worth knowing, and it
+cost a live project to learn: `/auth/v1/health` is served by GoTrue and never opens a database
+connection, while the pause scan measures *database* activity. A keep-alive built on it was green
+for 10 consecutive daily runs while Supabase was still counting the project as idle — so the pause
+warning arrived as a complete surprise, with a workflow reporting success the whole time. That is
+worse than no keep-alive at all, because it manufactures confidence.
+
+For the same reason the workflow asserts the **shape** of the response (a quoted ISO-8601
+timestamp, which only Postgres can produce) rather than the HTTP status. Exit status alone is
+exactly the signal that failed.
+
+It is an RPC rather than a table read because `schema.sql` gives `anon` no table grants, so a table
+read comes back `401` / `42501`. `anon` does hold `USAGE` on schema `public`, so `EXECUTE` on one
+function that touches nothing is the smallest opening that works.
+
+> Supabase does not publish exactly what counts as activity. That the health endpoint doesn't is a
+> strong inference — no Postgres connection, plus the 10-for-10 green runs alongside a pause
+> warning — not a documented rule. If a project still pauses, escalate to a write (an
+> `update ... returning` on a single-row table) so the ping generates WAL.
+
+If you are choosing between backends, note that Firebase's free tier behaves completely
+differently here — it throttles on quota and never sleeps. See
+[Firebase: free tier](firebase.md#free-tier-quotas-not-dormancy).
+
+---
+
 ## Gotchas
 
 - **Offline `getSession()` throws, it doesn't silently sign out.** `toAuthError` (see above) classifies offline/DNS failures as `AuthError("network")`, and `useAuthStore.hydrate()` branches on that code: a network failure leaves the existing session/user state untouched and sets `hydrationError: "network"` instead of forcing the user to signed-out. `app/_layout.tsx` routes that state to `app/network-error.tsx`, a blocking "No Connection" retry screen, rather than the login screen — so a flaky connection never looks like a silent sign-out, and the app never runs a request against a session it couldn't verify (which is what used to produce a confusing **406 that looks like an RLS bug** but is actually `auth.uid()` resolving to NULL on an unverified session). This relies on the `getSession()` contract in `src/services/auth/types.ts`: answer from storage first, and throw `network` only when refreshing a session that exists. Supabase satisfies it as shipped — `auth.getSession()` reads local persistence and only hits the network to refresh an expired session, so a signed-out device offline gets `null`, not a throw. Preserve that if you wrap it.
@@ -236,6 +281,7 @@ They are manual pre-submission items in
 - **The redirect URI resolves differently per build type.** `Linking.createURL()` (and `makeRedirectUri()`) return `exp://…/--/auth/callback` in Expo Go and `<scheme>://auth/callback` in a dev client or standalone build. Two rules follow, and breaking either produces the same symptom — a browser that opens and never hands control back. **First**, every form your team runs has to be in Supabase's *URL Configuration → Redirect URLs* allowlist. **Second**, the string passed as `redirectTo` and the string passed to `openAuthSessionAsync` must be byte-identical; `social.ts` calls one helper for both so they cannot drift. This is why OAuth "works in Expo Go and breaks in TestFlight" — the values differ, and only one of them was ever allowlisted.
 - **PKCE on React Native**: the adapter sets `flowType: 'pkce'`, so the callback carries `?code=` and the session comes from `exchangeCodeForSession(code)` — not from reading `access_token` out of the URL, which is what Supabase's deep-linking guide shows. That code is **single-use**, has a **~5-minute TTL**, and works on **that device only**: the code verifier lives in the client's own storage, so a code cannot be relayed from a browser or a machine elsewhere. Supabase's docs never mention this. (Sign in with Apple is unaffected — it uses a native sheet and an identity token, with no browser round-trip.)
 - **`skipBrowserRedirect: true` is mandatory on Expo.** Without it supabase-js tries to navigate `window.location`, which does not exist in React Native, so you get no navigation *and* no `data.url` to hand to `WebBrowser`. `signInWithOAuth` appears to succeed and nothing at all happens.
+- **A free project pauses after 7 days idle, and a keep-alive that pings `/auth/v1/health` will not stop it.** That endpoint never opens a database connection. See [Free tier: the 7-day pause](#free-tier-the-7-day-pause) — the workflow that does work ships in the repo, but needs two secrets set.
 - **`schema.sql` is the source of truth, not the dashboard.** See [Typed database](#typed-database) — CI generates the types from `schema.sql`, so a change made only in the SQL Editor is invisible to it until you write the change back into the file.
 
 ---
