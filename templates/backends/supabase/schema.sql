@@ -158,6 +158,40 @@ revoke all on function public.delete_own_account() from public, anon;
 grant execute on function public.delete_own_account() to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Free-tier keep-alive
+-- ---------------------------------------------------------------------------
+-- A free Supabase project is auto-paused after 7 days with no *database*
+-- activity, and after 90 days paused it is data-export only. The window that
+-- matters is the one between "app finished" and "app has users" — a project
+-- sitting idle awaiting App Store review is the textbook case.
+--
+-- .github/workflows/supabase-keepalive.yml calls this once a day. It exists as
+-- an RPC rather than a table read for one reason: the grants above leave `anon`
+-- with no table privileges (correctly), so a table read returns 401 / 42501.
+-- `anon` does hold USAGE on schema public and PostgREST routes rpc/ calls for
+-- it, so EXECUTE on one function is the smallest opening that works.
+--
+-- SECURITY INVOKER (the default) on purpose: unlike delete_own_account() this
+-- touches no table and needs no auth.uid() guard, so it stays off the
+-- privileged-function audit surface. It returns the server clock, which an anon
+-- caller could already read off an HTTP Date header.
+--
+-- Returning a timestamptz is also load-bearing, not decoration. The workflow
+-- asserts the *shape* of the response, because only Postgres can produce one —
+-- an earlier keep-alive elsewhere pinged /auth/v1/health, which is served by
+-- GoTrue and never opens a database connection, and was green for 10 runs
+-- straight while Supabase still counted the project as idle.
+
+create or replace function public.keepalive_ping()
+returns timestamptz
+language sql
+stable
+as $$ select now() $$;
+
+revoke all on function public.keepalive_ping() from public;
+grant execute on function public.keepalive_ping() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Verify
 -- ---------------------------------------------------------------------------
 -- After applying, confirm RLS is actually on. A table with policies but RLS

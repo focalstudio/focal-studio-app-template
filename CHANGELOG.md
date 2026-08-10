@@ -9,6 +9,31 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **Supabase free-tier keep-alive (#140).** A free project is auto-paused after 7 days without
+  *database* activity, and is data-export only 90 days after that — the window that matters being
+  the one between "app finished" and "app has users", with a project idle awaiting App Store review
+  as the textbook case. `schema.sql` gains a `keepalive_ping()` RPC and
+  `.github/workflows/supabase-keepalive.yml` calls it daily, no-oping (with a warning) when the app
+  is un-bootstrapped, not wired to Supabase, or missing the two repository secrets.
+  The design detail worth keeping: the workflow asserts the **shape** of the response, not the HTTP
+  status. The version of this written downstream first pinged `/auth/v1/health`, which is served by
+  GoTrue and never opens a database connection — it was green for 10 consecutive daily runs while
+  Supabase was still flagging the project for pause, so exit status alone is exactly the signal
+  that failed. It is an RPC rather than a table read because `schema.sql` deliberately leaves
+  `anon` with no table grants. `verify-backend.yml` now asserts the inverse of its
+  `delete_own_account` check — that `anon` *can* execute `keepalive_ping()` and gets a timestamp —
+  since a future grant tightening would otherwise surface only as a paused project weeks later.
+
+### Changed
+- **Both backend pages now cover what happens to an idle project (#141)**, which is a real
+  backend-selection input and was invisible at the moment you choose. Supabase: the 7-day pause,
+  the 90-day export cliff, and how to wire the keep-alive. Firebase: Spark **does not** pause for
+  inactivity — daily quotas throttle instead — plus two things stated explicitly rather than left
+  to inference, that the Supabase keep-alive must **not** be ported across for symmetry, and that
+  Cloud Storage has required a Blaze billing account since 3 February 2026 at any volume, which
+  retires "Storage ✅" as a free-tier claim in the path-comparison table.
+
 ### Fixed
 - **`full-journey.yaml` never actually reached the account-deletion alert (#143).**
   `scrollUntilVisible` treated the off-screen Danger Zone row as already visible — an off-screen

@@ -14,12 +14,18 @@ That installs the **Firebase JS SDK** path. Read the next section before running
 |---|---|---|
 | Runs in Expo Go | ✅ | ❌ needs `expo-dev-client` |
 | Config plugin / prebuild | none | required |
-| Auth, Firestore, Storage | ✅ | ✅ |
+| Auth, Firestore, Storage | ✅ † | ✅ † |
 | Sign in with Apple | ✅ * | ✅ |
 | Sign in with Google | ✅ iOS only * | ✅ both platforms |
 | Analytics, Crashlytics, Performance, FCM | ❌ | ✅ |
 | EAS build cache | untouched | invalidated (~15 min full iOS rebuild) |
 | Current version | `firebase` 12.x | `@react-native-firebase/*` 25.x |
+
+† **Storage is no longer a free-tier feature on either path.** Cloud Storage for Firebase has
+required a Blaze (pay-as-you-go) billing account since **3 February 2026**, at any volume including
+zero. Auth and Firestore are still fully usable on Spark; Storage is a billing decision now, so if
+you picked Firebase to stay free, plan to use something else for files or accept Blaze. See
+[Free tier: quotas, not dormancy](#free-tier-quotas-not-dormancy).
 
 \* **Those two ✅s cancel the "runs in Expo Go" row above them.** Both are supported on the JS SDK path ([section 4](#4-social-sign-in--apple-and-google-optional)), but the recipe installs `expo-apple-authentication` — a native module with a config plugin. The moment you add it, "runs in Expo Go" and "EAS build cache untouched" stop being true, and the JS SDK's remaining advantage over React Native Firebase is that it's less to configure. If Expo Go was your reason for picking this column, decide about social sign-in *now*, not after you've built on it.
 
@@ -286,8 +292,41 @@ The cache is cleared on sign-out and account deletion (`clearQueryCache()` in
 For realtime (`onSnapshot`), prefer a `useEffect` subscription writing into
 `queryClient.setQueryData` over a polling `useQuery` — and remember the unsubscribe.
 
+---
+
+## Free tier: quotas, not dormancy
+
+**Spark does not pause for inactivity.** An idle Firebase project stays up indefinitely. What
+limits you is a daily quota, and exceeding one stops *that product* until the quota resets — it
+does not sleep the project. Firestore's are the ones you will meet first:
+
+| Firestore (Spark, per day) | Limit |
+|---|---|
+| Document reads | 50,000 |
+| Document writes | 20,000 |
+| Document deletes | 20,000 |
+| Stored data | 1 GB total |
+
+**Do not add a keep-alive workflow here.** The template ships one for Supabase
+(`.github/workflows/supabase-keepalive.yml`), and porting it across for symmetry would be an
+active mistake on two counts: it would spend Spark quota on a schedule to prevent a pause that
+does not exist, and it would recreate the "green but proves nothing" trap that made the Supabase
+version necessary in the first place. Its absence here is a decision, not an oversight.
+
+**Cloud Storage requires Blaze as of 3 February 2026**, at any volume — including zero. This is
+the free-tier gotcha most likely to catch you out, because Storage is otherwise presented
+alongside Auth and Firestore as part of the same free bundle, and the change is recent enough that
+most tutorials predate it. Auth and Firestore remain fully usable on Spark.
+
+If you are still choosing a backend, this is a real point of difference: a free Supabase project
+**pauses after 7 days idle**, which is a failure mode Firebase simply does not have, and which
+bites hardest while an app sits awaiting App Store review. See
+[Supabase: the 7-day pause](supabase.md#free-tier-the-7-day-pause). Firebase trades that for daily
+ceilings you can hit under real traffic.
+
 ## Gotchas
 
+- **Cloud Storage needs a Blaze billing account, even at zero usage** (since 3 Feb 2026). Auth and Firestore are unaffected. See [Free tier: quotas, not dormancy](#free-tier-quotas-not-dormancy).
 - **Apple returns the user's name once, ever.** `fullName` and a real `email` arrive only on the *first* authorization for that Apple ID and app pair. Reinstalling the app does not reset it — to test that path again you must revoke the app under Settings → Apple ID → Sign in with Apple.
 - **Apple's private relay.** Users can hide behind `@privaterelay.appleid.com`. If you send them mail, configure the relay domain and sender in Apple's console, or it silently bounces.
 - **Google sign-in is iOS-only on this path, and refuses loudly on Android.** Android needs an OAuth client keyed to the package name and the signing certificate's SHA-1 — and that fingerprint differs between a local build, EAS, and Play App Signing, so "it worked in debug" is the normal way to discover this. Rather than send the iOS client ID and get an opaque `redirect_uri_mismatch`, the module throws `not_wired` with an explanation. Android means React Native Firebase plus `@react-native-google-signin/google-signin`.

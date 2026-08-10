@@ -69,6 +69,7 @@ export type Database = {
     }
     Functions: {
       delete_own_account: { Args: never; Returns: undefined }
+      keepalive_ping: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

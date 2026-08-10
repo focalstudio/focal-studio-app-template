@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Verifies the Supabase account-deletion contract against a REAL Postgres + GoTrue.
+ * Verifies the Supabase account-deletion contract — plus the free-tier keep-alive
+ * grant that supabase-keepalive.yml depends on — against a REAL Postgres + GoTrue.
  *
  * Run by .github/workflows/verify-backend.yml against a local `supabase start`
  * instance that has had templates/backends/supabase/schema.sql applied. Pure Node —
@@ -197,6 +198,37 @@ async function verifyIntact() {
     "anon is blocked by the grant, not by the function body",
     `anon reached the function body (error was "${anonError.message}"). ` +
       "`revoke all on function public.delete_own_account() from public, anon` is missing."
+  );
+
+  // 8. The mirror image, for the keep-alive: anon MUST be able to execute
+  // keepalive_ping(), and must get a timestamp back.
+  //
+  // .github/workflows/supabase-keepalive.yml calls this with the anon key once a
+  // day to keep a free-tier project off the 7-day auto-pause list, and it is the
+  // one grant in schema.sql that deliberately opens something to anon. A future
+  // edit tightening grants across the board would break it silently: the
+  // workflow only runs on a schedule, in a repo that is not this one, and the
+  // symptom is a project that pauses weeks later. This is the only place that
+  // can catch it against a real Postgres.
+  const { data: ping, error: pingError } = await anon.rpc("keepalive_ping");
+  assert(
+    pingError === null,
+    "anon can execute keepalive_ping()",
+    pingError
+      ? `anon cannot reach the keep-alive RPC (${pingError.code ?? "?"}: ${pingError.message}). ` +
+        "`grant execute on function public.keepalive_ping() to anon` is missing — " +
+        "supabase-keepalive.yml would fail and the project would auto-pause."
+      : undefined
+  );
+  // The shape, not just the absence of an error — same reasoning as the
+  // workflow's own grep. Only Postgres produces an ISO-8601 timestamp, so this
+  // is what proves the call reached the database rather than being answered
+  // short of it.
+  assert(
+    typeof ping === "string" && /^\d{4}-\d{2}-\d{2}T/.test(ping),
+    "keepalive_ping() returns a timestamp",
+    `Expected an ISO-8601 timestamp, got ${JSON.stringify(ping)}. The workflow asserts this ` +
+      "shape to prove it reached Postgres; changing the return type breaks that proof."
   );
 }
 
