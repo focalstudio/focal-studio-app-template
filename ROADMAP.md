@@ -20,6 +20,13 @@
 - [x] Supabase free-tier keep-alive — a generated app's project auto-pauses after 7 days idle,
       and nothing in the backend adapter prevents it (#140)
 - [x] Backend docs cover free-tier idle/dormancy behaviour (#141)
+- [x] One-command Supabase provisioning via the Management API — `scripts/provision-supabase.sh`
+      collapses the manual dashboard steps `add-backend.sh` used to print (#149)
+
+  > No Firebase equivalent is planned, deliberately: non-interactive auth needs a GCP service
+  > account that itself needs a pre-existing project, and `projects:create` is gated by
+  > per-account quota and billing. Written up in `docs/backends/firebase.md` rather than left
+  > as a permanently-open box.
 
 ## Phase 2 — Test & CI Hardening
 - [x] React Native screen-test harness (#77)
