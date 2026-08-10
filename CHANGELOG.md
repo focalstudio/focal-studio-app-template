@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-10
+
 ### Added
 - **Supabase free-tier keep-alive (#140).** A free project is auto-paused after 7 days without
   *database* activity, and is data-export only 90 days after that — the window that matters being
@@ -24,6 +26,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `anon` with no table grants. `verify-backend.yml` now asserts the inverse of its
   `delete_own_account` check — that `anon` *can* execute `keepalive_ping()` and gets a timestamp —
   since a future grant tightening would otherwise surface only as a paused project weeks later.
+- `Stop` hook (`.claude/hooks/wrap-reminder.sh`, wired in `.claude/settings.json`) that blocks a
+  Claude Code session from ending while the branch has commits not yet reflected in `STATUS.md` /
+  `ROADMAP.md`, prompting `/wrap` first. Fires once per session. Backported from MealCart, where
+  it was written and never propagated upstream.
 
 ### Changed
 - **Both backend pages now cover what happens to an idle project (#141)**, which is a real
@@ -65,12 +71,6 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 Both flow fixes were found in the first app bootstrapped from this template, which is the only
 place they can be found — the template's own E2E job skips before Maestro ever starts.
-
-### Added
-- `Stop` hook (`.claude/hooks/wrap-reminder.sh`, wired in `.claude/settings.json`) that blocks a
-  Claude Code session from ending while the branch has commits not yet reflected in `STATUS.md` /
-  `ROADMAP.md`, prompting `/wrap` first. Fires once per session. Backported from MealCart, where
-  it was written and never propagated upstream.
 
 ## [0.13.0] — 2026-08-08
 

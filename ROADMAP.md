@@ -17,9 +17,9 @@
 - [x] `scripts/init.sh` one-shot bootstrap, smoke-tested in CI (#75)
 - [x] Auth port with Supabase and Firebase adapters via `scripts/add-backend.sh` (#76)
 - [x] Apple and Google sign-in via `scripts/add-social-auth.sh` (#70)
-- [ ] Supabase free-tier keep-alive — a generated app's project auto-pauses after 7 days idle,
+- [x] Supabase free-tier keep-alive — a generated app's project auto-pauses after 7 days idle,
       and nothing in the backend adapter prevents it (#140)
-- [ ] Backend docs cover free-tier idle/dormancy behaviour (#141)
+- [x] Backend docs cover free-tier idle/dormancy behaviour (#141)
 
 ## Phase 2 — Test & CI Hardening
 - [x] React Native screen-test harness (#77)

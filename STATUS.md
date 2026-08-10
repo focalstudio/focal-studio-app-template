@@ -2,17 +2,17 @@
 
 _Updated: 2026-08-10_
 
-**Version:** 0.13.0 (on `main`, tagged `v0.13.0`)   **Stage:** Template / pre-app
+**Version:** 0.14.0 (on `main`, tagged `v0.14.0`)   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
 #144 merged, closing #143 — the Danger Zone scroll is real and the Maestro flows no longer flake.
-The open work is **PR #146, green and waiting to merge** (#140 + #141): a free Supabase project is
-auto-paused after 7 days without *database* activity, so `schema.sql` gains a `keepalive_ping()`
-RPC and `supabase-keepalive.yml` calls it daily. **The design detail is the point** — the workflow
-asserts the *shape* of the response, not the HTTP status, because the version written downstream
-first pinged `/auth/v1/health`, which is served by GoTrue and never opens a database connection,
-and was green for 10 consecutive runs while Supabase was still flagging the project for pause.
+**Shipped in 0.14.0** (#140 + #141): a free Supabase project is auto-paused after 7 days without
+*database* activity, so `schema.sql` gains a `keepalive_ping()` RPC and `supabase-keepalive.yml`
+calls it daily. **The design detail is the point** — the workflow asserts the *shape* of the
+response, not the HTTP status, because the version written downstream first pinged
+`/auth/v1/health`, which is served by GoTrue and never opens a database connection, and was green
+for 10 consecutive runs while Supabase was still flagging the project for pause.
 `verify-backend.yml` now asserts the inverse of its `delete_own_account` check — anon *can* execute
 the ping and gets a timestamp — because that grant is what the whole thing rests on and losing it
 would surface only as a paused project weeks later. Both backend docs pages now cover idle
@@ -27,9 +27,6 @@ flow: green under the old form, correctly red under the new one. A vacuous check
 check are both green, so nothing in tick could ever have raised its hand.
 
 ## Next
-- **Merge #146** — checks are green, including `Supabase contract & typed database`, which applied
-  `schema.sql` twice to a real Postgres and confirmed the hand-edited `database.types.ts` matches
-  what the CLI generates.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
   the only way to exercise the parts of the pipeline the template can never reach itself.
 - **#145** — pick an option for the propagation problem, or consciously decide not to. The issue
