@@ -213,6 +213,17 @@ EOF
 if [ "$PROVIDER" = "supabase" ]; then
   cat <<'EOF'
 
+Steps 1-5 below are all automated. Create a token at
+https://supabase.com/dashboard/account/tokens (the only thing with no API — signup and
+token creation are browser flows), then run:
+
+    SUPABASE_ACCESS_TOKEN=sbp_... bash scripts/provision-supabase.sh "Your App Name"
+
+That creates the project, writes .env.local, applies the schema, and verifies RLS and the
+grants actually took. The rest of this list is the by-hand path if you would rather.
+
+------------------------------------------------------------
+
 1. Create a project at https://supabase.com/dashboard
 
 2. Project Settings -> API. Copy into .env.local:
