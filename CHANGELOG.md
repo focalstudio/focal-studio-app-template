@@ -9,6 +9,33 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **One-command Supabase provisioning.** `scripts/provision-supabase.sh` does every step
+  `add-backend.sh supabase` previously printed as manual work: creates the project, waits for it to
+  come up, reads back the publishable key, writes `.env.local`, applies `schema.sql`, and configures
+  redirect URLs, email confirmation, and the Google/Apple providers — all through the Supabase
+  Management API. Optional `--set-ci-secrets` sets the two repository secrets
+  `supabase-keepalive.yml` needs so it stops skipping.
+
+  It **verifies rather than assumes**. The three things it asserts afterwards — RLS actually enabled
+  on `profiles`, `delete_own_account()` present, `anon` able to execute `keepalive_ping()` — are
+  precisely the three that fail silently: a table with policies but RLS off is world-readable and
+  the dashboard does not warn you; a missing deletion RPC turns the store-compliance claim into a
+  no-op; a missing keep-alive grant pauses the project weeks later. These are read-only checks
+  rather than a call into `verify-backend-contract.mjs`, which is more thorough but needs the
+  `service_role` key and creates and deletes real users — right for a throwaway local instance,
+  wrong to point at a project bound for production.
+
+  The access token is read from `SUPABASE_ACCESS_TOKEN` for one run and never written to disk,
+  never passed in argv (`ps` is world-readable), and never echoed. It is account-wide and can delete
+  every project you own — the opposite of the publishable key the script writes into `.env.local`,
+  which is designed to ship inside a client binary.
+
+  **Firebase deliberately gets no equivalent**, and `docs/backends/firebase.md` now says why:
+  non-interactive auth needs a GCP service account that itself needs a pre-existing project, and
+  `firebase projects:create` is gated by per-account quota and billing. A script that works for its
+  author and fails for everyone else is worse than an honest checklist.
+
 ## [0.14.0] — 2026-08-10
 
 ### Added

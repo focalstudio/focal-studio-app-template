@@ -22,6 +22,7 @@ on:
       - "scripts/add-backend.sh"
       - "scripts/add-social-auth.sh"
       - "scripts/add-paywall.sh"
+      - "scripts/provision-supabase.sh"
       - "templates/backends/**"
       - "templates/social/**"
       - "templates/paywall/**"
@@ -67,6 +68,34 @@ jobs:
           grep -qE "^EXPO_PUBLIC_SUPABASE_URL=" .env.example || { echo "::error::.env.example Supabase URL line was not uncommented"; exit 1; }
           grep -qE "^EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=" .env.example || { echo "::error::.env.example Supabase key line was not uncommented"; exit 1; }
           echo "Supabase backend wired correctly."
+
+      # provision-supabase.sh is the other half: add-backend.sh wires the app, this
+      # creates the project it points at. It needs a real account token, so CI can only
+      # exercise --dry-run — which is still the part that rots, because it covers
+      # argument parsing, the preflight gates, and the shape of every request body.
+      #
+      # Deliberately placed AFTER add-backend.sh, where env.js says BACKEND = "supabase".
+      # Run before it, the dry run takes its "not wired yet" warning branch and the real
+      # gate goes untested.
+      - name: Dry-run provision-supabase.sh
+        run: |
+          set -eo pipefail
+          bash -n scripts/provision-supabase.sh
+          bash scripts/provision-supabase.sh --dry-run "Smoke Test App" \
+            --region eu-west-2 --org smoke-org --apple-client-ids com.example.smoke \
+            | tee /tmp/provision.log
+          grep -q '"region": "eu-west-2"' /tmp/provision.log || { echo "::error::--region did not reach the create body"; exit 1; }
+          grep -q '"organization_slug": "smoke-org"' /tmp/provision.log || { echo "::error::--org did not reach the create body"; exit 1; }
+          grep -q '"external_apple_enabled": true' /tmp/provision.log || { echo "::error::--apple-client-ids did not reach the auth config body"; exit 1; }
+          if grep -q 'a real run would stop here' /tmp/provision.log; then
+            echo "::error::the BACKEND preflight took its dry-run bypass; the real gate is untested"
+            exit 1
+          fi
+          if [ -f .env.local ]; then
+            echo "::error::a dry run wrote .env.local"
+            exit 1
+          fi
+          echo "provision-supabase.sh dry run OK."
 
       - name: Expo doctor
         run: npx expo-doctor@latest || true

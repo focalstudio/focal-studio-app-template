@@ -6,7 +6,39 @@ Postgres, auth, storage, and realtime behind one client. This is the recommended
 bash scripts/add-backend.sh supabase
 ```
 
-That installs the packages, drops the adapter into `src/services/auth/supabase.ts`, activates it, and makes the Supabase environment variables required. The rest of this page is what the script can't do for you, plus the things that break in React Native.
+That installs the packages, drops the adapter into `src/services/auth/supabase.ts`, activates it, and makes the Supabase environment variables required. That is the *app* half. The other half is the project it talks to — automate it with §0, or do it by hand with §1–5.
+
+---
+
+## 0. Provision the project automatically
+
+Sections 1 through 5 are all API-driven. One command does them:
+
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_... bash scripts/provision-supabase.sh "Your App Name"
+```
+
+Get the token from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens). Creating the *account* is the one step with no API — signup is a ToS-and-captcha flow, and nothing should be automating that on your behalf. Everything after it is scripted.
+
+The script creates the project, waits for it to come up, writes `.env.local`, applies `schema.sql`, then **verifies the result** rather than assuming it: RLS actually on, `delete_own_account()` present, `anon` able to execute `keepalive_ping()`. Those three are the ones that fail silently — see §3 and the free-tier section below.
+
+Useful flags:
+
+| Flag | Why |
+|---|---|
+| `--region eu-west-2` | Defaults to `us-east-1`. **Permanent** — a project cannot be moved later. |
+| `--org <slug>` | Only needed if your account has more than one organization. |
+| `--ref <ref>` | Skip creation, configure an existing project. Resumes after a timeout, or re-applies the schema (which is idempotent). |
+| `--autoconfirm` | Turns email confirmation off. Fine in development, wrong in production — see §4. |
+| `--set-ci-secrets` | Sets the two repo secrets `supabase-keepalive.yml` needs. |
+| `--dry-run` | Prints every request it would send, sends none. |
+
+> [!warning]
+> The access token is **account-wide** — it can delete every project you own. Prefix it onto the command as shown rather than putting it in `.env.local`; the script never writes it to disk, never passes it as an argument (`ps` is world-readable), and never echoes it. This is the opposite of the publishable key it writes out, which is designed to ship inside a client binary.
+
+Social sign-in is a partial exception: the script can enable the providers (`--google-client-id` / `--google-client-secret`, `--apple-client-ids`), but obtaining those credentials means the Google Cloud consent screen and the Apple Developer portal, neither of which has an API. §5 covers that, and the script prints the exact redirect URI you need.
+
+**Firebase has no equivalent script**, deliberately — see [firebase.md](firebase.md#why-there-is-no-provisioning-script).
 
 ---
 

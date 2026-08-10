@@ -45,6 +45,14 @@ Google is **iOS only** here, and that is a real limit rather than an omission: A
 
 Then **Add app → Web** (the `</>` icon). Yes, a Web app even though this is a mobile app — that's the JS SDK path.
 
+### Why there is no provisioning script
+
+Supabase has one — `scripts/provision-supabase.sh` turns its §1–5 into a single command via the Management API. Firebase does not, and the gap is real rather than an omission waiting to be filled.
+
+Two things block it. **Non-interactive auth**: `firebase login:ci` is deprecated, and the supported replacement is a Google Cloud service account — which has to live in a GCP project that already exists, so it cannot bootstrap the first one. **Project creation**: `firebase projects:create` is subject to a per-account project quota and, depending on the account, an organization or billing prerequisite. Neither is something a script can clear on your behalf.
+
+A script that works for whoever wrote it and fails for everyone else is worse than an honest checklist, so this page stays a checklist. The individual pieces *are* scriptable once you have a project and are signed in — `firebase apps:create WEB`, `firebase apps:sdkconfig WEB` for §2's four variables, `firebase deploy --only firestore:rules` — and are worth wiring into your own tooling. The end-to-end path is what does not survive contact with someone else's Google account.
+
 ## 2. Environment variables
 
 Project settings → Your apps → SDK setup and configuration. Into `.env.local`:
