@@ -61,6 +61,7 @@
 - [ ] Dev-only Showcase screen for smoke-testing template changes (#54)
 - [ ] Encrypted-at-rest session option via `LargeSecureStore` (#66)
 - [ ] Cross-repo privacy auto-PR workflow (#56)
-- [ ] A general answer to fixes not propagating between the template and generated apps — four
-      instances now, three of them app → template, the direction with no mechanism at all (#145)
+- [x] A general answer to fixes not propagating between the template and generated apps — the
+      boundary is written down in `.github/shared-paths.json`, `/wrap` covers the outbound half
+      and `scripts/drift-report.sh` the inbound one. Found instance five on its first run (#145)
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)

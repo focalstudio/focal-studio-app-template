@@ -69,6 +69,21 @@ Two slash commands bracket every work session (defined in [.claude/commands/](co
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
 
+## Cross-repo propagation
+
+**`.github/shared-paths.json` is the template ↔ generated-app boundary, written down.** Everything listed in it is meant to stay the same across this repo and the apps generated from it (`.claude/**`, `.github/workflows/*`, `scripts/*`, `templates/**`, `.maestro/*`, `docs/*`). Everything outside it — `app/`, `src/store/`, `src/theme/`, `assets/`, `store-listing/` — is meant to diverge. Before this file existed that distinction was written down nowhere, which is half of why fixes kept failing to travel (#145).
+
+Two mechanisms consume it, one per direction:
+
+- **Outbound** — `/wrap` step 2 intersects the session's changed files with the manifest and asks whether the change needs to travel. Fires in the repo where the fix was written.
+- **Inbound** — `bash scripts/drift-report.sh` compares against every app in the manifest's `apps` list. Catches a repo sitting on a stale copy that nobody is currently editing, which is the half `/wrap` structurally cannot see. Run it when picking up template work after a gap, and before cutting a release.
+
+**The app → template direction is the one that fails.** Three of the four instances in #145 travelled that way, and the reason is structural rather than accidental: `maestro-e2e.yml` skips at the `[APP_SLUG]` bootstrap gate, so `.maestro/*.yaml` is only ever *executed* inside a generated app. Every runtime defect in those flows is discovered downstream by construction. The same shape applies to anything needing real data, real users, or a real Supabase project. When an app teaches you something, assume it belongs upstream.
+
+**Do not build a sync-and-apply script.** It has been considered and rejected, not deferred. tick's `.maestro` flows differ from the template's by 59 lines, 58 of which are correct app-specific prose and 1 of which was a real unpropagated fix; a copy in either direction destroys the 58 to deliver the 1. Nothing mechanical can tell them apart — that is the judgment the human diff read exists for. Extend the report, not the writer.
+
+A scheduled cross-repo version of the report is deliberately not built either: reading private sibling repos from CI needs a PAT or GitHub App token, the same security-surface decision already deferred in #56. Take it once, for both.
+
 ## Release workflow
 When the user says to cut a release:
 
