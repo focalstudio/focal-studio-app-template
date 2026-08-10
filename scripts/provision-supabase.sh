@@ -70,15 +70,25 @@ Full guide: docs/backends/supabase.md
 EOF
 }
 
+# `--org --region us-east-1` would otherwise assign "--region" as the org slug, and a flag
+# given last with no value would `shift 2` past the end — which under `set -e` aborts with
+# bash's "shift count out of range" rather than anything a caller can act on. No value this
+# script takes (name, slug, region, ref, client id, bundle id) legitimately starts with `-`.
+need_value() {
+  case "${2:-}" in
+    ""|-*) echo "Error: $1 needs a value."; echo; usage; exit 1 ;;
+  esac
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --org)                   ORG_SLUG="${2:-}";             shift 2 ;;
-    --region)                REGION="${2:-}";               shift 2 ;;
-    --ref)                   REF="${2:-}";                  shift 2 ;;
-    --autoconfirm)           AUTOCONFIRM="yes";             shift ;;
-    --google-client-id)      GOOGLE_CLIENT_ID="${2:-}";     shift 2 ;;
-    --google-client-secret)  GOOGLE_CLIENT_SECRET="${2:-}"; shift 2 ;;
-    --apple-client-ids)      APPLE_CLIENT_IDS="${2:-}";     shift 2 ;;
+    --org)                   need_value "$1" "${2:-}"; ORG_SLUG="$2";             shift 2 ;;
+    --region)                need_value "$1" "${2:-}"; REGION="$2";               shift 2 ;;
+    --ref)                   need_value "$1" "${2:-}"; REF="$2";                  shift 2 ;;
+    --autoconfirm)           AUTOCONFIRM="yes";                                   shift ;;
+    --google-client-id)      need_value "$1" "${2:-}"; GOOGLE_CLIENT_ID="$2";     shift 2 ;;
+    --google-client-secret)  need_value "$1" "${2:-}"; GOOGLE_CLIENT_SECRET="$2"; shift 2 ;;
+    --apple-client-ids)      need_value "$1" "${2:-}"; APPLE_CLIENT_IDS="$2";     shift 2 ;;
     --set-ci-secrets)        SET_CI_SECRETS="yes";          shift ;;
     --dry-run)               DRY_RUN="yes";                 shift ;;
     --force)                 FORCE="yes";                   shift ;;
@@ -114,7 +124,7 @@ fi
 # Preflight
 # ---------------------------------------------------------------------------
 
-for tool in curl jq python3; do
+for tool in curl jq python3 openssl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Error: $tool is required but not installed."
     exit 1
@@ -184,6 +194,10 @@ trap 'rm -f "$TMP"/*; rmdir "$TMP" 2>/dev/null || true' EXIT
 # ---------------------------------------------------------------------------
 # API helper
 # ---------------------------------------------------------------------------
+# Masks any top-level field whose name looks like a credential, for --dry-run output only.
+# Real requests are never passed through it.
+REDACT='with_entries(if (.key | test("secret|pass|password|key"; "i")) then .value = "***redacted***" else . end)'
+
 # Writes the response body to $TMP/body and returns non-zero on any non-2xx, printing
 # the body — Supabase's error messages are specific ("free plan project limit reached",
 # "region not available") and swallowing them would make every failure look the same.
@@ -196,10 +210,16 @@ api() {
     echo "    [dry-run] $method $path"
     # Bodies are passed to curl as `@file`, the form --data-binary wants. Deref it here so
     # a dry run shows the JSON that would go over the wire rather than a path.
+    #
+    # Redacted on the way out. A dry run exists to be read, piped, and pasted into an issue,
+    # and this script's own smoke test tees it into a CI log — printing
+    # --google-client-secret verbatim there would undo the argv and mktemp care everywhere
+    # else. Keys are matched by name so a field added later is redacted by default rather
+    # than leaking until someone notices.
     case "$body" in
       "")  ;;
-      @*)  jq . < "${body#@}" | sed 's/^/    /' ;;
-      *)   printf '%s' "$body" | jq . | sed 's/^/    /' ;;
+      @*)  jq "$REDACT" < "${body#@}" | sed 's/^/    /' ;;
+      *)   printf '%s' "$body" | jq "$REDACT" | sed 's/^/    /' ;;
     esac
     echo '{}' > "$TMP/body"
     return 0
@@ -266,7 +286,14 @@ if [ -z "$REF" ]; then
   # can leave fewer than 24 characters, and "usually long enough" is not a property to leave
   # to chance in a password generator. Alphanumeric-only avoids quoting problems in the
   # connection strings people paste this into.
-  DB_PASS="$(openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-32)"
+  # A dry run creates no project, so it gets a visible placeholder rather than a real
+  # credential — otherwise the run prints a genuine-looking password, into a CI log in the
+  # smoke test's case, for an account that will never exist.
+  if [ "$DRY_RUN" = "yes" ]; then
+    DB_PASS="<generated-at-run-time>"
+  else
+    DB_PASS="$(openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-32)"
+  fi
 
   echo "==> Creating project \"$PROJECT_NAME\" in $REGION"
   jq -n --arg name "$PROJECT_NAME" --arg org "$ORG_SLUG" \

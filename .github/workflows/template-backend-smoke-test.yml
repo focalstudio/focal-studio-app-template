@@ -83,10 +83,18 @@ jobs:
           bash -n scripts/provision-supabase.sh
           bash scripts/provision-supabase.sh --dry-run "Smoke Test App" \
             --region eu-west-2 --org smoke-org --apple-client-ids com.example.smoke \
+            --google-client-id smoke-client-id --google-client-secret NEVER_PRINT_ME \
             | tee /tmp/provision.log
           grep -q '"region": "eu-west-2"' /tmp/provision.log || { echo "::error::--region did not reach the create body"; exit 1; }
           grep -q '"organization_slug": "smoke-org"' /tmp/provision.log || { echo "::error::--org did not reach the create body"; exit 1; }
           grep -q '"external_apple_enabled": true' /tmp/provision.log || { echo "::error::--apple-client-ids did not reach the auth config body"; exit 1; }
+          # The regression guard that matters most here: this very step tees a dry run into a
+          # CI log, so a body dump that stopped redacting would publish a client secret.
+          if grep -q 'NEVER_PRINT_ME' /tmp/provision.log; then
+            echo "::error::a dry run printed --google-client-secret verbatim; the redaction filter is broken"
+            exit 1
+          fi
+          grep -q '"external_google_secret": "\*\*\*redacted\*\*\*"' /tmp/provision.log || { echo "::error::the google secret was neither redacted nor present; check the auth config body"; exit 1; }
           if grep -q 'a real run would stop here' /tmp/provision.log; then
             echo "::error::the BACKEND preflight took its dry-run bypass; the real gate is untested"
             exit 1
