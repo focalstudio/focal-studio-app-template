@@ -28,6 +28,13 @@
     { "glob": "AGENTS.md", "mode": "identical" },
     { "glob": "CLAUDE.md", "mode": "identical" },
 
+    {
+      "glob": "jest.config.js",
+      "mode": "identical",
+      "$comment": "Edited alongside eslint.config.js below for the same reason: excluding the gitignored drift clone cache at .claude/scratch/drift/ from test/lint walks."
+    },
+    { "glob": "eslint.config.js", "mode": "identical" },
+
     { "glob": ".claude/SKILLS.md", "mode": "identical" },
     { "glob": ".claude/settings.json", "mode": "identical" },
     { "glob": ".claude/settings.local.json.template", "mode": "identical" },
@@ -62,7 +69,12 @@
     { "glob": ".claude/CLAUDE.md", "mode": "advisory" },
     { "glob": ".maestro/*.yaml", "mode": "advisory" },
     { "glob": "docs/*.md", "mode": "advisory" },
-    { "glob": "src/__tests__/e2e-contract.test.ts", "mode": "advisory" }
+    { "glob": "src/__tests__/e2e-contract.test.ts", "mode": "advisory" },
+    {
+      "glob": ".github/shared-paths.json",
+      "mode": "advisory",
+      "$comment": "Apps receive this file too (their own /wrap step 2 reads it), so paths changes should be flagged as travel-worthy. But the apps array is inherently per-repo and would always show as drift under a byte diff, which is why advisory (compared by commit subject) rather than identical."
+    }
   ],
 
   "limitedScope": [
