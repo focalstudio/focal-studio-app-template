@@ -10,6 +10,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **The template ↔ generated-app boundary is now written down, and drift against it is
+  reportable.** `.github/shared-paths.json` lists the paths meant to stay the same across this
+  repo and the apps generated from it; `scripts/drift-report.sh` compares them and prints what
+  has diverged. Read-only in both directions — run it here to check every registered app, or
+  from inside a generated app to check that app against the template (public, so it needs no
+  auth). Nothing is ever written to another repo.
+
+  Fixes had failed to travel four times, three of them app → template, and every one was caught
+  by a person happening to remember (#145). That direction fails structurally rather than by
+  accident: `maestro-e2e.yml` skips at the `[APP_SLUG]` bootstrap gate, so `.maestro/*.yaml` is
+  only ever *executed* inside a generated app, and every runtime defect in those flows is
+  discovered downstream by construction.
+
+  **Files with app-specific prose are compared by commit subject, not by content.** tick's
+  `full-journey.yaml` differs from ours by 59 lines, 58 of which are correct — a content diff
+  cannot separate those from the one line that was a real unpropagated fix, and a list of commit
+  subjects can, without needing any stored state. Paths that must match exactly are diffed
+  byte-for-byte after `[APP_NAME]`/`[APP_SLUG]`/`[GITHUB_REPO]` normalisation; skip that step
+  and all 181 shared files read as drifted.
+
+  There is deliberately **no apply/sync half**, and there should not be one: copying a shared
+  file in either direction destroys those 58 correct lines to deliver the 1. The diff is for a
+  human. A scheduled cross-repo version is also deliberately absent — it needs the same
+  cross-repo token decision already deferred in #56.
+
+- **`/wrap` now checks whether the session crossed that boundary** (new step 2). It intersects
+  the changed files with the manifest and asks whether the fix needs to travel, naming the
+  repos that carry each path. This is the outbound half only, by construction: it fires where
+  the fix was written and can say nothing about a repo sitting on a stale copy — that is what
+  the drift report is for.
+
 - **One-command Supabase provisioning.** `scripts/provision-supabase.sh` does every step
   `add-backend.sh supabase` previously printed as manual work: creates the project, waits for it to
   come up, reads back the publishable key, writes `.env.local`, applies `schema.sql`, and configures
@@ -35,6 +66,29 @@ Versioning: [Semantic Versioning](https://semver.org/)
   non-interactive auth needs a GCP service account that itself needs a pre-existing project, and
   `firebase projects:create` is gated by per-account quota and billing. A script that works for its
   author and fails for everyone else is worse than an honest checklist.
+
+### Fixed
+- **The Maestro cold-start waits were shorter than a cold start** — backported from `tick#14`,
+  and the first thing the drift report above found. Three `extendedWaitUntil` timeouts in
+  `.maestro/full-journey.yaml` and `.maestro/persistence.yaml` go from 60s to 180s. The number
+  is measured, not guessed: a cold GitHub `macos-latest` runner took **54,161 ms** to serve its
+  first bundle (3,435 modules), and `clearState: true` throws the dev-client state away so every
+  launch in these flows pays that cost again rather than getting a warm Metro's 6–15s
+  incremental rebuild. Stacked on native launch, 60s expired while slide 1 was already on
+  screen — the debug artifact has the element in the hierarchy dump, a screenshot showing it
+  rendered, and no crash.
+
+  180s is a ceiling, not an expectation: `extendedWaitUntil` returns the moment the element
+  appears, so a healthy run costs nothing and the only path made slower is one that was going
+  to fail anyway. The template's own CI never sees this — it skips at the bootstrap gate — but
+  every app generated from it inherited the too-short value.
+
+- **A local `npm test` or `npm run lint` no longer picks up the cached app clones.**
+  `scripts/drift-report.sh` caches clones under the gitignored `.claude/scratch/drift/`, which
+  CI never sees but Jest and ESLint both walk into: before the exclusions in `jest.config.js`
+  and `eslint.config.js`, a drift run left `npm test` executing every downstream app's suite and
+  `npm run lint` reporting 523 problems, of which only 10 were this repo's.
+
 
 ## [0.14.0] — 2026-08-10
 

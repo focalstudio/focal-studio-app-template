@@ -1,0 +1,143 @@
+{
+  "$comment": [
+    "The template <-> generated-app boundary, written down. Consumed by",
+    "scripts/drift-report.sh and by the shared-path step in .claude/commands/wrap.md.",
+    "",
+    "Everything listed under `paths` is meant to stay the same across the template and",
+    "the apps generated from it. Everything NOT listed (app/, src/store/, src/theme/,",
+    "assets/, store-listing/, IDEA.md, ...) is meant to diverge. That distinction was",
+    "previously written down nowhere, which is half of why #145 kept happening.",
+    "",
+    "Pattern semantics: matched with bash `[[ path == glob ]]`, where `*` DOES match a",
+    "slash. So `scripts/*` covers everything under scripts/ at any depth, and there is",
+    "no need for `**`. Patterns are matched against repo-relative paths.",
+    "",
+    "`mode` is the important field:",
+    "  identical - must match byte-for-byte after placeholder normalisation. Any",
+    "              difference is drift and gets reported with a diff.",
+    "  advisory  - shared in SHAPE but legitimately carries app-specific prose, so",
+    "              diffing the content is noise. Compared by commit subject instead:",
+    "              the report lists commits touching the path that one side has and",
+    "              the other does not. tick's .maestro flows differ from ours by 59",
+    "              lines, 58 of which are correct app-specific comments and one of",
+    "              which was an unpropagated fix - content diffing cannot tell those",
+    "              apart, and commit subjects can."
+  ],
+
+  "paths": [
+    { "glob": "AGENTS.md", "mode": "identical" },
+    { "glob": "CLAUDE.md", "mode": "identical" },
+
+    {
+      "glob": "jest.config.js",
+      "mode": "identical",
+      "$comment": "Edited alongside eslint.config.js below for the same reason: excluding the gitignored drift clone cache at .claude/scratch/drift/ from test/lint walks."
+    },
+    { "glob": "eslint.config.js", "mode": "identical" },
+
+    { "glob": ".claude/SKILLS.md", "mode": "identical" },
+    { "glob": ".claude/settings.json", "mode": "identical" },
+    { "glob": ".claude/settings.local.json.template", "mode": "identical" },
+    { "glob": ".claude/agents/*.md", "mode": "identical" },
+    { "glob": ".claude/commands/*.md", "mode": "identical" },
+    { "glob": ".claude/hooks/*.sh", "mode": "identical" },
+    { "glob": ".claude/reference/*.md", "mode": "identical" },
+    { "glob": ".claude/skills/*", "mode": "identical" },
+
+    { "glob": ".github/labels.tsv", "mode": "identical" },
+    { "glob": ".github/PULL_REQUEST_TEMPLATE.md", "mode": "identical" },
+    { "glob": ".github/ISSUE_TEMPLATE/*", "mode": "identical" },
+    {
+      "glob": ".github/workflows/*.yml",
+      "mode": "identical",
+      "exclude": [
+        ".github/workflows/template-smoke-test.yml",
+        ".github/workflows/template-backend-smoke-test.yml"
+      ],
+      "$comment": "The two template-*-smoke-test workflows exercise the template AS A TEMPLATE (init.sh, add-backend.sh against a scratch checkout). A generated app's stale copy is not drift - it is a file that stopped applying the moment the app was bootstrapped."
+    },
+
+    {
+      "glob": "scripts/*",
+      "mode": "identical",
+      "exclude": ["scripts/init.sh"],
+      "$comment": "init.sh rewrites the placeholders and then deletes itself from relevance; it differs from tick by 99 lines, all of them correct."
+    },
+
+    { "glob": "templates/*", "mode": "identical" },
+
+    { "glob": ".claude/CLAUDE.md", "mode": "advisory" },
+    { "glob": ".maestro/*.yaml", "mode": "advisory" },
+    { "glob": "docs/*.md", "mode": "advisory" },
+    { "glob": "src/__tests__/e2e-contract.test.ts", "mode": "advisory" },
+    {
+      "glob": ".github/shared-paths.json",
+      "mode": "advisory",
+      "$comment": "Apps receive this file too (their own /wrap step 2 reads it), so paths changes should be flagged as travel-worthy. But the apps array is inherently per-repo and would always show as drift under a byte diff, which is why advisory (compared by commit subject) rather than identical."
+    }
+  ],
+
+  "limitedScope": [
+    ".claude/commands/*.md",
+    ".claude/hooks/*.sh",
+    ".github/labels.tsv",
+    ".github/ISSUE_TEMPLATE/*"
+  ],
+  "$limitedScopeComment": "What a non-descendant repo is compared on. Deliberately tiny: these four are the only parts of the shared surface that mean anything to a repo on a different stack. Comparing a Capacitor app against .claude/skills/rn-* or .github/workflows/eas-preview.yml produces pages of output and zero decisions.",
+
+  "apps": [
+    {
+      "repo": "focalstudio/tick",
+      "branch": "dev",
+      "scope": "full",
+      "skip": []
+    },
+    {
+      "repo": "focalstudio/mealcart",
+      "branch": "dev",
+      "scope": "full",
+      "skip": [
+        ".maestro/*.yaml",
+        "docs/*.md",
+        "templates/*",
+        ".github/labels.tsv",
+        ".github/ISSUE_TEMPLATE/*",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/workflows/maestro-e2e.yml",
+        ".github/workflows/verify-privacy.yml",
+        ".github/workflows/release-review.yml",
+        ".github/workflows/eas-preview.yml",
+        "scripts/build-nutrition-index.js",
+        "scripts/e2e.sh",
+        "scripts/sync-labels.sh",
+        "scripts/gen-privacy-policy.mjs",
+        "scripts/check-simulator-crashes.sh",
+        "scripts/add-social-auth.sh",
+        "scripts/verify-backend-contract.mjs",
+        "src/__tests__/e2e-contract.test.ts",
+        ".claude/skills/*",
+        ".claude/reference/*.md",
+        ".claude/agents/*.md",
+        ".claude/SKILLS.md"
+      ],
+      "$comment": "MealCart was bootstrapped before most of this existed and has never adopted it. Each entry here is a triaged 'known absent, not a missed fix' - without them the first report is a wall of ABSENT and the second one gets ignored. Re-triage by deleting a line and re-running."
+    },
+    {
+      "repo": "focalstudio/WildFocus",
+      "branch": "dev",
+      "scope": "limited",
+      "skip": [],
+      "$comment": "Capacitor + Vite, not Expo. Only the stack-agnostic slice is comparable."
+    },
+    {
+      "repo": "focalstudio/vestia-portfolio-manager",
+      "branch": "dev",
+      "scope": "limited",
+      "skip": [],
+      "$comment": "Expo, but predates the current layout (components/, lib/, store/ at the root, no src/)."
+    }
+  ],
+
+  "upstream": "focalstudio/focal-studio-app-template",
+  "upstreamBranch": "dev"
+}
