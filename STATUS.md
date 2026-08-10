@@ -1,45 +1,57 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-09_
+_Updated: 2026-08-10_
 
 **Version:** 0.13.0 (on `main`, tagged `v0.13.0`)   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
-**0.13.0 is released and on `main`**, and #126–#131 closed with it as expected, clearing the
-carry-forward the last two sessions were tracking. Nothing product-facing moved this session.
-The one piece of work is **PR #142, open against `dev` with checks running**: a `Stop` hook
-(`.claude/hooks/wrap-reminder.sh`) that blocks a session from ending while the branch has commits
-not yet reflected in `STATUS.md`/`ROADMAP.md`. It is a backport, not an invention — MealCart has
-had it since `d3b370d`, one commit after being initialised from this template, and it never came
-back upstream, so `/wrap` has been enforced there and merely advisory here for the entire time
-since. Both paths are tested: silent against a wrapped `dev`, `{"decision":"block"}` against an
-unwrapped branch. **The interesting finding is the drift itself** — improvements written inside a
-generated app have no path home, and template improvements have no path forward to apps already
-bootstrapped. #56 covers exactly one file (privacy) and is still unstarted.
+#144 merged, closing #143 — the Danger Zone scroll is real and the Maestro flows no longer flake.
+The open work is **PR #146, green and waiting to merge** (#140 + #141): a free Supabase project is
+auto-paused after 7 days without *database* activity, so `schema.sql` gains a `keepalive_ping()`
+RPC and `supabase-keepalive.yml` calls it daily. **The design detail is the point** — the workflow
+asserts the *shape* of the response, not the HTTP status, because the version written downstream
+first pinged `/auth/v1/health`, which is served by GoTrue and never opens a database connection,
+and was green for 10 consecutive runs while Supabase was still flagging the project for pause.
+`verify-backend.yml` now asserts the inverse of its `delete_own_account` check — anon *can* execute
+the ping and gets a timestamp — because that grant is what the whole thing rests on and losing it
+would surface only as a paused project weeks later. Both backend docs pages now cover idle
+behaviour, which is a real selection input that was invisible at the moment you choose.
+
+Also this session, and the more interesting half: **the guard fix went upstream into `tick`**
+(`tick#17`, PR #18, merged). Its `"swipes once per onboarding slide"` check was passing while
+examining nothing — its own #13 added an `extendedWaitUntil` on `onboarding-cta` before the first
+swipe, and the guard cut the flow at the first *appearance* of that id, counted zero swipes, and
+treated zero as "not comparable". Proved in both directions with a deliberately-broken three-swipe
+flow: green under the old form, correctly red under the new one. A vacuous check and a working
+check are both green, so nothing in tick could ever have raised its hand.
 
 ## Next
-- **Merge #142**, then decide whether the hook gets backported sideways to already-bootstrapped
-  apps. `Vestia-portfolio_manager` is the known candidate; MealCart already has it.
+- **Merge #146** — checks are green, including `Supabase contract & typed database`, which applied
+  `schema.sql` twice to a real Postgres and confirmed the hand-edited `database.types.ts` matches
+  what the CLI generates.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
-  the only way to exercise the parts of the pipeline the template itself can never reach. It is
-  also the only way to exercise the RevenueCat adapter and the E2E CI job for real.
-- **#140** — Supabase free-tier keep-alive. A generated app's project auto-pauses after 7 days
-  idle and nothing in the backend adapter prevents it; MealCart hit this live.
+  the only way to exercise the parts of the pipeline the template can never reach itself.
+- **#145** — pick an option for the propagation problem, or consciously decide not to. The issue
+  lays out three (a `/wrap` backport prompt, a scheduled drift report, a sync script over an
+  explicit manifest) and deliberately picks none.
 
 ## Blockers
 None.
 
 Four things worth carrying forward, none of them blocking:
 
-- **Template↔app changes propagate in neither direction.** #142 is the second instance of the same
-  shape after the privacy-file problem #56 was filed for: a fix lands in one repo and silently
-  fails to reach the others. There is no mechanism, only noticing. Worth a general answer rather
-  than a third one-off backport.
-- **The E2E job has still never run against a real simulator in CI.** Every run on this repo skips
-  at the `[APP_SLUG]` bootstrap gate, including the new weekly `dev` cron, so what 0.13.0 added is
-  static coverage of the flows plus a scheduled slot that only starts doing work in a generated
-  app. The gap is the open Phase 2 box, and it closes from the app side, not from here.
+- **Fixes still propagate between the template and generated apps only by someone remembering** —
+  now written up as **#145** rather than re-derived each time. Four instances: #56 (privacy, still
+  unstarted), #142 (from MealCart), #143 (from tick), and `tick#17` (this session, template → app).
+  Three of the four travelled *app → template*, the direction with no mechanism at all. `tick#17`
+  is the sharpest version: the symptom there was a test that passed while checking nothing, so
+  there was no failing build, no error, and no drift warning to notice.
+- **The E2E job has still never run against a real simulator in CI *on this repo*** — every run
+  skips at the `[APP_SLUG]` gate, including the weekly `dev` cron. This is structural, not a gap to
+  close: a template has no app to drive, so runtime defects in `.maestro/*.yaml` are discovered
+  downstream **by construction**. Same shape as #140 itself, which MealCart found live. Do not add
+  the `e2e` label to a template PR expecting a signal.
 - **The RevenueCat adapter has never run against a live RevenueCat project.** CI proves the wiring
   (`Wire RevenueCat Paywall` and `Wire Supabase Backend + RevenueCat Paywall` both green, the
   latter being the only check that catches one `add-*.sh` clobbering the other's selector), and the
