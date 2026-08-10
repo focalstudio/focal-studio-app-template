@@ -1,0 +1,105 @@
+name: Supabase Keep-Alive
+
+# Keeps a free-tier Supabase project off the 7-day auto-pause list by making one
+# real database query a day.
+#
+# ── Why the response shape is asserted, and not just the exit status ──────────
+# This MUST hit Postgres. The first version of this workflow (written in MealCart,
+# where the problem was found — focalstudio/mealcart#129) pinged /auth/v1/health,
+# which is served by GoTrue and never opens a database connection. It was green
+# for 10 consecutive daily runs while Supabase still counted the project as idle,
+# and the pause-warning email arrived with no signal anywhere that anything was
+# wrong. A keep-alive that reports success without reaching the database is worse
+# than no keep-alive, because it manufactures confidence.
+#
+# So the check below asserts that the response is a quoted ISO-8601 timestamp.
+# Only Postgres produces one. Exit status alone is precisely the signal that
+# failed us.
+#
+# ── Why an RPC and not a table read ──────────────────────────────────────────
+# templates/backends/supabase/schema.sql leaves `anon` with no table grants, by
+# design, so a table read returns 401 / 42501. See the "Free-tier keep-alive"
+# section of that file for the full reasoning, and docs/backends/supabase.md for
+# the pause rules themselves.
+#
+# ── Scheduling ───────────────────────────────────────────────────────────────
+# Daily against a 7-day window, deliberately generous: a single missed run (a
+# GitHub incident, a scheduling delay, a repo briefly disabled) must not be able
+# to consume the whole budget. Note that GitHub disables scheduled workflows in
+# repositories with no activity for 60 days — a paused project is exactly the
+# situation where that could bite, so re-enable it if the repo goes quiet.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping Supabase
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Three audiences, one workflow, and only the third has anything to do:
+      #   • the un-bootstrapped template — no project exists yet;
+      #   • a generated app on firebase/none — no Supabase project to keep alive;
+      #   • a generated app on Supabase — ping it.
+      # Same gating shape as verify-backend.yml and android-release.yml, so the
+      # scheduled run is silent-green rather than red everywhere it does not apply.
+      #
+      # The secrets are read here rather than in an `if:` because the `secrets`
+      # context is not available in step conditions.
+      - name: Gate — is there a Supabase project to keep alive?
+        id: gate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if grep -q '\[APP_SLUG\]' app.json; then
+            echo "Un-bootstrapped template — there is no Supabase project yet. Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! grep -qE '^const BACKEND = "supabase";' env.js; then
+            echo "No Supabase backend wired (env.js BACKEND is not \"supabase\"). Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Wired to Supabase but the secrets are missing. Deliberately a skip
+          # with a loud message rather than a failure: the most likely reader of
+          # this is someone who has just run scripts/add-backend.sh and has not
+          # added the secrets yet, and a repo that goes red every night at 04:00
+          # trains people to ignore it — which is how the project gets paused.
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::warning::This app uses Supabase, but the SUPABASE_URL / SUPABASE_ANON_KEY repository secrets are not set, so the project is NOT being kept alive. Add them under Settings → Secrets and variables → Actions. See docs/backends/supabase.md."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Supabase backend wired and secrets present — pinging."
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Ping Supabase database
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          response=$(curl -sf -X POST "${SUPABASE_URL}/rest/v1/rpc/keepalive_ping" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "Database responded: ${response}"
+          # Assert the shape, not the status. keepalive_ping() returns a
+          # timestamptz, which PostgREST renders as a quoted ISO-8601 string --
+          # only Postgres can produce that, so matching it proves the query
+          # actually reached the database. See the header for why this is here.
+          if ! echo "${response}" | grep -qE '^"[0-9]{4}-[0-9]{2}-[0-9]{2}T'; then
+            echo "::error::Keep-alive did not return a timestamp -- the database was not reached. If this is 404 PGRST202, keepalive_ping() is missing: re-apply templates/backends/supabase/schema.sql."
+            exit 1
+          fi

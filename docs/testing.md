@@ -450,6 +450,43 @@ because a `tapOn` against an unmatched-but-present element reports COMPLETED whi
 nothing. `commands.json` in that directory gives every step's status, which is the fastest way to
 spot a step that "passed" without doing anything.
 
+**Read the failure backwards, not forwards.** Maestro names the step that failed, and that step is
+usually innocent. The one that lied is earlier, and it reported COMPLETED.
+
+That is not hypothetical. `full-journey.yaml` failed in the first app generated from this template
+at `tapOn: "Continue"`, the delete-account alert — nowhere near the actual defect:
+
+1. `scrollUntilVisible` on `settings-delete-account` **completed without scrolling at all**. An
+   off-screen row is still in the accessibility tree, so Maestro judged it visible — the exact
+   blind spot that command was added to work around.
+2. The `tapOn` that followed fired at the row's true centre, which was below the viewport, and
+   landed on the **tab bar**. The app switched to the Home tab.
+3. Three steps later the flow looked for alert buttons on the home screen and failed.
+
+The fix was `centerElement: true` on the scroll, which forces a real one. The diagnosis came from
+one screenshot: a `takeScreenshot` immediately before the tap showed Settings still scrolled to the
+top. **When a step's COMPLETED and the failure make no sense together, screenshot between them** —
+the hierarchy dump alone would not have shown it, because the row was present in the tree the whole
+time. Note that `takeScreenshot` paths are sandboxed to the run directory; an absolute path fails.
+
+**Assert with a wait after anything that moves.** Every assertion in both flows that follows a tap,
+swipe or navigation uses `extendedWaitUntil`, not a bare `assertVisible`. Maestro's default
+assertion timeout assumes an idle device, and neither a cold macOS runner nor a loaded laptop is
+one. Three separate intermittent failures came from this — roughly one run in three — and none of
+them named its own cause: an onboarding swipe swallowed outright, a second swipe racing the first
+and leaving the pager one slide short of where `onboarding-cta` completes rather than advances, and
+Settings not having finished its lazy first mount before `settings-title` was asserted.
+
+Two rules fall out of that, and both are worth keeping:
+
+- **Consecutive gestures need something between them.** Two back-to-back swipes are the fragile
+  construct — pace them on the state each is supposed to have produced, not on a duration. Swiping
+  slower than Maestro's 400ms default flick helps too; a fast flick is the one a `FlatList` is most
+  likely to drop under load.
+- **`assertNotVisible` stays flat.** Waiting for something to be *absent* passes the instant the
+  screen has not rendered yet, which is precisely the failure such an assertion exists to catch.
+  Gate it behind an `extendedWaitUntil` on something that *should* be there instead.
+
 ### When it is the simulator, not the app
 
 One failure mode looks like an app bug and is not. Apple's **SpringBoard** — the iOS home screen

@@ -1,47 +1,54 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-08_
+_Updated: 2026-08-10_
 
-**Version:** 0.13.0   **Stage:** Template / pre-app
+**Version:** 0.14.0 (on `main`, tagged `v0.14.0`)   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
-**0.13.0 is the test-and-CI hardening release**, carrying #126–#131 from `dev` to `main`. Its
-theme is the gap between "the template's own checks are green" and "a *generated* app's checks
-are green". Both Maestro flows addressed elements by placeholder copy — onboarding slide titles,
-the home card's `"Welcome"`, the settings page title — so they shipped green here and failed the
-first time anyone wrote their own product (#126); every selector is now a `testID`, and
-`src/__tests__/e2e-contract.test.ts` fails statically, in under a second on every branch, if one
-goes missing. The same blind spot had already let a dead `"Start Free Trial"` assertion survive a
-release. `init.sh` created 4 of 18 issue labels, so a generated app could not follow the labelling
-convention it ships with and could never apply the `e2e` opt-in gate (#127) — the set now lives in
-`.github/labels.tsv` behind `scripts/sync-labels.sh`, and an older generated app can self-heal by
-running it. A weekly Maestro run on `dev` covers the rot a static check cannot see (#128), and
-`scripts/check-simulator-crashes.sh` now names the simulator's own SpringBoard segfaults instead of
-letting them read as app navigation bugs (#131). One user-facing change: Settings' three-Toggle
-appearance picker is a single **Dark Mode** switch (#129) — `"device"` stays the persisted default
-and the `hydrate` fallback, it just stops being selectable.
+#144 merged, closing #143 — the Danger Zone scroll is real and the Maestro flows no longer flake.
+**Shipped in 0.14.0** (#140 + #141): a free Supabase project is auto-paused after 7 days without
+*database* activity, so `schema.sql` gains a `keepalive_ping()` RPC and `supabase-keepalive.yml`
+calls it daily. **The design detail is the point** — the workflow asserts the *shape* of the
+response, not the HTTP status, because the version written downstream first pinged
+`/auth/v1/health`, which is served by GoTrue and never opens a database connection, and was green
+for 10 consecutive runs while Supabase was still flagging the project for pause.
+`verify-backend.yml` now asserts the inverse of its `delete_own_account` check — anon *can* execute
+the ping and gets a timestamp — because that grant is what the whole thing rests on and losing it
+would surface only as a paused project weeks later. Both backend docs pages now cover idle
+behaviour, which is a real selection input that was invisible at the moment you choose.
+
+Also this session, and the more interesting half: **the guard fix went upstream into `tick`**
+(`tick#17`, PR #18, merged). Its `"swipes once per onboarding slide"` check was passing while
+examining nothing — its own #13 added an `extendedWaitUntil` on `onboarding-cta` before the first
+swipe, and the guard cut the flow at the first *appearance* of that id, counted zero swipes, and
+treated zero as "not comparable". Proved in both directions with a deliberately-broken three-swipe
+flow: green under the old form, correctly red under the new one. A vacuous check and a working
+check are both green, so nothing in tick could ever have raised its hand.
 
 ## Next
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
-  the only way to exercise the parts of the pipeline the template itself can never reach. It is
-  also the only way to exercise the RevenueCat adapter and the E2E CI job for real.
-- **#54** — dev-only Showcase screen for smoke-testing template changes.
-- **#66** — encrypted-at-rest session option via `LargeSecureStore`.
+  the only way to exercise the parts of the pipeline the template can never reach itself.
+- **#145** — pick an option for the propagation problem, or consciously decide not to. The issue
+  lays out three (a `/wrap` backport prompt, a scheduled drift report, a sync script over an
+  explicit manifest) and deliberately picks none.
 
 ## Blockers
 None.
 
 Four things worth carrying forward, none of them blocking:
 
-- **#126–#131 stay open until 0.13.0 lands on `main`.** `Closes` only fires on merges to the
-  default branch and template PRs target `dev`, so the work shipped while the issues stayed open —
-  the same mechanic that held #113/#114 open through 0.11.0 and #112 through 0.12.0. The release PR
-  closes all six.
-- **The E2E job has still never run against a real simulator in CI.** Every run on this repo skips
-  at the `[APP_SLUG]` bootstrap gate, including the new weekly `dev` cron, so what 0.13.0 added is
-  static coverage of the flows plus a scheduled slot that only starts doing work in a generated
-  app. The gap is the open Phase 2 box, and it closes from the app side, not from here.
+- **Fixes still propagate between the template and generated apps only by someone remembering** —
+  now written up as **#145** rather than re-derived each time. Four instances: #56 (privacy, still
+  unstarted), #142 (from MealCart), #143 (from tick), and `tick#17` (this session, template → app).
+  Three of the four travelled *app → template*, the direction with no mechanism at all. `tick#17`
+  is the sharpest version: the symptom there was a test that passed while checking nothing, so
+  there was no failing build, no error, and no drift warning to notice.
+- **The E2E job has still never run against a real simulator in CI *on this repo*** — every run
+  skips at the `[APP_SLUG]` gate, including the weekly `dev` cron. This is structural, not a gap to
+  close: a template has no app to drive, so runtime defects in `.maestro/*.yaml` are discovered
+  downstream **by construction**. Same shape as #140 itself, which MealCart found live. Do not add
+  the `e2e` label to a template PR expecting a signal.
 - **The RevenueCat adapter has never run against a live RevenueCat project.** CI proves the wiring
   (`Wire RevenueCat Paywall` and `Wire Supabase Backend + RevenueCat Paywall` both green, the
   latter being the only check that catches one `add-*.sh` clobbering the other's selector), and the

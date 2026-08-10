@@ -17,6 +17,9 @@
 - [x] `scripts/init.sh` one-shot bootstrap, smoke-tested in CI (#75)
 - [x] Auth port with Supabase and Firebase adapters via `scripts/add-backend.sh` (#76)
 - [x] Apple and Google sign-in via `scripts/add-social-auth.sh` (#70)
+- [x] Supabase free-tier keep-alive — a generated app's project auto-pauses after 7 days idle,
+      and nothing in the backend adapter prevents it (#140)
+- [x] Backend docs cover free-tier idle/dormancy behaviour (#141)
 
 ## Phase 2 — Test & CI Hardening
 - [x] React Native screen-test harness (#77)
@@ -34,6 +37,8 @@
 - [x] Weekly Maestro run on `dev`, plus simulator-crash attribution (#128, #131)
 - [ ] E2E job exercised against a real simulator **in CI** — only reachable from a generated app,
       since every run on the template itself skips at the `[APP_SLUG]` gate
+- [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
+      flaked ~1-in-3; found in a generated app, invisible from here (#143)
 
 ## Phase 3 — Release & Store Automation
 - [x] Automated tag + GitHub Release on merge to `main` (`release.yml`)
@@ -49,4 +54,6 @@
 - [ ] Dev-only Showcase screen for smoke-testing template changes (#54)
 - [ ] Encrypted-at-rest session option via `LargeSecureStore` (#66)
 - [ ] Cross-repo privacy auto-PR workflow (#56)
+- [ ] A general answer to fixes not propagating between the template and generated apps — four
+      instances now, three of them app → template, the direction with no mechanism at all (#145)
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)

@@ -65,6 +65,8 @@ Two slash commands bracket every work session (defined in [.claude/commands/](co
 - **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
 - **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
 
+`/wrap` is **enforced, not advisory**. `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping with a nudge to run `/wrap`. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn. The hook exists because "run `/wrap` at the end" as plain instruction text is something a session reliably forgets.
+
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
 
 ## Release workflow
@@ -329,6 +331,7 @@ Committed to git → propagates automatically to every repo cloned from this tem
   - `git push origin main` — no direct push to main; always via PR
   - `rm -rf` / `rm -r` — no recursive deletes
   - `sudo` — no privilege escalation
+- **Hooks:** a `Stop` hook running `.claude/hooks/wrap-reminder.sh` — blocks a session from stopping with unwrapped commits (see "Session workflow" above). Requires `jq`; no-ops silently if it's absent.
 
 ### Layer 2 — Project personal (`.claude/settings.local.json`, gitignored)
 Your machine-specific overrides. Copy `.claude/settings.local.json.template` to `.claude/settings.local.json` to activate. Use this to add permissions that are personal (e.g., custom Homebrew paths) or that you explicitly trust `devops-agent` to use autonomously (e.g., `brew install`, `npm install -g`).

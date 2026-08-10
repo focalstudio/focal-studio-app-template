@@ -10,6 +10,12 @@ name: Verify Backend
 #      silent success. deleteAccount() is the claim the app makes on Google Play's Data
 #      safety form; "it compiles" is not good enough.
 #
+#      It also asserts the exact inverse for the free-tier keep-alive (#140): anon *can*
+#      execute keepalive_ping() and gets a timestamp back. That is the one grant in
+#      schema.sql that deliberately opens something to anon, and supabase-keepalive.yml —
+#      which runs on a schedule, in a different repo — is the only other thing that would
+#      notice it being tightened away, weeks later, as a paused project.
+#
 #   2. Typed database (#64) — regenerates src/types/database.types.ts from that same
 #      instance and fails when the committed file has drifted from schema.sql.
 #
@@ -145,7 +151,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: npm i --no-save --legacy-peer-deps @supabase/supabase-js
 
-      # Assertions 2-5 and 7.
+      # Assertions 2-5, 7 and 8.
       - name: Verify the deletion contract
         if: steps.gate.outputs.run == 'true'
         run: node scripts/verify-backend-contract.mjs

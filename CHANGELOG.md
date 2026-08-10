@@ -9,6 +9,69 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-10
+
+### Added
+- **Supabase free-tier keep-alive (#140).** A free project is auto-paused after 7 days without
+  *database* activity, and is data-export only 90 days after that — the window that matters being
+  the one between "app finished" and "app has users", with a project idle awaiting App Store review
+  as the textbook case. `schema.sql` gains a `keepalive_ping()` RPC and
+  `.github/workflows/supabase-keepalive.yml` calls it daily, no-oping (with a warning) when the app
+  is un-bootstrapped, not wired to Supabase, or missing the two repository secrets.
+  The design detail worth keeping: the workflow asserts the **shape** of the response, not the HTTP
+  status. The version of this written downstream first pinged `/auth/v1/health`, which is served by
+  GoTrue and never opens a database connection — it was green for 10 consecutive daily runs while
+  Supabase was still flagging the project for pause, so exit status alone is exactly the signal
+  that failed. It is an RPC rather than a table read because `schema.sql` deliberately leaves
+  `anon` with no table grants. `verify-backend.yml` now asserts the inverse of its
+  `delete_own_account` check — that `anon` *can* execute `keepalive_ping()` and gets a timestamp —
+  since a future grant tightening would otherwise surface only as a paused project weeks later.
+- `Stop` hook (`.claude/hooks/wrap-reminder.sh`, wired in `.claude/settings.json`) that blocks a
+  Claude Code session from ending while the branch has commits not yet reflected in `STATUS.md` /
+  `ROADMAP.md`, prompting `/wrap` first. Fires once per session. Backported from MealCart, where
+  it was written and never propagated upstream.
+
+### Changed
+- **Both backend pages now cover what happens to an idle project (#141)**, which is a real
+  backend-selection input and was invisible at the moment you choose. Supabase: the 7-day pause,
+  the 90-day export cliff, and how to wire the keep-alive. Firebase: Spark **does not** pause for
+  inactivity — daily quotas throttle instead — plus two things stated explicitly rather than left
+  to inference, that the Supabase keep-alive must **not** be ported across for symmetry, and that
+  Cloud Storage has required a Blaze billing account since 3 February 2026 at any volume, which
+  retires "Storage ✅" as a free-tier claim in the path-comparison table.
+
+### Fixed
+- **`full-journey.yaml` never actually reached the account-deletion alert (#143).**
+  `scrollUntilVisible` treated the off-screen Danger Zone row as already visible — an off-screen
+  row is still in the accessibility tree, which is the exact blind spot that command was added to
+  work around — and so scrolled nothing. The `tapOn` that followed fired at the row's true centre,
+  below the viewport, and landed on the **tab bar**: the app switched to Home, no alert opened, and
+  the run died three steps later looking for alert buttons on the home screen. Every step in
+  between still reported COMPLETED, so the failure read as a broken alert. The scroll now centres
+  the row. This repo could never see it — `maestro-e2e.yml` hits the bootstrap gate and skips here,
+  and the bug only bites once Settings grows tall enough to push Danger Zone below the fold.
+- **Both Maestro flows are no longer flaky under load (#143).** Every assertion that follows a
+  gesture now waits (`extendedWaitUntil`) instead of asserting flat, consecutive onboarding swipes
+  are paced by the slide each is supposed to have reached rather than sitting back-to-back, and
+  swipes are slower than Maestro's default flick. One cause underneath three separate ~1-in-3
+  intermittent failures, none of which named itself: a swipe swallowed outright on a cold CI
+  runner, a second swipe racing the first and leaving the pager on slide 2 — where `onboarding-cta`
+  reads "Next" and merely advances, so the flow blamed the auth wall several steps later — and
+  Settings not having finished its lazy first mount before `settings-title` was asserted.
+  `assertNotVisible` is deliberately left flat: waiting for something to be *absent* passes the
+  instant the screen has not rendered yet. `full-journey.yaml` also now asserts the paywall
+  actually dismissed rather than only that a tap was dispatched at its close button.
+- **The onboarding swipe-count guard had a hole that would have opened silently (#143).**
+  `onboardingSwipesOf()` in `src/__tests__/e2e-contract.test.ts` cut the flow at the first
+  `id: "onboarding-cta"` anywhere in the file. The new pre-swipe wait on that id moved the cut
+  ahead of both swipes, making the count 0, which the function reports as "not comparable" — so the
+  check would have passed vacuously on both flows with nothing reported. It now cuts at the first
+  *tap on* the CTA. Verified by counterfactual: under the old form a flow with three swipes passes
+  green; under the new one it fails with the expected message.
+
+Both flow fixes were found in the first app bootstrapped from this template, which is the only
+place they can be found — the template's own E2E job skips before Maestro ever starts.
+
 ## [0.13.0] — 2026-08-08
 
 ### Added
