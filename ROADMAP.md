@@ -60,8 +60,11 @@
 - [x] RevenueCat wired behind a `PaywallProvider` port rather than into the store directly (#112)
 - [ ] Dev-only Showcase screen for smoke-testing template changes (#54)
 - [ ] Encrypted-at-rest session option via `LargeSecureStore` (#66)
-- [ ] Cross-repo privacy auto-PR workflow (#56)
-- [x] A general answer to fixes not propagating between the template and generated apps — the
-      boundary is written down in `.github/shared-paths.json`, `/wrap` covers the outbound half
-      and `scripts/drift-report.sh` the inbound one. Found instance five on its first run (#145)
+- [ ] Cross-repo privacy auto-PR workflow (#56) — now blocking a second consumer too: the
+      scheduled version of the drift report needs the same cross-repo token. One GitHub App
+      covers both; take the decision once (commented on #56)
+- [ ] A general answer to fixes not propagating between the template and generated apps — the
+      boundary written down in `.github/shared-paths.json`, `/wrap` covering the outbound half
+      and `scripts/drift-report.sh` the inbound one. Found instance five on its first run
+      (`tick#14`). **PR #151 open, CI green, not yet merged** (#145)
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)

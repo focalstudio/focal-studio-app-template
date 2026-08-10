@@ -6,6 +6,40 @@ _Updated: 2026-08-10_
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
+
+**#145 answered — PR #151 open, CI green, awaiting merge to `dev`.** The propagation problem
+now has a mechanism instead of a memory. `.github/shared-paths.json` writes down the
+template ↔ app boundary; `scripts/drift-report.sh` reports drift against it (read-only, both
+directions, no secret — it runs on your own `gh auth`); `/wrap` gained a step 2 covering the
+outbound half.
+
+The issue offered three options and picked none, and **its cost ordering does not survive
+contact with the repos**: options 1 and 2 both need the shared/diverges boundary written down,
+and that boundary *is* option 3's manifest. So the manifest was never the expensive part — the
+**apply** half is, and that half is now **rejected rather than deferred**. tick's `.maestro`
+flows differ from ours by 59 lines, **58 of them correct** app-specific prose and 1 a real
+unpropagated fix; any copy destroys the 58 to deliver the 1, and nothing mechanical separates
+them. Recorded in `.claude/CLAUDE.md` so it isn't re-proposed. Extend the report, never the
+writer.
+
+**The report found instance five on its first run**, which is the whole claim: `tick#14` had
+raised the Maestro cold-start waits from 60s to 180s after measuring a **54,161 ms** first-bundle
+serve on a cold `macos-latest` runner, and that never came back upstream. Backported here. The
+inverse too — `wrap-reminder.sh`, the entire subject of #142, was *absent from tick*, and vestia
+is missing it plus both session commands, which is #142's own untaken follow-up.
+
+The design detail worth keeping: `advisory` paths (`.maestro/*`, `docs/*.md`) are compared by
+**commit subject, not content**, bounded on both sides by the app's bootstrap commit. A content
+diff cannot tell "this app renamed a screen in a comment" from "this app fixed a real bug"; a
+list of commit subjects can, and needs no stored state to do it. `identical` paths are diffed
+after `[APP_NAME]`/`[APP_SLUG]`/`[GITHUB_REPO]` normalisation — skip that and all 181 shared
+files read as drifted.
+
+Also found while building it: the gitignored clone cache at `.claude/scratch/drift/` is invisible
+to CI but **Jest and ESLint both walk into it** — before the exclusions, a drift run left
+`npm test` running tick's entire suite and `npm run lint` reporting 523 problems when the real
+baseline is 10.
+
 **#149 merged to `dev`**: `scripts/provision-supabase.sh` turns every manual
 dashboard step `add-backend.sh supabase` used to print into one command, through the Supabase
 Management API — create project, wait, read the publishable key, write `.env.local`, apply
@@ -70,9 +104,11 @@ check are both green, so nothing in tick could ever have raised its hand.
   project refresh rather than treating as separate work.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
   the only way to exercise the parts of the pipeline the template can never reach itself.
-- **#145** — pick an option for the propagation problem, or consciously decide not to. The issue
-  lays out three (a `/wrap` backport prompt, a scheduled drift report, a sync script over an
-  explicit manifest) and deliberately picks none.
+- **Merge #151, then act on the 50 drifted paths it reports.** The mechanism exists; nothing has
+  been *acted on* yet beyond the one backport. The two clearest: `wrap-reminder.sh` is missing
+  from tick, WildFocus and vestia (vestia also lacks both session commands), and tick is behind on
+  `expo-services/SKILL.md`, `verify-backend.yml` and `schema.sql`. Also re-triage MealCart's
+  `skip` array — its 21 entries are my first-pass "known absent", not a verified reading.
 
 ## Blockers
 None.
@@ -87,12 +123,14 @@ None.
 
 Four things worth carrying forward, none of them blocking:
 
-- **Fixes still propagate between the template and generated apps only by someone remembering** —
-  now written up as **#145** rather than re-derived each time. Four instances: #56 (privacy, still
-  unstarted), #142 (from MealCart), #143 (from tick), and `tick#17` (this session, template → app).
-  Three of the four travelled *app → template*, the direction with no mechanism at all. `tick#17`
-  is the sharpest version: the symptom there was a test that passed while checking nothing, so
-  there was no failing build, no error, and no drift warning to notice.
+- **Propagation now has a mechanism, but the fleet is not homogeneous and the report is still
+  local-only.** #145 is answered (PR #151), so this is no longer "someone has to remember" — but
+  two caveats survive. First, only `tick` and `mealcart` are true descendants: **WildFocus is a
+  Capacitor + Vite app**, and vestia predates the current layout, so both are compared on a
+  deliberately tiny `limitedScope` slice and a uniform diff across all four would be ~90% noise.
+  Second, the **scheduled** version of the report is not built: a cron job reading private sibling
+  repos needs a PAT or GitHub App, which is the *same* deferred decision as **#56**. One App covers
+  both consumers — commented there rather than provisioning a second secret.
 - **The E2E job has still never run against a real simulator in CI *on this repo*** — every run
   skips at the `[APP_SLUG]` gate, including the weekly `dev` cron. This is structural, not a gap to
   close: a template has no app to drive, so runtime defects in `.maestro/*.yaml` are discovered
