@@ -82,7 +82,9 @@ Two mechanisms consume it, one per direction:
 
 **Do not build a sync-and-apply script.** It has been considered and rejected, not deferred. tick's `.maestro` flows differ from the template's by 59 lines, 58 of which are correct app-specific prose and 1 of which was a real unpropagated fix; a copy in either direction destroys the 58 to deliver the 1. Nothing mechanical can tell them apart — that is the judgment the human diff read exists for. Extend the report, not the writer.
 
-A scheduled cross-repo version of the report is deliberately not built either: reading private sibling repos from CI needs a PAT or GitHub App token, the same security-surface decision already deferred in #56. Take it once, for both.
+A scheduled cross-repo version of the report is **unblocked but not yet built**. Reading private sibling repos from CI needs a credential the default `GITHUB_TOKEN` cannot provide; that decision was taken once, for both consumers, alongside #56 — see [.claude/reference/cross-repo-token.md](reference/cross-repo-token.md). What remains for #145 is the workflow itself plus token auth in `drift-report.sh`'s `sync_clone`, which currently clones anonymously over HTTPS. The local script covers the need until the fleet grows.
+
+**Any workflow writing to another repo opens a PR — never commits, never merges.** Same reason the drift report reports rather than applies: the receiving copy may be deliberately better. `publish-privacy.yml` is the reference implementation.
 
 ## Release workflow
 When the user says to cut a release:

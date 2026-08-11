@@ -31,10 +31,32 @@ anchor is missing, or `PRIVACY_POLICY_URL` in `src/constants.ts` does not end wi
 
 ## Publish
 
-Open a PR adding the generated `privacy-<slug>.html` to the `focalstudio.github.io` repo
-root. GitHub Pages serves it from `main`. Point Play's account-deletion URL at the page's
-`#delete` anchor. (A later Phase-2 workflow can open this PR automatically — see the repo
-issues.)
+Run the **Publish Privacy Policy** workflow
+(`.github/workflows/publish-privacy.yml`, Actions → Run workflow). It regenerates the page,
+diffs it against the live one, and opens a PR adding or updating `privacy-<slug>.html` in the
+[`focalstudio.github.io`](https://github.com/focalstudio/focalstudio.github.io) repo root.
+GitHub Pages serves it from `main`. Merge the PR, then point Play's account-deletion URL at the
+page's `#delete` anchor.
+
+- Tick **dry run** to see the diff against the live page without opening a PR.
+- The workflow **opens a PR and stops**. It never commits to the Pages repo directly and never
+  merges — read the diff before merging.
+- It no-ops (green, with a message saying which) when the org has no cross-repo credentials,
+  when this repo has no `privacy.config.json`, or when the live page already matches.
+- Re-running updates the same PR rather than opening another; it pushes one stable
+  `privacy/<slug>` branch.
+
+Cross-repo writes need a credential the default `GITHUB_TOKEN` cannot provide — see
+[`.claude/reference/cross-repo-token.md`](../.claude/reference/cross-repo-token.md) for the
+GitHub App behind it and how to provision or rotate it.
+
+> **Adopting this for an app that already has a live page.** If the live page was written by
+> hand it is probably richer than anything the config currently generates — MealCart's is. Do a
+> dry run first and read the diff. The PR body shouts when it removes more lines than it adds.
+> Do not merge until `privacy.config.json` reproduces the content that would be dropped.
+
+The manual fallback is unchanged: copy `store-listing/privacy-<slug>.html` into the Pages repo
+and open the PR yourself.
 
 > The generated page is **standalone-styled** (self-contained CSS from `privacy-shell.html`),
 > matching `privacy-policy-template.html` and the published `privacy-<slug>.html` pages. It
