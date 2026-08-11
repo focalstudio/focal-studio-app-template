@@ -60,13 +60,15 @@
 - [x] RevenueCat wired behind a `PaywallProvider` port rather than into the store directly (#112)
 - [ ] Dev-only Showcase screen for smoke-testing template changes (#54)
 - [ ] Encrypted-at-rest session option via `LargeSecureStore` (#66)
-- [x] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
-      the Pages repo. Took the shared token decision with it: one org-owned GitHub App, two org
-      secrets, documented in `.claude/reference/cross-repo-token.md`
-- [ ] Scheduled cross-repo drift report — unblocked by the App above; needs the workflow plus
-      token auth in `drift-report.sh`'s `sync_clone`. Local script covers it meanwhile (#145)
-- [ ] A general answer to fixes not propagating between the template and generated apps — the
+- [x] A general answer to fixes not propagating between the template and generated apps — the
       boundary written down in `.github/shared-paths.json`, `/wrap` covering the outbound half
       and `scripts/drift-report.sh` the inbound one. Found instance five on its first run
-      (`tick#14`). **PR #151 open, CI green, not yet merged** (#145)
+      (`tick#14`). PR #151 merged (#145)
+- [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
+      the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
+      two org secrets, `.claude/reference/cross-repo-token.md`. **PR #154 open, CI green, not yet
+      merged**; the App itself still needs provisioning (browser-only flow)
+- [ ] Scheduled cross-repo drift report — unblocked by the App above rather than blocked; needs
+      the workflow plus token auth in `drift-report.sh`'s `sync_clone`, which clones anonymously
+      today. Local script covers it meanwhile (#145)
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)
