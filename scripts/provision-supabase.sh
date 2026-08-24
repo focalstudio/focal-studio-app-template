@@ -490,7 +490,7 @@ SCHEME="$(jq -r '.expo.scheme // empty' app.json)"
 AUTH_ARGS=(-n)
 AUTH_FILTER='{}'
 
-# Tested by SHAPE, not by value. A literal "[APP_SLUG]" here would be rewritten by
+# Tested by SHAPE, not by value. A literal "\[APP_SLUG\]" here would be rewritten by
 # scripts/init.sh along with every other placeholder in every *.sh, turning this into
 # `[ "$SCHEME" != "myslug" ]` against an app.json whose scheme IS myslug — inverting
 # the guard so that every freshly bootstrapped app, the only kind that still needs

@@ -15,7 +15,7 @@
 # Why this exists: #145. Four fixes failed to travel between these repos, three of
 # them app -> template, and every one was caught by a person happening to remember.
 # The direction with no mechanism is the common one, because the template cannot run
-# its own E2E suite — maestro-e2e.yml skips at the [APP_SLUG] gate — so every runtime
+# its own E2E suite — maestro-e2e.yml skips at the \[APP_SLUG\] gate — so every runtime
 # defect in .maestro/*.yaml is found downstream by construction.
 #
 #   --app owner/name  restrict to one app (template direction only)
@@ -89,9 +89,9 @@ matches_any() {
 # Without this every single file reads as drifted. Two sources of false positives:
 # a missing trailing newline, and the [APP_*] placeholders init.sh rewrites.
 #
-# The placeholder half has to RENDER, not mask. Masking `[APP_NAME]` -> a sentinel
+# The placeholder half has to RENDER, not mask. Masking `\[APP_NAME\]` -> a sentinel
 # on the template side accomplishes nothing, because the app side does not say
-# `[APP_NAME]` — it says `Tick`, and always will. Every shared file containing a
+# `\[APP_NAME\]` — it says `Tick`, and always will. Every shared file containing a
 # placeholder therefore read as drift permanently, which no action on either repo
 # could ever clear: 5 of tick's 10 content-drift hits were this and nothing else.
 #
@@ -112,6 +112,12 @@ matches_any() {
 # it telling the reader to "leave `Tick` as-is, init.sh replaces them". Self-
 # referential documentation cannot round-trip through its own substitution, and
 # pretending otherwise would hide a line that a human should see once and dismiss.
+# Note the backslashes in the comments above and in the header. Prose that DISCUSSES
+# a placeholder is written bracket-escaped, `\[APP_NAME\]`, the same form the workflow
+# bootstrap gates use. Unescaped, init.sh rewrites it like any other occurrence, and a
+# generated app ends up with this file explaining that "maestro-e2e.yml skips at the
+# tick gate" — nonsense, and permanently un-round-trippable drift for the comparison
+# below. Escaping is what makes a file that documents the mechanism survive it.
 SUB_NAME=""; SUB_SLUG=""; SUB_REPO=""; SUB_ID=""
 
 # Reads the identity an app was bootstrapped with. Silent about failure: a repo that
@@ -149,8 +155,8 @@ _sed_rule() {
 
 # The TEMPLATE side: render placeholders the way init.sh would have, then compare.
 # The rule set mirrors scripts/init.sh, including its Obsidian-wikilink special case
-# (`[[APP_NAME Roadmap]]` has no closing bracket after APP_NAME, so the ordinary
-# `[APP_NAME]` rule misses it — init.sh carries a second rule for it and so must
+# (`\[\[APP_NAME Roadmap]]` has no closing bracket after APP_NAME, so the ordinary
+# `\[APP_NAME\]` rule misses it — init.sh carries a second rule for it and so must
 # this). If a substitution is ever added there, add it here too, or the file it
 # touches starts reporting as permanently drifted.
 normalise_template() {
