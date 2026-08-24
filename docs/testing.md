@@ -553,9 +553,10 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, hits the bootstrap gate and skips in seconds — the gate
-runs before any toolchain setup for exactly that reason. The signal only becomes real in an app
-generated from it.
+In an un-bootstrapped template checkout the job checks out, hits the bootstrap gate and skips in
+seconds — the gate runs before any toolchain setup for exactly that reason. The signal only
+becomes real in an app generated from it, which is why this paragraph does not say "on this repo":
+the sentence has to stay true after `init.sh` copies it downstream.
 
 ---
 
