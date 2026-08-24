@@ -99,7 +99,8 @@ jobs:
       - name: Assert no placeholders remain
         if: steps.gate.outputs.run == 'true'
         run: |
-          # scripts/init.sh, SETUP.md, .claude/agents/app-bootstrapper.md, and the
+          # scripts/init.sh, scripts/drift-report.sh, SETUP.md,
+          # .claude/agents/app-bootstrapper.md, and the
           # store-listing/*-listing.md files document the placeholder mechanism itself
           # (e.g. init.sh's own idempotency-guard grep, SETUP.md's usage examples) and
           # will always contain literal [APP_*] text by design — excluded from this check.
@@ -107,6 +108,7 @@ jobs:
             --include="*.json" --include="*.md" --include="*.sh" 2>/dev/null \
             | grep -v node_modules | grep -v "\.git/" | grep -v package-lock.json \
             | grep -v "scripts/init\.sh:" | grep -v "SETUP\.md:" \
+            | grep -v "scripts/drift-report\.sh:" \
             | grep -v "\.claude/agents/app-bootstrapper\.md:" \
             | grep -v "store-listing/.*-listing\.md:" || true)
           if [ -n "$REMAINING" ]; then
