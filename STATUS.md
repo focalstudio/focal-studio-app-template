@@ -1,13 +1,46 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-08-10_
+_Updated: 2026-08-11_
 
 **Version:** 0.14.0 (on `main`, tagged `v0.14.0`)   **Stage:** Template / pre-app
 
 ## Now
 Template repo — customise `[APP_NAME]`, replace placeholder assets, then bootstrap a new app.
 
-**#145 answered — PR #151 open, CI green, awaiting merge to `dev`.** The propagation problem
+**#56 answered — PR #154 open, CI green, awaiting merge to `dev`.** The cross-repo token
+decision is taken, once, for both consumers that were stalled on it: **one org-owned GitHub App**
+(`Focal Studio Cross-Repo Bot`), two org secrets, each workflow minting a token narrowed to the
+repos it touches.
+
+**The reason it isn't a PAT is the opposite of the intuition.** A fine-grained PAT looks like the
+smaller thing — one secret instead of two — but it applies **one permission union across every
+repo it selects**, so a single PAT serving both consumers hands `tick`/`mealcart`/`WildFocus`/
+`vestia` the `pull_requests:write` they never need. Two PATs is precisely the
+two-secrets-two-rotations outcome the decision existed to avoid. The App is also org-owned rather
+than bound to one account, has no annual expiry, and shows in the audit log as a named bot.
+Written up in `.claude/reference/cross-repo-token.md` so the next cross-repo workflow doesn't
+re-derive it.
+
+`publish-privacy.yml` is the first consumer: dispatch-only with a `dry_run` input, it regenerates
+`privacy-<slug>.html`, diffs it against the live page, and **opens a PR — never commits, never
+merges**. Re-running force-updates one stable `privacy/<slug>` branch so it refreshes that PR
+instead of stacking. This is the same conclusion `drift-report.sh` reached for the same reason,
+and it is now a stated rule for any cross-repo workflow.
+
+**#56's clobber Note needed no new mechanism** — the config-presence gate already *is* the opt-in.
+MealCart has no `store-listing/privacy.config.json` at all (no `privacy-shell.html`, no
+`PRIVACY.md`, and `gen-privacy-policy.mjs`/`verify-privacy.yml` were already in its `skip` array),
+so it sits outside the generator entirely and the workflow skips there. Belt and braces on top:
+the PR body carries the full diff and leads with a warning when it would remove more lines than
+it adds.
+
+The gate itself moved to `scripts/privacy-gate.sh`, shared with `verify-privacy.yml`. Not tidying
+— it carries the host allowlist regex that bounds the runner to `focalstudio.github.io`, and two
+hand-synced copies of a security check is exactly the drift `shared-paths.json` exists to fight.
+**The two must travel together:** an app that receives the new `verify-privacy.yml` without the
+script gets a broken workflow.
+
+**#145 merged (#151).** The propagation problem
 now has a mechanism instead of a memory. `.github/shared-paths.json` writes down the
 template ↔ app boundary; `scripts/drift-report.sh` reports drift against it (read-only, both
 directions, no secret — it runs on your own `gh auth`); `/wrap` gained a step 2 covering the
@@ -96,6 +129,19 @@ flow: green under the old form, correctly red under the new one. A vacuous check
 check are both green, so nothing in tick could ever have raised its hand.
 
 ## Next
+- **Provision the GitHub App, then close the loop on #154.** This is the one deliverable a session
+  structurally cannot do for itself: creating a GitHub App is a browser-only flow with no API
+  path, and setting org secrets needs an `admin:org` scope `gh` doesn't request by default. Steps
+  are in `.claude/reference/cross-repo-token.md`. Once the two secrets exist, dispatch
+  `verify-privacy.yml` here (expect: still green, still skipping — proves the gate refactor is
+  inert) and `publish-privacy.yml` here (expect: token minted, then clean skip — the mint sits
+  ahead of the bootstrap gate precisely so this repo can prove the App is installed on the Pages
+  repo, which is otherwise the one thing it cannot check about itself).
+- **Nothing in the fleet can exercise the privacy PR path yet.** `tick` has no
+  `privacy.config.json`, MealCart is outside the generator, so the only live per-app page is
+  MealCart's hand-written one. Proving `publish-privacy.yml` end to end means giving tick a real
+  config on a branch first — which it needs anyway — and dispatching with `dry_run` before
+  `dry_run: false`. Same downstream-only shape as the E2E and Supabase entries below.
 - **Run `provision-supabase.sh` against a real Supabase org, from a generated app.** CI can only
   ever reach `--dry-run`, so create → wait → schema → verify has never touched a live account. Note
   it cannot be validated *here*: `env.js` in the template has `BACKEND = "none"` by design and the
@@ -104,7 +150,7 @@ check are both green, so nothing in tick could ever have raised its hand.
   project refresh rather than treating as separate work.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
   the only way to exercise the parts of the pipeline the template can never reach itself.
-- **Merge #151, then act on the 50 drifted paths it reports.** The mechanism exists; nothing has
+- **Act on the 50 drifted paths the report finds** (#151 merged). The mechanism exists; nothing has
   been *acted on* yet beyond the one backport. The two clearest: `wrap-reminder.sh` is missing
   from tick, WildFocus and vestia (vestia also lacks both session commands), and tick is behind on
   `expo-services/SKILL.md`, `verify-backend.yml` and `schema.sql`. Also re-triage MealCart's
@@ -128,9 +174,10 @@ Four things worth carrying forward, none of them blocking:
   two caveats survive. First, only `tick` and `mealcart` are true descendants: **WildFocus is a
   Capacitor + Vite app**, and vestia predates the current layout, so both are compared on a
   deliberately tiny `limitedScope` slice and a uniform diff across all four would be ~90% noise.
-  Second, the **scheduled** version of the report is not built: a cron job reading private sibling
-  repos needs a PAT or GitHub App, which is the *same* deferred decision as **#56**. One App covers
-  both consumers — commented there rather than provisioning a second secret.
+  Second, the **scheduled** version of the report is still not built — but as of #154 it is
+  unblocked rather than blocked. The App decision that gated it is taken; what remains is the
+  workflow plus token auth in `sync_clone`, which clones anonymously over HTTPS today and works
+  locally only because it borrows the operator's own `gh` credential helper.
 - **The E2E job has still never run against a real simulator in CI *on this repo*** — every run
   skips at the `[APP_SLUG]` gate, including the weekly `dev` cron. This is structural, not a gap to
   close: a template has no app to drive, so runtime defects in `.maestro/*.yaml` are discovered

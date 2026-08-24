@@ -38,6 +38,30 @@ Versioning: [Semantic Versioning](https://semver.org/)
   a confidential stance.
 
 ### Added
+- **Publishing an app's privacy page to `focalstudio.github.io` is now a workflow, not a manual
+  PR.** `.github/workflows/publish-privacy.yml` (manual dispatch, with a `dry_run` option)
+  regenerates `privacy-<slug>.html` with the existing Phase-1 generator, diffs it against the
+  live page, and opens a pull request on the Pages repo. Re-running refreshes that same PR
+  instead of stacking a new one. It no-ops with a clear message when the org has no cross-repo
+  credentials, when the repo has no `privacy.config.json`, or when the live page already
+  matches (#56).
+
+  **It opens a PR and stops** — no direct commit to the Pages repo, no auto-merge. A live page
+  can be hand-written and richer than the generated one (MealCart's is), and nothing mechanical
+  separates "stale" from "deliberately better"; the same conclusion `scripts/drift-report.sh`
+  reached for the same reason. The PR body carries the full diff and leads with a warning when
+  it would remove more lines than it adds.
+
+- **A single org-owned GitHub App now covers every cross-repo workflow.** The default
+  `GITHUB_TOKEN` cannot touch another repository, which had stalled both the privacy auto-PR
+  (#56) and the scheduled drift report (#145). One App, two org secrets
+  (`FOCALSTUDIO_BOT_APP_ID` / `FOCALSTUDIO_BOT_PRIVATE_KEY`), and each workflow mints a token
+  narrowed to just the repos it touches. Chosen over a fine-grained PAT, which applies one
+  permission union across every repo it selects and would have handed the four app repos write
+  access they never need — and over two PATs, which is the two-secrets-two-rotations outcome
+  the decision existed to avoid. New reference:
+  [`.claude/reference/cross-repo-token.md`](.claude/reference/cross-repo-token.md).
+
 - **The template ↔ generated-app boundary is now written down, and drift against it is
   reportable.** `.github/shared-paths.json` lists the paths meant to stay the same across this
   repo and the apps generated from it; `scripts/drift-report.sh` compares them and prints what
@@ -60,8 +84,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
   There is deliberately **no apply/sync half**, and there should not be one: copying a shared
   file in either direction destroys those 58 correct lines to deliver the 1. The diff is for a
-  human. A scheduled cross-repo version is also deliberately absent — it needs the same
-  cross-repo token decision already deferred in #56.
+  human. A scheduled cross-repo version is still absent, but no longer blocked — the token
+  decision above unblocks it; what remains is the workflow and token auth in `sync_clone`.
 
 - **`/wrap` now checks whether the session crossed that boundary** (new step 2). It intersects
   the changed files with the manifest and asks whether the fix needs to travel, naming the
