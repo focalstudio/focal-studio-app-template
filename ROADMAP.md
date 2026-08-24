@@ -44,12 +44,14 @@
 - [x] Weekly Maestro run on `dev`, plus simulator-crash attribution (#128, #131)
 - [ ] E2E job exercised against a real simulator **in CI** — only reachable from a generated app,
       since every run on the template itself skips at the `[APP_SLUG]` gate
-- [ ] Harden `template-smoke-test.yml`'s placeholder assertion. It greps the bare prefix
-      `\[APP_`, which matches *escaped* documentation mentions and needs a hand-maintained
-      exclusion list that grows every time a file mentions a placeholder; `init.sh` already
-      uses `\[APP_[A-Z_]+\]`, which skips those on its own. Its `paths:` filter also omits
-      the scripts the check reads, which is how `drift-report.sh` broke it silently — found
-      while shipping #155
+- [ ] Harden `template-smoke-test.yml`'s placeholder assertion — **partly done in #157**.
+      The escaped-mention problem is solved: the check now filters on the bracket-escape
+      itself (`\[APP_`), which is what makes a mention safe, so six bootstrap gates stop
+      needing to be named. It also covers `*.yml`/`*.yaml`, whose absence had been hiding
+      two live defects. Still open: it greps the bare prefix rather than `\[APP_[A-Z_]+\]`
+      as `init.sh` does, and still carries a five-file exclusion list; its `paths:` filter
+      still omits the scripts the check reads, which is how `drift-report.sh` broke it
+      silently — found while shipping #155
 - [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
       flaked ~1-in-3; found in a generated app, invisible from here (#143)
 - [ ] Comments that say "this repo" invert when `init.sh` copies them downstream —
@@ -80,6 +82,25 @@
   > half in #158 (upstream) and `tick#22` (downstream), with the per-path verdicts written into
   > tick's entry in `.github/shared-paths.json` so the next run skims rather than re-derives.
   > mealcart, WildFocus and vestia are untouched.
+
+- [x] The drift report reports accurately — its normalisation masked placeholders on the
+      template side only, so every shared file containing one read as drifted permanently —
+      5 of tick's 10 content-drift hits, clearable by no action on either repo. It now
+      renders the app's real identity into the template side and compares, which cleared the
+      noise and surfaced four defects the masking had been hiding. PR #157 merged (#152)
+- [x] `init.sh` substitutes placeholders in YAML — PR #157 merged. Its `EXTS` filter never
+      covered `*.yml`, so every generated app shipped a 404 security-advisory link and a
+      feature-request form addressed to `\[APP_NAME\]`; the CI assertion shared the blind spot
+- [x] `provision-supabase.sh`'s un-bootstrapped sentinel tested by shape — PR #157 merged. As
+      a literal it was rewritten by `init.sh`, inverting the guard so every newly generated
+      app silently configured no OAuth redirect URLs at all
+- [ ] tick at zero content drift and zero missing shared paths — **`tick#21` open, not
+      merged**. Against that branch `drift-report.sh` reports only the advisory set, which is
+      compared by commit subject and expected to differ. Includes two live tick defects: a
+      404 security-advisory link and a placeholder-addressed feature-request form (#145)
+- [ ] Act on the drift the report finds for **MealCart, WildFocus and vestia**. tick is
+      handled; the other three have not been read since #151. Also re-triage MealCart's
+      `skip` array — its 21 entries are a first-pass "known absent", not a verified reading
 - [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
       two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself

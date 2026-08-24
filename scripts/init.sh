@@ -93,12 +93,20 @@ fi
 echo "Initialising $APP_NAME ($APP_SLUG)..."
 
 # ── File-type filter (used in every grep/sed call) ────────────────────────────
+# *.yml/*.yaml are here because leaving them out shipped two live defects in every
+# generated app: config.yml's security-advisory URL kept pointing at
+# github.com/[GITHUB_REPO] (a 404) and feature_request.yml greeted contributors as
+# **[APP_NAME]**. The three workflow bootstrap gates grep app.json for
+# `\[APP_SLUG\]` with the brackets escaped, so they never matched these
+# substitutions and still do not — check that before adding a fourth gate.
 EXTS=(
   --include="*.ts"
   --include="*.tsx"
   --include="*.json"
   --include="*.md"
   --include="*.sh"
+  --include="*.yml"
+  --include="*.yaml"
 )
 
 # ── Replacement helper — macOS (sed -i '') and Linux (sed -i) compatible ──────

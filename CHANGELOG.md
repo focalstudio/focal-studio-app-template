@@ -10,6 +10,44 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Fixed
+- **`drift-report.sh` reported half its content drift falsely, and hid four real defects doing it.**
+  Normalisation masked `[APP_NAME]` and friends to a sentinel on the template side only. The app
+  side never says `[APP_NAME]` — it says `Tick`, and always will — so the two sides could not
+  match, and every shared file containing a placeholder read as drifted permanently. No action on
+  either repo could clear it: 5 of tick's 10 content-drift hits were this and nothing else, which
+  is how a report meant to be read ends up skimmed.
+
+  It now **renders** instead of masking, doing to the template side what `init.sh` did to the app:
+  substituting the app's real identity — read from its own `app.json` and `origin` remote, so
+  there is nothing to configure per app — into the placeholders, then comparing bytes. Substitution
+  fires only where a placeholder literally appears, so unlike a reverse substitution (`Tick` → a
+  sentinel on the app side) it cannot mask a real difference in a line that merely contains the
+  app's name — and for a slug like `tick`, an ordinary English word, it certainly would have. The
+  rule set mirrors `init.sh` including its `[[APP_NAME ` wikilink special case; a placeholder with
+  no derivable value is left alone and reports as drift, over-reporting rather than masking.
+
+  Against tick this cleared 7 false entries and surfaced 4 the old masking had been suppressing —
+  among them the two `init.sh` bugs below, both of which had been live in every generated app.
+
+- **`init.sh` never substituted placeholders in YAML, so every generated app shipped a dead
+  security link and a form that greeted users as `[APP_NAME]`.** The `EXTS` filter listed
+  `.ts/.tsx/.json/.md/.sh` and no `.yml`, leaving
+  `.github/ISSUE_TEMPLATE/config.yml`'s "Report a security vulnerability" URL pointing at
+  `https://github.com/[GITHUB_REPO]/security/advisories/new` — a 404 — and `feature_request.yml`
+  thanking contributors "for suggesting an improvement to **[APP_NAME]**". The placeholder
+  assertion in `template-smoke-test.yml` used the same extension list, which is why CI never
+  caught it. Both now include `*.yml` and `*.yaml`. The three bootstrap gates that grep `app.json`
+  for `\[APP_SLUG\]` are unaffected: they escape the brackets, so the substitution never matched
+  them and still does not.
+
+- **`provision-supabase.sh` skipped OAuth redirect configuration for exactly the apps that needed
+  it.** The guard compared the scheme against a literal `"[APP_SLUG]"` to detect an
+  un-bootstrapped app — but `init.sh` rewrites `[APP_SLUG]` in every `.sh` it finds, so at
+  bootstrap the test became `[ "$SCHEME" != "myslug" ]` against an `app.json` whose scheme is
+  `myslug`. It inverted: every newly generated app fell to the else branch and printed "app.json
+  scheme is still myslug" while silently configuring no redirect URLs, the failure mode whose own
+  comment calls it "the single most common way the OAuth recipe fails". The sentinel is now tested
+  by shape rather than value, so `init.sh` cannot consume it.
 - **`docs/testing.md` documents the E2E guards the code already has.** Read from the advisory half
   of `bash scripts/drift-report.sh --app focalstudio/tick`, where three of the differences turned
   out to be a fix whose *code* travelled upstream while its *documentation* stayed behind.
