@@ -5,9 +5,13 @@ _Updated: 2026-08-24_
 **Version:** 0.14.0 (on `main`, tagged `v0.14.0`)   **Stage:** Template / pre-app
 
 ## Now
-Template repo at 0.14.0. **Two PRs open and green, neither merged:** `#157` here and `tick#21`
-downstream. This session acted on the drift the report found — and found that the report was
-itself the largest single source of it.
+Template repo at 0.14.0. **#157 and #158 are merged**; `tick#21` and `tick#22` are open, green
+and mergeable downstream. Between them they close out the drift work #151 deferred when it built
+the mechanism — first by repairing the mechanism, then by reading what it actually found.
+
+### The report was the largest single source of the drift it reported (#157, merged)
+
+Acting on what the report found started by fixing the report.
 
 **`drift-report.sh` was calling half its content drift falsely, and hiding real defects doing
 it.** Normalisation masked `\[APP_NAME\]` and friends to a sentinel **on the template side only**.
@@ -50,21 +54,65 @@ excluding the consumer is incoherent, and copying buys a quiet report with two d
 every app forever. The reasoning is recorded in `shared-paths.json` so it is not re-derived a
 third time.
 
-**tick is now at zero content drift and zero missing shared paths** (`tick#21`). What remains
+**tick reaches zero content drift and zero missing shared paths** with `tick#21`. What remains
 there is the advisory set — `.claude/CLAUDE.md`, the `.maestro` flows, `docs/*`,
-`e2e-contract.test.ts` — compared by commit subject and expected to differ.
+`e2e-contract.test.ts` — compared by commit subject, and read below.
+
+### tick's advisory drift is fully triaged (#158 merged; `tick#21`, `tick#22` open)
+
+**The advisory half was the point, and it paid.** Seven paths are compared by *commit subject*
+rather than content, because they are shared in shape but legitimately carry app-specific prose —
+tick's `.maestro` flows differ from ours by 59 lines, 58 of them correct. Reading them per subject
+rather than per file found one real thing, and it is a shape worth naming: **a fix whose code
+travelled upstream while its documentation stayed behind.** `e2e-contract.test.ts` has carried
+`CTA_TAP` and a full docblock since `tick#17` landed, but `docs/testing.md` never gained the
+section, so the one thing a person adding another reference to `onboarding-cta` needs to know lived
+only in a regex comment. A content diff would have said "identical" and moved on. Same file also
+still described a 60-second assertion timeout against flows that have waited 180s since `tick#14`
+measured a 54,161 ms cold first-bundle serve. Fixed upstream in **#158**.
+
+**The other five advisory paths carried nothing, and that is now written down.** `e2e-contract.test.ts`
+and both `docs/backends/*.md` are byte-identical to tick despite six diverged subjects each; the two
+`.maestro` flows differ only in prose that is correct where it sits. The verdicts live in tick's
+entry in `.github/shared-paths.json`, because **the history section never empties** — an app adopts
+template work in squashed `chore: sync template x.y.z` commits, so every subject on both sides of a
+squash reads as one-sided forever. A non-empty section is the resting state, not a backlog. Without
+a written verdict per path, every future run re-derives the whole read.
+
+**Downstream, `tick#21` ships `drift-report.sh` and the manifest without either prose section that
+explains them** — both live in advisory-mode files it correctly declined to overwrite. `tick#22`
+adds them, rendered for that side of the boundary rather than copied: from tick the default
+direction is app → template, the template is public so no auth is needed, and `#14`/`#17` are local
+issue numbers while `#145` is not.
+
+**A new failure mode surfaced while writing it (#159).** A comment saying "on this repo the job
+hits the bootstrap gate and skips" is true here and false in every app `init.sh` copies it into —
+and unlike the `\[APP_NAME\]` placeholder bug #157 fixes, nothing rewrites these, so they arrive
+downstream intact and wrong. `docs/testing.md` is advisory, so both sides are now worded to survive
+the copy. `.github/workflows/maestro-e2e.yml` carries two more and is `identical` mode, which
+leaves no downstream escape hatch: correcting it in tick would trade a wrong comment for permanent
+content drift. It has to be reworded here, Tracked in #159.
 
 ## Next
-- **Merge `#157`, then `tick#21`.** Both green. `tick#21` carries the two live tick defects and
-  depends on `#157` only for the `init.sh` root-cause fix — the repairs stand on their own.
+- **Merge `tick#21`, then `tick#22`.** Both green and `MERGEABLE`. #22 documents the files #21
+  delivers and touches nothing #21 touches, so the ordering is a merge constraint, not a review one.
+  #21's repairs stand on their own; it depended on #157 only for the `init.sh` root cause, which is
+  now merged.
 - **Provision the GitHub App, then close the loop on #154.** Still the one deliverable a session
-  structurally cannot do for itself: creating a GitHub App is a browser-only flow with no API
-  path, and setting org secrets needs an `admin:org` scope `gh` doesn't request by default. Steps
-  are in `.claude/reference/cross-repo-token.md`. Once the two secrets exist, dispatch
-  `verify-privacy.yml` here (expect: still green, still skipping) and `publish-privacy.yml` here
-  (expect: token minted, then clean skip).
-- **Run the drift report against MealCart, WildFocus and vestia.** tick is handled; the other
-  three have not been read since #151, and the report is now accurate enough to be worth reading.
+  structurally cannot do for itself: creating a GitHub App is a browser-only flow with no API path,
+  and setting org secrets needs an `admin:org` scope `gh` doesn't request by default. Steps are in
+  `.claude/reference/cross-repo-token.md`. Once the two secrets exist, dispatch `verify-privacy.yml`
+  here (expect: still green, still skipping) and `publish-privacy.yml` here (expect: token minted,
+  then clean skip).
+- **tick store-readiness audit.** The drift sessions were its prerequisite precisely so a release
+  would not discover that tick's `.maestro` and `docs/testing.md` were behind on E2E fixes. They no
+  longer are. Session 5a of the post-#155 plan, and the gate on the whole store push.
+- **Sweep #159 across the shared surface.** Comments saying "this repo" invert when `init.sh`
+  copies them downstream; `maestro-e2e.yml` has two, and `identical` mode leaves no downstream
+  escape hatch. Not a bulk replace — plenty of instances are correct either side
+  (`docs/testing.md:3`), so each needs reading.
+- **Run the drift report against MealCart, WildFocus and vestia.** tick is handled; the other three
+  have not been read since #151, and the report is now accurate enough to be worth reading.
   Re-triage MealCart's `skip` array while there — its 21 entries are a first-pass "known absent",
   not a verified reading.
 - **Finish hardening `template-smoke-test.yml`'s placeholder assertion.** #157 solved the
@@ -72,11 +120,11 @@ there is the advisory set — `.claude/CLAUDE.md`, the `.maestro` flows, `docs/*
   rather than `\[APP_[A-Z_]+\]` as `init.sh` does, still carries a five-file exclusion list, and
   its `paths:` filter still omits the scripts the check reads.
 - **Nothing in the fleet can exercise the privacy PR path yet.** `tick` has no
-  `privacy.config.json`, MealCart is outside the generator. Proving `publish-privacy.yml` end to
-  end means giving tick a real config on a branch first — which it needs anyway.
-- **Run `provision-supabase.sh` against a real Supabase org, from a generated app** — and note
-  this is now more urgent than it was, since the redirect-URL guard was inverted for every app
-  that ever ran it after bootstrap. CI can only ever reach `--dry-run`.
+  `privacy.config.json`, MealCart is outside the generator. Proving `publish-privacy.yml` end to end
+  means giving tick a real config on a branch first — which it needs anyway.
+- **Run `provision-supabase.sh` against a real Supabase org, from a generated app** — more urgent
+  than it was, since the redirect-URL guard was inverted for every app that ever ran it after
+  bootstrap. CI can only ever reach `--dry-run`.
 - **First generated app through both stores end to end** — the last unchecked box in Phase 3.
 
 ## Blockers

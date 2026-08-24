@@ -358,6 +358,15 @@ flows swipe twice, land on slide 3, and tap `onboarding-cta`, which on a non-fin
 labelled "Next" and just advances the pager. The flow then waits for the auth wall from inside
 onboarding and dies on a timeout 20 minutes into a macOS run.
 
+Check 4 counts the swipes **before the first `- tapOn:` whose selector is `onboarding-cta`** —
+matching the tap, not the id. That distinction is load-bearing and was learned the hard way in a
+generated app (tick#17). Both flows also *wait* on `onboarding-cta` before the first swipe, as
+proof the pager has laid out before it is panned; an earlier version of the check cut the flow at
+the first appearance of the id, so it cut at that wait, counted zero swipes, and treated zero as
+"not comparable". The whole check reported green while examining nothing, and nothing anywhere
+said so. If you add another reference to that id ahead of the swipes, this is the thing to keep in
+mind: the guard reads the flow file, so where the id appears changes what the guard sees.
+
 **Checks 3 and 4 are deliberately loose**, because a generated app is allowed to restructure. If
 one false-fails on your app, that is the escape hatch, not a bug to work around:
 
@@ -367,6 +376,7 @@ one false-fails on your app, that is the escape hatch, not a bug to work around:
 | Alert copy behind i18n or a template literal | **false-fails** → drop the string from `APP_TEXT_SELECTORS`, or drop the text selector from the flows |
 | Onboarding driven by taps rather than swipes | skipped |
 | Onboarding slides renamed off `onboarding-slide-N` | skipped |
+| The CTA tap written in Maestro's inline-map form (`- tapOn: { id: "onboarding-cta" }`) | skipped |
 | A non-onboarding swipe before the onboarding CTA | false-fails (rare — the count stops at the first `onboarding-cta` tap) |
 
 Check 3's looseness also costs a false negative: `"Continue"` is a Button label in
@@ -417,7 +427,7 @@ npm run e2e -- .maestro/persistence.yaml     # or just one flow
 ```
 
 `npm run e2e` runs [`scripts/e2e.sh`](../scripts/e2e.sh), which preflights the four things that
-otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
+otherwise fail as a silent 180-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
 out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
 the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
 still holds its unreplaced template placeholders. After the run it scans for the simulator crash
@@ -543,9 +553,10 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, hits the bootstrap gate and skips in seconds — the gate
-runs before any toolchain setup for exactly that reason. The signal only becomes real in an app
-generated from it.
+In an un-bootstrapped template checkout the job checks out, hits the bootstrap gate and skips in
+seconds — the gate runs before any toolchain setup for exactly that reason. The signal only
+becomes real in an app generated from it, which is why this paragraph does not say "on this repo":
+the sentence has to stay true after `init.sh` copies it downstream.
 
 ---
 
