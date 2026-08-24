@@ -87,12 +87,98 @@ matches_any() {
 
 # ── Normalisation ────────────────────────────────────────────────────────────
 # Without this every single file reads as drifted. Two sources of false positives:
-# the [APP_*] placeholders init.sh rewrites, and a missing trailing newline. 51 of
-# the 56 shared files compared against tick differ by nothing else.
-normalise() {
-  sed -E 's/\[APP_NAME\]|\[APP_SLUG\]|\[GITHUB_REPO\]/@@PLACEHOLDER@@/g' "$1" \
-    | sed -e '$a\'
+# a missing trailing newline, and the [APP_*] placeholders init.sh rewrites.
+#
+# The placeholder half has to RENDER, not mask. Masking `[APP_NAME]` -> a sentinel
+# on the template side accomplishes nothing, because the app side does not say
+# `[APP_NAME]` — it says `Tick`, and always will. Every shared file containing a
+# placeholder therefore read as drift permanently, which no action on either repo
+# could ever clear: 5 of tick's 10 content-drift hits were this and nothing else.
+#
+# So instead we do what init.sh did, to the template side only: substitute the app's
+# real identity values into the placeholders, then compare bytes. Substitution fires
+# only where a placeholder literally appears, so unlike a reverse substitution
+# (`Tick` -> sentinel on the app side) it cannot mask a real difference in a line
+# that happens to contain the app's name — and for a slug like `tick`, an ordinary
+# English word, it certainly would have.
+#
+# Values are derived from the app checkout itself (app.json + its origin remote),
+# so there is nothing to configure per app. A placeholder we cannot derive a value
+# for is left alone and reports as drift — over-reporting, never masking.
+#
+# APP_COLOR / APP_COLOR_DARK / APP_TAGLINE are deliberately not derived. They appear
+# in exactly one shared file, .claude/agents/app-bootstrapper.md, on a line that
+# DOCUMENTS the placeholder list — and init.sh rewrote that line in the app, leaving
+# it telling the reader to "leave `Tick` as-is, init.sh replaces them". Self-
+# referential documentation cannot round-trip through its own substitution, and
+# pretending otherwise would hide a line that a human should see once and dismiss.
+SUB_NAME=""; SUB_SLUG=""; SUB_REPO=""; SUB_ID=""
+
+# Reads the identity an app was bootstrapped with. Silent about failure: a repo that
+# predates init.sh, or one whose app.json is not expo-shaped (WildFocus is Capacitor),
+# just leaves the values empty and gets today's behaviour.
+load_identity() {
+  local app_dir="$1"
+  SUB_NAME=""; SUB_SLUG=""; SUB_REPO=""; SUB_ID=""
+  if [[ -f "$app_dir/app.json" ]]; then
+    SUB_NAME=$(jq -r '.expo.name // empty'                  "$app_dir/app.json" 2>/dev/null || true)
+    SUB_SLUG=$(jq -r '.expo.slug // empty'                  "$app_dir/app.json" 2>/dev/null || true)
+    SUB_ID=$(jq   -r '.expo.ios.bundleIdentifier // empty'  "$app_dir/app.json" 2>/dev/null || true)
+  fi
+  # owner/name from the remote, so the manifest is not the source of truth twice.
+  local url
+  url=$(git -C "$app_dir" remote get-url origin 2>/dev/null || true)
+  [[ -n "$url" ]] && SUB_REPO=$(sed -E 's#(\.git)$##; s#^.*[:/]([^/]+/[^/]+)$#\1#' <<< "$url")
+  # A still-unbootstrapped checkout (the template itself) would otherwise substitute
+  # a placeholder with itself, which is harmless but reads as nonsense while debugging.
+  [[ "$SUB_NAME" == *"[APP_"* ]] && SUB_NAME=""
+  [[ "$SUB_SLUG" == *"[APP_"* ]] && SUB_SLUG=""
+  [[ "$SUB_ID"   == *"[APP_"* ]] && SUB_ID=""
+  # Explicit: under `set -e` a function whose last command is a false `[[ ]] &&`
+  # returns 1 and takes the whole run down silently.
+  return 0
 }
+
+# `|` as the sed delimiter because SUB_REPO contains a slash; the values are then
+# escaped for `|`, `&` and backslash so an exotic app name cannot break the script.
+_sed_rule() {
+  local token="$1" value="$2"
+  [[ -z "$value" ]] && return 0
+  printf ' -e s|\\[%s\\]|%s|g' "$token" "$(sed -e 's|[\\&|]|\\\\&|g' <<< "$value")"
+}
+
+# The TEMPLATE side: render placeholders the way init.sh would have, then compare.
+# The rule set mirrors scripts/init.sh, including its Obsidian-wikilink special case
+# (`[[APP_NAME Roadmap]]` has no closing bracket after APP_NAME, so the ordinary
+# `[APP_NAME]` rule misses it — init.sh carries a second rule for it and so must
+# this). If a substitution is ever added there, add it here too, or the file it
+# touches starts reporting as permanently drifted.
+normalise_template() {
+  local rules
+  rules="$(_sed_rule APP_NAME "$SUB_NAME")$(_sed_rule APP_SLUG "$SUB_SLUG")"
+  rules+="$(_sed_rule GITHUB_REPO "$SUB_REPO")$(_sed_rule APP_ID "$SUB_ID")"
+  # shellcheck disable=SC2086
+  sed $rules "$1" | _render_wikilink | sed -e '$a\'
+}
+
+# init.sh: replace "\[\[APP_NAME " "[[$APP_NAME "
+_render_wikilink() {
+  if [[ -n "$SUB_NAME" ]]; then
+    sed -e "s|\[\[APP_NAME |[[$(sed -e 's|[\\&|]|\\\\&|g' <<< "$SUB_NAME") |g"
+  else
+    cat
+  fi
+}
+
+# The APP side is already rendered; it only needs the trailing-newline fix.
+normalise_app() {
+  sed -e '$a\' "$1"
+}
+
+# LEFT is always this checkout. Which side is the template flips with direction, and
+# both callers below go through these two so it can only be got wrong in one place.
+norm_left()  { if [[ "$DIRECTION" == "template" ]]; then normalise_template "$1"; else normalise_app "$1"; fi; }
+norm_right() { if [[ "$DIRECTION" == "template" ]]; then normalise_app "$1";      else normalise_template "$1"; fi; }
 
 # ── Clone cache ──────────────────────────────────────────────────────────────
 # .claude/scratch/ is already gitignored. Clones are reused rather than recreated,
@@ -156,6 +242,9 @@ compare() {
   # own, `chore: initialise <Name> from focal-studio-app-template`.
   local app_dir bootstrap_date
   if [[ "$DIRECTION" == "template" ]]; then app_dir="$right_dir"; else app_dir="$ROOT"; fi
+  # Per app, not per file: the placeholder rendering above needs the app's identity,
+  # and app_dir is already the side that has one.
+  load_identity "$app_dir"
   # `|| true` on both: a repo that predates init.sh (WildFocus, vestia — transferred
   # in rather than generated) has no such commit, and under `set -o pipefail` the
   # empty grep would take the whole run down before the later apps are reached.
@@ -230,10 +319,10 @@ compare() {
       continue
     fi
 
-    if ! diff -q <(normalise "$ROOT/$f") <(normalise "$right_dir/$f") >/dev/null 2>&1; then
+    if ! diff -q <(norm_left "$ROOT/$f") <(norm_right "$right_dir/$f") >/dev/null 2>&1; then
       content+=("$f")
       if [[ "$SHOW_DIFF" == "true" ]]; then
-        DIFF_DETAIL+=$'\n'"--- $f"$'\n'"$(diff <(normalise "$ROOT/$f") <(normalise "$right_dir/$f") || true)"
+        DIFF_DETAIL+=$'\n'"--- $f"$'\n'"$(diff <(norm_left "$ROOT/$f") <(norm_right "$right_dir/$f") || true)"
       fi
     fi
   done <<< "$all_files"

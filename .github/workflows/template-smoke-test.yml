@@ -104,12 +104,27 @@ jobs:
           # store-listing/*-listing.md files document the placeholder mechanism itself
           # (e.g. init.sh's own idempotency-guard grep, SETUP.md's usage examples) and
           # will always contain literal [APP_*] text by design — excluded from this check.
+          #
+          # The extension list MUST track init.sh's EXTS. It did not: neither covered
+          # *.yml, so config.yml's [GITHUB_REPO] security URL and feature_request.yml's
+          # [APP_NAME] survived bootstrap into every generated app, with nothing to
+          # report it.
+          #
+          # The second grep drops the BRACKET-ESCAPED form, `\[APP_SLUG\]`. That is
+          # not a leftover: it is the literal grep pattern the workflow bootstrap gates
+          # test app.json with, and the escape is exactly why init.sh's sed never
+          # rewrites it — so it is still there after bootstrap, correctly. Filtering on
+          # the escape rather than on a list of filenames is deliberate; six such gates
+          # exist today and the seventh would not have been added to a list.
           REMAINING=$(grep -rE "\[APP_" . --include="*.ts" --include="*.tsx" \
-            --include="*.json" --include="*.md" --include="*.sh" 2>/dev/null \
+            --include="*.json" --include="*.md" --include="*.sh" \
+            --include="*.yml" --include="*.yaml" 2>/dev/null \
             | grep -v node_modules | grep -v "\.git/" | grep -v package-lock.json \
+            | grep -v '\\\[APP_' \
             | grep -v "scripts/init\.sh:" | grep -v "SETUP\.md:" \
             | grep -v "scripts/drift-report\.sh:" \
             | grep -v "\.claude/agents/app-bootstrapper\.md:" \
+            | grep -v "\.github/workflows/template-smoke-test\.yml:" \
             | grep -v "store-listing/.*-listing\.md:" || true)
           if [ -n "$REMAINING" ]; then
             echo "::error::Leftover [APP_*] placeholders after init.sh:"

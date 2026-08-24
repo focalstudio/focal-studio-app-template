@@ -490,7 +490,12 @@ SCHEME="$(jq -r '.expo.scheme // empty' app.json)"
 AUTH_ARGS=(-n)
 AUTH_FILTER='{}'
 
-if [ -n "$SCHEME" ] && [ "$SCHEME" != "[APP_SLUG]" ]; then
+# Tested by SHAPE, not by value. A literal "[APP_SLUG]" here would be rewritten by
+# scripts/init.sh along with every other placeholder in every *.sh, turning this into
+# `[ "$SCHEME" != "myslug" ]` against an app.json whose scheme IS myslug — inverting
+# the guard so that every freshly bootstrapped app, the only kind that still needs
+# configuring, silently got no redirect URLs at all.
+if [ -n "$SCHEME" ] && ! printf '%s' "$SCHEME" | grep -q '^\[APP_'; then
   # A redirect target that is not on this list produces a browser that opens and never
   # comes back — the single most common way the OAuth recipe fails.
   AUTH_ARGS+=(--arg site "$SCHEME://auth/callback"
@@ -498,7 +503,7 @@ if [ -n "$SCHEME" ] && [ "$SCHEME" != "[APP_SLUG]" ]; then
   AUTH_FILTER="$AUTH_FILTER + {site_url: \$site, uri_allow_list: \$allow}"
   echo "    redirect URLs for scheme \"$SCHEME\""
 else
-  echo "    skipping redirect URLs — app.json scheme is still [APP_SLUG]."
+  echo "    skipping redirect URLs — app.json scheme is still a placeholder ($SCHEME)."
   echo "    Re-run after scripts/init.sh, or set them in the dashboard."
 fi
 

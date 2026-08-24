@@ -64,7 +64,22 @@
       "$comment": "init.sh rewrites the placeholders and then deletes itself from relevance; it differs from tick by 99 lines, all of them correct."
     },
 
-    { "glob": "templates/*", "mode": "identical" },
+    {
+      "glob": "templates/*",
+      "mode": "identical",
+      "exclude": ["templates/licenses/*"],
+      "$comment": [
+        "templates/licenses/{private,public}.txt are init.sh's data files, and init.sh",
+        "is already excluded from scripts/* just above. Excluding a consumer while",
+        "still shipping its inputs is incoherent: a generated app never re-runs init.sh,",
+        "so it never receives the one thing that reads these, and they would sit there",
+        "inert forever. The alternative — copying them down so the report goes quiet —",
+        "buys silence with two dead files in every app, permanently. Decided rather",
+        "than deferred; do not re-open it without a consumer that runs inside an app.",
+        "The LICENSE those files install still travels: it is a real file at the app",
+        "root, just not one compared here (it is intentionally per-repo, see #155)."
+      ]
+    },
 
     { "glob": ".claude/CLAUDE.md", "mode": "advisory" },
     { "glob": ".maestro/*.yaml", "mode": "advisory" },
