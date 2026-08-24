@@ -44,6 +44,12 @@
 - [x] Weekly Maestro run on `dev`, plus simulator-crash attribution (#128, #131)
 - [ ] E2E job exercised against a real simulator **in CI** — only reachable from a generated app,
       since every run on the template itself skips at the `[APP_SLUG]` gate
+- [ ] Harden `template-smoke-test.yml`'s placeholder assertion. It greps the bare prefix
+      `\[APP_`, which matches *escaped* documentation mentions and needs a hand-maintained
+      exclusion list that grows every time a file mentions a placeholder; `init.sh` already
+      uses `\[APP_[A-Z_]+\]`, which skips those on its own. Its `paths:` filter also omits
+      the scripts the check reads, which is how `drift-report.sh` broke it silently — found
+      while shipping #155
 - [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
       flaked ~1-in-3; found in a generated app, invisible from here (#143)
 
@@ -64,10 +70,13 @@
       boundary written down in `.github/shared-paths.json`, `/wrap` covering the outbound half
       and `scripts/drift-report.sh` the inbound one. Found instance five on its first run
       (`tick#14`). PR #151 merged (#145)
+
+  > Acting on the ~50 drifted paths the report found is separate work, not part of this box.
 - [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
-      two org secrets, `.claude/reference/cross-repo-token.md`. **PR #154 open, CI green, not yet
-      merged**; the App itself still needs provisioning (browser-only flow)
+      two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself
+      still needs provisioning — a browser-only flow, and the one step a session cannot do for
+      itself
 - [ ] Scheduled cross-repo drift report — unblocked by the App above rather than blocked; needs
       the workflow plus token auth in `drift-report.sh`'s `sync_clone`, which clones anonymously
       today. Local script covers it meanwhile (#145)
