@@ -52,6 +52,10 @@
       while shipping #155
 - [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
       flaked ~1-in-3; found in a generated app, invisible from here (#143)
+- [ ] Comments that say "this repo" invert when `init.sh` copies them downstream —
+      `maestro-e2e.yml` tells a generated app its E2E job skips at the bootstrap gate, which is
+      backwards. Unlike the placeholder bug they survive bootstrap intact, and `identical` mode
+      leaves no downstream escape hatch, so the reword has to happen here (#159)
 
 ## Phase 3 — Release & Store Automation
 - [x] Automated tag + GitHub Release on merge to `main` (`release.yml`)
@@ -72,6 +76,10 @@
       (`tick#14`). PR #151 merged (#145)
 
   > Acting on the ~50 drifted paths the report found is separate work, not part of this box.
+  > **tick is fully triaged** as of 2026-08-24 — the mechanical half in `tick#21`, the advisory
+  > half in #158 (upstream) and `tick#22` (downstream), with the per-path verdicts written into
+  > tick's entry in `.github/shared-paths.json` so the next run skims rather than re-derives.
+  > mealcart, WildFocus and vestia are untouched.
 - [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
       two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself
