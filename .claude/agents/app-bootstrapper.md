@@ -73,7 +73,11 @@ Write `IDEA.md` at the repo root. Start with the template already in the file (i
 - **Non-goals** → any features the user mentioned as "later" or explicitly out of scope
 - **Design notes / color rationale** → brief sentence about what the color choice conveys
 - **Bootstrap date** → today's date
-- Leave `[APP_NAME]`, `[APP_SLUG]`, `[APP_ID]`, `[APP_COLOR]`, `[APP_COLOR_DARK]`, `[APP_TAGLINE]`, `[GITHUB_REPO]` as-is in identity fields — `init.sh` replaces them.
+- Leave `\[APP_NAME\]`, `\[APP_SLUG\]`, `\[APP_ID\]`, `\[APP_COLOR\]`, `\[APP_COLOR_DARK\]`, `\[APP_TAGLINE\]`, `\[GITHUB_REPO\]` as-is in identity fields — `init.sh` replaces them.
+  <!-- Bracket-escaped on purpose: this line NAMES the tokens, so init.sh substituting it
+       turns the instruction into "leave `Tick` as-is — init.sh replaces them". The other
+       occurrences below are unescaped by design: there `\[APP_NAME\]` stands for the value,
+       and substituting it is what should happen. -->
 
 ## Phase 4 — Run init.sh
 

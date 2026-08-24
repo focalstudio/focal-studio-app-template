@@ -5,87 +5,79 @@ _Updated: 2026-08-24_
 **Version:** 0.14.0 (on `main`, tagged `v0.14.0`)   **Stage:** Template / pre-app
 
 ## Now
-Template repo at 0.14.0 with **#154 and #155 both merged to `dev`** and nothing blocked. #145 is
-done and merged (#151); the propagation problem now has a mechanism instead of a memory, and
-acting on what the report found is the work that remains. The repo description — which still read
-`Capacitor + React + TypeScript app scaffold`, a leftover describing WildFocus rather than this
-repo — was corrected at the same time.
+Template repo at 0.14.0. **Two PRs open and green, neither merged:** `#157` here and `tick#21`
+downstream. This session acted on the drift the report found — and found that the report was
+itself the largest single source of it.
 
-**#155 (merged) — `LICENSE` now matches the visibility of the repo it sits in.** The template shipped one
-license calling the source "proprietary and **confidential**" while this repo is public. Nothing
-leaked (no credential file on any ref, no `pull_request_target`, no self-hosted runners, no
-secret-consuming workflow on a `pull_request` trigger) — but the file asserted something false
-about its own repo, and resolving that the *other* way would silently break the two things public
-visibility buys: free GitHub-hosted runners, and `drift-report.sh`'s anonymous clone from inside a
-generated app. Two variants under `templates/licenses/`, identical in legal posture;
-`scripts/init.sh` installs the matching one instead of letting the template's copy be inherited,
-with **one `VISIBILITY` variable driving both the license and `gh repo create`** — private by
-default, `--public` flips both. Coupling them is the point: two independent settings disagreeing is
-the exact bug being repaired.
+**`drift-report.sh` was calling half its content drift falsely, and hiding real defects doing
+it.** Normalisation masked `\[APP_NAME\]` and friends to a sentinel **on the template side only**.
+The app side never says `\[APP_NAME\]` — it says `Tick`, and always will — so the two sides could
+not match, and every shared file containing a placeholder read as drifted **permanently**,
+clearable by no action on either repo. Five of tick's ten content-drift hits were that and
+nothing else, in a report whose whole value is that someone still reads it.
 
-That PR also surfaced a **pre-existing CI failure it did not cause**: `drift-report.sh` contains
-literal `[APP_*]` text by design, and `template-smoke-test.yml`'s assertion flagged it. It landed
-in #151, which never ran the check — the workflow's `paths:` filter doesn't include
-`drift-report.sh`, so the first PR to touch a triggering path inherited the failure. One-line
-exclusion added; the deeper fix (that check still uses the over-broad regex `init.sh` itself
-abandoned) is now a Phase 2 box.
+It now **renders** instead of masking: doing to the template side what `init.sh` did to the app,
+substituting the app's real identity — read from its own `app.json` and `origin` remote, so there
+is nothing to configure per app — then comparing bytes. Substitution fires only where a
+placeholder literally appears, so unlike a reverse substitution (`Tick` → sentinel on the app
+side) it cannot mask a real difference in a line that merely contains the app's name; for a slug
+like `tick`, an ordinary English word, it certainly would have.
 
-**#154 (merged) — the cross-repo privacy publish, and the token decision behind it (#56).**
-`publish-privacy.yml` regenerates `privacy-<slug>.html`, diffs it against the live page on
-`focalstudio.github.io`, and **opens a PR — never commits, never merges**. Re-running
-force-updates one stable `privacy/<slug>` branch so it refreshes that PR instead of stacking. A
-live page can be hand-written and richer than the generated one (MealCart's is), and nothing
-mechanical separates "stale" from "deliberately better" — the same conclusion `drift-report.sh`
-reached for the same reason, now a stated rule for any cross-repo workflow.
+**Unmasking surfaced two defects live in every generated app**, both from `init.sh`'s `EXTS`
+filter never covering `*.yml` — and the CI placeholder assertion used the same extension list,
+which is exactly why neither was ever caught:
 
-**The token is one org-owned GitHub App, and the reason it isn't a PAT is the opposite of the
-intuition.** A fine-grained PAT looks like the smaller thing — one secret instead of two — but it
-applies **one permission union across every repo it selects**, so a single PAT serving both
-consumers would hand `tick`/`mealcart`/`WildFocus`/`vestia` a `pull_requests:write` they never
-need; two PATs is precisely the two-secrets-two-rotations outcome the decision existed to avoid.
-The App is org-owned rather than bound to one account, has no annual expiry, and shows in the
-audit log as a named bot. Written up in `.claude/reference/cross-repo-token.md` so the next
-cross-repo workflow doesn't re-derive it — the scheduled drift report is the second consumer, and
-this is one decision taken once for both.
+- The **"Report a security vulnerability" link was a 404** — `config.yml` shipped
+  `github.com/\[GITHUB_REPO\]/security/advisories/new`. Anyone trying to report privately had
+  nowhere to go. The feature-request form greeted contributors as `\[APP_NAME\]`.
+- **`provision-supabase.sh` configured no OAuth redirect URLs for any newly generated app.** Its
+  guard compared the scheme against a literal `"\[APP_SLUG\]"`, but `init.sh` rewrites that token
+  in every `.sh` — so it became `[ "$SCHEME" != "myslug" ]` against an `app.json` whose scheme
+  *is* `myslug`. Inverted. Its own comment calls that the single most common way the OAuth recipe
+  fails.
 
-#56's clobber concern needed no new mechanism: the config-presence gate already *is* the opt-in,
-and MealCart has no `store-listing/privacy.config.json` at all, so it sits outside the generator
-entirely. The gate itself moved to `scripts/privacy-gate.sh`, shared with `verify-privacy.yml` —
-not tidying, since it carries the host allowlist regex bounding the runner to
-`focalstudio.github.io`, and two hand-synced copies of a security check is exactly the drift
-`shared-paths.json` exists to fight. **The two must travel together:** an app receiving the new
-`verify-privacy.yml` without the script gets a broken workflow.
+**A convention came out of it:** prose that *documents* a placeholder is now written
+bracket-escaped, `\[APP_NAME\]` — the form the six workflow bootstrap gates already use.
+Unescaped, `init.sh` rewrites it like any other occurrence, which is how tick ended up carrying
+the instruction "Leave `Tick`, `tick`, `com.focalstudio.tick`, `#5B6CE8` … as-is in identity
+fields — `init.sh` replaces them". The CI assertion now filters on that escape rather than a
+hand-maintained filename list; six gates depend on it today and the seventh would not have been
+added to a list.
+
+**`templates/licenses/*` is settled — excluded from the manifest, not copied down.** `init.sh` is
+its only consumer and is already excluded from `scripts/*`; shipping a consumer's inputs while
+excluding the consumer is incoherent, and copying buys a quiet report with two dead files in
+every app forever. The reasoning is recorded in `shared-paths.json` so it is not re-derived a
+third time.
+
+**tick is now at zero content drift and zero missing shared paths** (`tick#21`). What remains
+there is the advisory set — `.claude/CLAUDE.md`, the `.maestro` flows, `docs/*`,
+`e2e-contract.test.ts` — compared by commit subject and expected to differ.
 
 ## Next
-- **Provision the GitHub App, then close the loop on #154.** This is the one deliverable a session
+- **Merge `#157`, then `tick#21`.** Both green. `tick#21` carries the two live tick defects and
+  depends on `#157` only for the `init.sh` root-cause fix — the repairs stand on their own.
+- **Provision the GitHub App, then close the loop on #154.** Still the one deliverable a session
   structurally cannot do for itself: creating a GitHub App is a browser-only flow with no API
   path, and setting org secrets needs an `admin:org` scope `gh` doesn't request by default. Steps
   are in `.claude/reference/cross-repo-token.md`. Once the two secrets exist, dispatch
-  `verify-privacy.yml` here (expect: still green, still skipping — proves the gate refactor is
-  inert) and `publish-privacy.yml` here (expect: token minted, then clean skip — the mint sits
-  ahead of the bootstrap gate precisely so this repo can prove the App is installed on the Pages
-  repo, which is otherwise the one thing it cannot check about itself).
+  `verify-privacy.yml` here (expect: still green, still skipping) and `publish-privacy.yml` here
+  (expect: token minted, then clean skip).
+- **Run the drift report against MealCart, WildFocus and vestia.** tick is handled; the other
+  three have not been read since #151, and the report is now accurate enough to be worth reading.
+  Re-triage MealCart's `skip` array while there — its 21 entries are a first-pass "known absent",
+  not a verified reading.
+- **Finish hardening `template-smoke-test.yml`'s placeholder assertion.** #157 solved the
+  escaped-mention half and added `*.yml`/`*.yaml` coverage. Still open: it greps the bare prefix
+  rather than `\[APP_[A-Z_]+\]` as `init.sh` does, still carries a five-file exclusion list, and
+  its `paths:` filter still omits the scripts the check reads.
 - **Nothing in the fleet can exercise the privacy PR path yet.** `tick` has no
-  `privacy.config.json`, MealCart is outside the generator, so the only live per-app page is
-  MealCart's hand-written one. Proving `publish-privacy.yml` end to end means giving tick a real
-  config on a branch first — which it needs anyway — and dispatching with `dry_run` before
-  `dry_run: false`.
-- **Decide whether `templates/licenses/*` travels to tick.** Those two files are
-  inert downstream — a generated app never re-runs `init.sh`, and `init.sh` is deliberately
-  excluded from `scripts/*` so tick never gets the installer anyway. But `templates/*` is
-  `identical` mode, so tick will show permanent drift until they are either copied or excluded.
-  Pick one; don't leave the report noisy.
-- **Act on the ~50 drifted paths #151 found.** Nothing has been acted on beyond the one backport.
-  Clearest two: `wrap-reminder.sh` is missing from tick, WildFocus and vestia (vestia also lacks
-  both session commands), and tick is behind on `expo-services/SKILL.md`, `verify-backend.yml` and
-  `schema.sql`. Also re-triage MealCart's `skip` array — its 21 entries are a first-pass "known
-  absent", not a verified reading.
-- **Run `provision-supabase.sh` against a real Supabase org, from a generated app.** CI can only
-  ever reach `--dry-run`, so create → wait → schema → verify has never touched a live account, and
-  it cannot be validated here: `env.js` is `BACKEND = "none"` by design and the script's preflight
-  refuses. Pair it with the next bootstrap or a MealCart refresh.
-- **First generated app through both stores end to end** — the last unchecked box in Phase 3, and
-  the only way to exercise the parts of the pipeline the template can never reach itself.
+  `privacy.config.json`, MealCart is outside the generator. Proving `publish-privacy.yml` end to
+  end means giving tick a real config on a branch first — which it needs anyway.
+- **Run `provision-supabase.sh` against a real Supabase org, from a generated app** — and note
+  this is now more urgent than it was, since the redirect-URL guard was inverted for every app
+  that ever ran it after bootstrap. CI can only ever reach `--dry-run`.
+- **First generated app through both stores end to end** — the last unchecked box in Phase 3.
 
 ## Blockers
 None.
@@ -98,7 +90,13 @@ None.
   involving Supabase's actual responses — the `ACTIVE_HEALTHY` poll, the publishable-vs-legacy key
   selection, and whether the three post-schema assertions read `true` off a real Postgres.
 
-Four things worth carrying forward, none of them blocking:
+Five things worth carrying forward, none of them blocking:
+
+- **Any app bootstrapped after `provision-supabase.sh` landed has the inverted redirect-URL
+  guard.** #157 fixes the template, but nothing back-fills. tick escaped it by accident — the file
+  reached tick by sync, *after* bootstrap, so its literal sentinel survived and the guard worked —
+  and `tick#21` carries the shape-tested version anyway. Worth checking MealCart, and worth
+  remembering that "the template is fixed" and "the fleet is fixed" are different claims.
 
 - **Propagation now has a mechanism, but the fleet is not homogeneous and the report is still
   local-only.** #145 is answered and merged (#151), so this is no longer "someone has to remember" — but

@@ -14,7 +14,7 @@ name: Maestro E2E
 #      matches essentially every feature PR, so "path filtered" would mean "always"
 #      for them.
 #
-# Note also that on this repo the job hits the [APP_SLUG] bootstrap gate below and
+# Note also that on this repo the job hits the bootstrap gate below and
 # skips — the pre-merge signal here is a template-correctness check, and only earns
 # its keep once an app has been bootstrapped from it.
 on:
