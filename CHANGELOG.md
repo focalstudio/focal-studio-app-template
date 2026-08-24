@@ -10,6 +10,27 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Fixed
+- **`docs/testing.md` documents the E2E guards the code already has.** Read from the advisory half
+  of `bash scripts/drift-report.sh --app focalstudio/tick`, where three of the differences turned
+  out to be a fix whose *code* travelled upstream while its *documentation* stayed behind.
+
+  Check 4 of the flow-contract suite counts swipes before the first `- tapOn:` matching
+  `onboarding-cta` — the tap, not the id — because both flows also *wait* on that id before the
+  first swipe. `src/__tests__/e2e-contract.test.ts` has carried `CTA_TAP` and the reasoning for it
+  since that fix landed; the testing docs never gained the corresponding section, so the one thing
+  a person adding another reference to that id needs to know was recorded only in a regex comment.
+  The escape-hatch table likewise never listed the inline-map form (`- tapOn: { id: "..." }`),
+  which `CTA_TAP` deliberately skips.
+
+  The preflight paragraph also still described "a silent 60-second assertion timeout" against flows
+  that have waited 180s since the cold-start measurement (`tick#14`: a cold `macos-latest` runner
+  took 54,161 ms to serve its first bundle).
+
+  `.github/shared-paths.json` records the rest of the advisory triage on tick's entry. That section
+  of the report never empties — an app adopts template work in squashed `chore: sync template`
+  commits, so subjects on both sides of the squash read as one-sided forever — and without a
+  written verdict per path the next run re-derives all of it. The `.maestro` flows and both backend
+  docs are noise; they differ in app-specific prose or not at all.
 - **`LICENSE` now matches the visibility of the repo it sits in.** The template shipped a single
   license declaring the source the "proprietary and **confidential** property of Focal Studio",
   while the template repo is public and readable by anyone. Nothing leaked — a security pass found
