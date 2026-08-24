@@ -9,6 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **`LICENSE` now matches the visibility of the repo it sits in.** The template shipped a single
+  license declaring the source the "proprietary and **confidential** property of Focal Studio",
+  while the template repo is public and readable by anyone. Nothing leaked — a security pass found
+  no credential file ever added on any ref, no `pull_request_target`, no self-hosted runners, and
+  no secret-consuming workflow triggered by `pull_request` — but the document asserted something
+  false about its own repo, and a reader resolving that contradiction the other way would flip
+  visibility and silently break both things that depend on it: free GitHub-hosted runners (the
+  `macos-latest` E2E job alone is 150–250 billable minutes per run against a 2,000-minute
+  allowance) and `drift-report.sh`'s anonymous clone from a generated app.
+
+  The file serves two audiences, hence two variants. `templates/licenses/private.txt` is the old
+  text verbatim; `templates/licenses/public.txt` drops the confidentiality claim and adds a
+  non-operative note recording why the repo is public at all. The legal posture is identical in
+  both — all rights reserved, no reproduction, no derivative works. Neither grants anything.
+
+  **`scripts/init.sh` now installs the right one instead of letting it be inherited.** `LICENSE`
+  is absent from `.github/shared-paths.json` and the script never rewrote it, so every bootstrapped
+  app took the template's copy verbatim into a private repo — which is why "confidential" was
+  correct downstream and wrong here. A new `VISIBILITY` variable drives both the license variant
+  and `gh repo create`'s flag, from one switch: private by default, `--public` for both. Coupling
+  them is the point — two independent settings disagreeing is the bug being repaired, so there is
+  deliberately no way to set one without the other. Existing apps keep the license they have;
+  nothing back-fills.
+
+  Supersedes the `LICENSE` line under 0.4.0 below, which describes the original file as codifying
+  a confidential stance.
+
 ### Added
 - **The template ↔ generated-app boundary is now written down, and drift against it is
   reportable.** `.github/shared-paths.json` lists the paths meant to stay the same across this

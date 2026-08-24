@@ -90,6 +90,11 @@ bash scripts/init.sh \
   --repo  "$GITHUB_REPO"
 ```
 
+**Add `--public` only if the user explicitly asked for a public repo.** The flag sets the
+`gh repo create` visibility *and* the LICENSE variant from one switch — private (the default)
+installs the stricter text that also calls the source confidential. Never pass it on your own
+initiative: a private app repo made public is not something a later commit can undo.
+
 Read the script output carefully. If it reports remaining placeholders, investigate and fix before continuing. The verification section at the end of the script output must show `✅ No [APP_*] placeholders remaining.`
 
 ## Phase 5 — Create GitHub issues
