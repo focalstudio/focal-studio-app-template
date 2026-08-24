@@ -437,6 +437,12 @@ When the user says any of the following, classify as `bootstrap` and **spawn `ap
 
 Pass the verbatim user message as the brief. The agent handles all Q&A and execution.
 
+**New repos are private, and the LICENSE follows.** `scripts/init.sh` creates the GitHub repo
+private and installs `templates/licenses/private.txt` — the variant that calls the source
+confidential. `--public` flips both from one switch, and is the only supported way to make a
+public app: the two settings are coupled precisely so they cannot drift apart, which is what
+happened to this template's own LICENSE. Pass it only on an explicit request.
+
 ### Orchestration playbook
 
 When a user request arrives:

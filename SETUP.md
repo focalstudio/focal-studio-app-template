@@ -87,7 +87,18 @@ grep -rl "\[APP_COLOR\]" . --include="*.ts" --include="*.tsx" --include="*.json"
 grep -rl "\[APP_COLOR_DARK\]" . --include="*.ts" --include="*.tsx" --include="*.json" --include="*.md" | xargs sed -i '' "s/\[APP_COLOR_DARK\]/$APP_COLOR_DARK/g"
 ```
 
-### 1.3 Verify no placeholders remain
+### 1.3 Install the license that matches your repo
+
+The template's own `LICENSE` is the **public** variant, because the template repo is public. Your
+app's repo almost certainly is not, so install the stricter copy:
+
+```bash
+cp templates/licenses/private.txt LICENSE   # or public.txt, for a public repo
+```
+
+`scripts/init.sh` does this for you (Option A) — it is only manual here.
+
+### 1.4 Verify no placeholders remain
 
 ```bash
 grep -r "\[APP_" . --include="*.ts" --include="*.tsx" --include="*.json" | grep -v node_modules

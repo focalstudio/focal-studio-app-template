@@ -2,7 +2,8 @@
 # Usage: bash scripts/init.sh --name "My App" --slug "my-app" --id "com.focalstudio.myapp" \
 #                              --color "#007AFF" --color-dark "#0A84FF" \
 #                              --tagline "The app that does X" \
-#                              --repo "focalstudio/my-app" [--no-git] [--no-github] [--force]
+#                              --repo "focalstudio/my-app" \
+#                              [--public] [--no-git] [--no-github] [--force]
 #
 # Replaces every APP_* and GITHUB_REPO placeholder across the project, renames
 # Obsidian template files, initialises git, and creates the GitHub repo.
@@ -26,6 +27,11 @@ APP_COLOR=""
 APP_COLOR_DARK=""
 APP_TAGLINE=""
 GITHUB_REPO=""
+# Repo visibility. Drives BOTH `gh repo create` below and which LICENSE variant is
+# installed — deliberately one variable, because the two disagreeing is the exact bug
+# this exists to prevent: the template itself shipped a LICENSE calling the source
+# "confidential" while sitting in a public repo.
+VISIBILITY="private"
 INIT_GIT=true
 INIT_GITHUB=true
 FORCE=false
@@ -39,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --color-dark)  APP_COLOR_DARK="$2"; shift 2 ;;
     --tagline)     APP_TAGLINE="$2";    shift 2 ;;
     --repo)        GITHUB_REPO="$2";    shift 2 ;;
+    --public)      VISIBILITY="public"; shift ;;
     --no-git)      INIT_GIT=false;      shift ;;
     --no-github)   INIT_GITHUB=false;   shift ;;
     --force)       FORCE=true;          shift ;;
@@ -274,6 +281,23 @@ else
   echo "  ℹ️  Obsidian vault base not found — skipping vault copy."
 fi
 
+# ── License ───────────────────────────────────────────────────────────────────
+# The license text is a function of repo visibility, so it is chosen here rather
+# than inherited from the template. The template's own LICENSE is the public
+# variant (it is a public repo); a generated app is private by default and gets
+# the stricter copy, which additionally calls the Software confidential — true
+# there, false in the template. Must run before `git add .` below so the right
+# text is in the initial commit.
+LICENSE_SRC="templates/licenses/${VISIBILITY}.txt"
+if [[ -f "$LICENSE_SRC" ]]; then
+  echo "  Installing the $VISIBILITY LICENSE..."
+  cp "$LICENSE_SRC" LICENSE
+else
+  # Non-fatal: `set -e` is on and a missing license variant is no reason to kill
+  # a bootstrap. Leaving the inherited LICENSE in place is the safe fallback.
+  echo "  ⚠️  $LICENSE_SRC not found — leaving the inherited LICENSE untouched."
+fi
+
 # ── Git initialisation ────────────────────────────────────────────────────────
 if [[ "$INIT_GIT" == "true" ]]; then
   if [[ -d ".git" ]]; then
@@ -295,7 +319,7 @@ fi
 if [[ "$INIT_GITHUB" == "true" && "$INIT_GIT" == "true" ]]; then
   if command -v gh &>/dev/null; then
     echo "  Creating GitHub repo: $GITHUB_REPO..."
-    gh repo create "$GITHUB_REPO" --private --source=. --remote=origin 2>/dev/null || \
+    gh repo create "$GITHUB_REPO" "--$VISIBILITY" --source=. --remote=origin 2>/dev/null || \
       echo "  ⚠️  gh repo create failed — repo may already exist, or you may need to push manually."
 
     # Align the remote with however `gh` actually authenticates.
