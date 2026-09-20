@@ -202,8 +202,14 @@ _clone_url() {
   fi
 }
 
+# want_tags: only the UPSTREAM clone needs them. TEMPLATE_VERSION resolves against
+# the template's release tags, and those tags point at commits on `main` — which a
+# `--single-branch --branch dev` clone does not fetch. A separate --depth 1 refspec
+# gets the tag objects and their tips, which is all `log -1 <tag>` needs, without
+# pulling main's history. Best-effort: without it the fork point falls back to the
+# bootstrap-commit grep, which is the behaviour that existed before.
 sync_clone() {
-  local repo="$1" branch="$2" dir="$3"
+  local repo="$1" branch="$2" dir="$3" want_tags="${4:-false}"
   if [[ -d "$dir/.git" ]]; then
     if [[ "$FETCH" == "true" ]]; then
       [[ -n "${GH_TOKEN:-}" ]] && git -C "$dir" remote set-url origin "$(_clone_url "$repo")" 2>/dev/null
@@ -218,6 +224,9 @@ sync_clone() {
     mkdir -p "$(dirname "$dir")"
     git clone --quiet --filter=blob:none --depth 500 --single-branch \
       --branch "$branch" "$(_clone_url "$repo")" "$dir" 2>/dev/null || return 1
+  fi
+  if [[ "$want_tags" == "true" ]]; then
+    git -C "$dir" fetch --quiet --depth 1 origin 'refs/tags/*:refs/tags/*' 2>/dev/null || true
   fi
   return 0
 }
@@ -265,11 +274,30 @@ compare() {
   # Per app, not per file: the placeholder rendering above needs the app's identity,
   # and app_dir is already the side that has one.
   load_identity "$app_dir"
+  # Preferred: TEMPLATE_VERSION, the template release this app last adopted. It is
+  # an explicit statement rather than an inference, it survives a squashed or
+  # reworded history, and it moves forward as the app adopts later releases —
+  # where the bootstrap commit is frozen at day one and over-reports for ever after.
+  # Resolved against the TEMPLATE's tag dates, which is the side that has the tags.
+  local adopted
+  # `cat` rather than `< file`: a redirection on a missing file is reported by the
+  # shell itself, before tr runs, so `2>/dev/null` on the command would not catch it
+  # — and every app that predates this file would print an error into the report.
+  adopted=$(cat "$app_dir/TEMPLATE_VERSION" 2>/dev/null | tr -d '[:space:]' || true)
+  if [[ "$adopted" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # The template checkout is whichever side is not the app.
+    local tmpl_dir
+    if [[ "$DIRECTION" == "template" ]]; then tmpl_dir="$ROOT"; else tmpl_dir="$right_dir"; fi
+    bootstrap_date=$(git -C "$tmpl_dir" log -1 --format='%aI' "v${adopted}" 2>/dev/null || true)
+  fi
+
   # `|| true` on both: a repo that predates init.sh (WildFocus, vestia — transferred
   # in rather than generated) has no such commit, and under `set -o pipefail` the
   # empty grep would take the whole run down before the later apps are reached.
-  bootstrap_date=$(git -C "$app_dir" log --format='%aI%x09%s' 2>/dev/null \
-    | grep -i 'from focal-studio-app-template' | tail -1 | cut -f1 || true)
+  if [[ -z "$bootstrap_date" ]]; then
+    bootstrap_date=$(git -C "$app_dir" log --format='%aI%x09%s' 2>/dev/null \
+      | grep -i 'from focal-studio-app-template' | tail -1 | cut -f1 || true)
+  fi
   if [[ -z "$bootstrap_date" ]]; then
     # Pre-init.sh app, or history deeper than the clone. Fall back to the oldest
     # commit we actually have, which over-reports rather than hiding anything.
@@ -439,7 +467,7 @@ else
   echo "Drift report — this app vs the template ($UPSTREAM)"
   echo "Manifest: .github/shared-paths.json"
   dir="$CACHE/template"
-  if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir"; then
+  if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir" true; then
     echo "  ⚠️  Could not fetch $UPSTREAM@$UPSTREAM_BRANCH."
     exit 0
   fi

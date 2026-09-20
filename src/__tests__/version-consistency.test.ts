@@ -1,6 +1,17 @@
+import fs from "fs";
+import path from "path";
+
 import { APP_VERSION, DEV_MODE_KEY, STORAGE_PREFIX } from "../constants";
 import appJson from "../../app.json";
 import packageJson from "../../package.json";
+
+const REPO_ROOT = path.resolve(__dirname, "../..");
+const SEMVER = /^\d+\.\d+\.\d+$/;
+
+// The template still carries its placeholders; a generated app does not. Same
+// bootstrap tell app.json gives maestro-e2e.yml's gate and drift-report.sh's
+// direction detection.
+const IS_TEMPLATE = JSON.stringify(appJson).includes("[APP_NAME]");
 
 describe("version consistency", () => {
   it("APP_VERSION in constants.ts matches package.json version", () => {
@@ -22,4 +33,33 @@ describe("version consistency", () => {
   it("app.json version matches package.json version", () => {
     expect(appJson.expo.version).toBe(packageJson.version);
   });
+});
+
+// TEMPLATE_VERSION records which template release this repo is on. It is the
+// input to drift-report.sh's fork point and to the fleet report's TEMPLATE
+// column, both of which silently degrade to a worse heuristic when it is
+// malformed rather than failing — so the assertion has to live here.
+describe("TEMPLATE_VERSION", () => {
+  const raw = fs.readFileSync(path.join(REPO_ROOT, "TEMPLATE_VERSION"), "utf8");
+
+  it("is a bare semver version", () => {
+    expect(raw.trim()).toMatch(SEMVER);
+  });
+
+  it("has no leading or trailing content beyond a single newline", () => {
+    // Consumers read it with `tr -d '[:space:]'`, but a stray second line would
+    // be silently concatenated rather than rejected.
+    expect(raw).toBe(`${raw.trim()}\n`);
+  });
+
+  // In the template the file tracks the template's own version, and
+  // scripts/bump-version.sh moves both together. In a generated app the two are
+  // expected to differ — the app is on its own version while TEMPLATE_VERSION
+  // records the template release it last adopted — so this assertion is scoped.
+  (IS_TEMPLATE ? it : it.skip)(
+    "matches package.json version while this is still the template",
+    () => {
+      expect(raw.trim()).toBe(packageJson.version);
+    },
+  );
 });

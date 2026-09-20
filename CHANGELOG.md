@@ -10,6 +10,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`TEMPLATE_VERSION` records which template release an app is on.** Nothing recorded it before,
+  so "which apps are behind?" meant diffing every shared file, and `drift-report.sh` derived its
+  fork point by grepping commit subjects for `from focal-studio-app-template` and taking that
+  commit's *date* — a heuristic that degrades silently when history is squashed, reworded, or
+  (as for WildFocus and vestia, transferred in rather than generated) never existed. The file
+  tracks release **tags**, not `dev`, so an app adopts work that has already been through
+  `release-review.yml`. `scripts/bump-version.sh` moves it in the template and deliberately
+  leaves it alone in a generated app, where the app's own version says nothing about which
+  template it is on. `scripts/init.sh` carries it through bootstrap untouched — structurally, not
+  by exception: it has no file extension, so the `EXTS` filter driving `replace()` never reaches
+  it. Against tick, supplying it removed 13 lines of already-adopted history from the report.
+- **Fleet report gains a `TEMPLATE` column**, flagging with `!` any app behind the template's own
+  version, plus two `NEEDS A LOOK` lines: an app on an older release, and an app with no
+  `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
+  is read from the probed fleet data rather than the working tree, so a single-repo run does not
+  compare against whatever happens to be checked out.
 - **Scheduled cross-repo report (`cross-repo-report.yml`)** — runs the drift and fleet reports
   weekly and writes both to the run summary (#145, #163). Covers the half a local script
   structurally cannot: a repo nobody is editing, in a week nobody thought to look. It reports
