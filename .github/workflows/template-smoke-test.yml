@@ -83,6 +83,23 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: npm ci --legacy-peer-deps
 
+      # In the TEMPLATE, TEMPLATE_VERSION tracks the template's own version and
+      # scripts/bump-version.sh moves both together. This cannot be asserted from the
+      # Jest suite: that suite also runs inside generated apps, where the two are
+      # expected to differ. Here the placeholder gate above has already established
+      # which side we are on, so the check is unambiguous.
+      - name: Assert TEMPLATE_VERSION matches package.json (pre-init)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          TV="$(tr -d '[:space:]' < TEMPLATE_VERSION)"
+          PV="$(node -p "require('./package.json').version")"
+          [ "$TV" = "$PV" ] || {
+            echo "::error::TEMPLATE_VERSION ($TV) != package.json version ($PV). scripts/bump-version.sh moves both; one was edited by hand."
+            exit 1
+          }
+          echo "TEMPLATE_VERSION $TV matches package.json."
+          echo "TEMPLATE_VERSION_BEFORE=$TV" >> "$GITHUB_ENV"
+
       - name: Run init.sh with dummy values
         if: steps.gate.outputs.run == 'true'
         run: |
@@ -132,6 +149,22 @@ jobs:
             exit 1
           fi
           echo "No [APP_*] placeholders remaining."
+
+      # The whole point of the file: a generated app keeps the template release it
+      # came from while its OWN version resets to 0.1.0. If a future edit to init.sh
+      # sweeps TEMPLATE_VERSION into the version reset, every app would claim to be
+      # on template 0.1.0 and adoption would propose re-applying the entire history.
+      - name: Assert init.sh preserved TEMPLATE_VERSION
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          TV="$(tr -d '[:space:]' < TEMPLATE_VERSION)"
+          PV="$(node -p "require('./package.json').version")"
+          [ "$TV" = "$TEMPLATE_VERSION_BEFORE" ] || {
+            echo "::error::init.sh changed TEMPLATE_VERSION ($TEMPLATE_VERSION_BEFORE -> $TV). It must carry the template release the app was generated from."
+            exit 1
+          }
+          [ "$PV" = "0.1.0" ] || { echo "::error::package.json should reset to 0.1.0, got $PV"; exit 1; }
+          echo "TEMPLATE_VERSION preserved at $TV while package.json reset to $PV."
 
       - name: Assert app.json / package.json match injected values
         if: steps.gate.outputs.run == 'true'

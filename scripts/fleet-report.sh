@@ -225,6 +225,14 @@ probe_repo() {
                    | select([.labels[]?.name] | any(. == "critical" or . == "high"))] | length' \
                  <<< "$issues" 2>/dev/null || echo 0)
 
+  # Which template release this repo last adopted. Absent for anything not generated
+  # from the template (WildFocus, vestia) and for apps bootstrapped before the file
+  # existed — absent and behind are different facts, so a missing file stays null
+  # rather than reading as 0.0.0.
+  local template_version
+  template_version=$(_raw "repos/$ORG/$name/contents/TEMPLATE_VERSION?ref=$default_branch" | tr -d '[:space:]')
+  [[ ! "$template_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && template_version=""
+
   # Roadmap. Absent and zero are different facts, so a missing file stays null.
   local roadmap done_n total_n percent="" roadmap_ref="$default_branch"
   roadmap=$(_raw "repos/$ORG/$name/contents/ROADMAP.md?ref=dev")
@@ -257,11 +265,13 @@ probe_repo() {
     --argjson issues "${issue_count:-0}" --argjson issues_hot "${issues_hot:-0}" \
     --arg done_n "$done_n" --arg total_n "$total_n" --arg percent "$percent" \
     --arg roadmap_ref "$roadmap_ref" \
+    --arg template_version "$template_version" \
     '{
       name: $name, kind: $kind, private: $private,
       scope: (if $scope == "" then null else $scope end),
       default_branch: $default_branch,
       version: $version,
+      template_version: (if $template_version == "" then null else $template_version end),
       database:  { verdict: $db,        evidence: $db_ev },
       paywall:   { verdict: $paywall,   evidence: $paywall_ev },
       analytics: { verdict: $analytics, evidence: $analytics_ev },
@@ -358,6 +368,12 @@ if [[ "$AS_JSON" == "true" ]]; then
   exit 0
 fi
 
+# The template's own current version, for the TEMPLATE column's "behind" marker.
+# Read from the fleet data rather than this checkout: running `--repo tick` alone
+# would otherwise compare against whatever is in the working tree. Empty when the
+# template itself was not probed, which suppresses the marker rather than guessing.
+TEMPLATE_SELF=$(jq -r '[.[] | select(.kind == "template") | .template_version] | first // ""' <<< "$FLEET")
+
 # ── Render ───────────────────────────────────────────────────────────────────
 _age_label() {
   local d="$1"
@@ -371,26 +387,29 @@ render() {
   count=$(jq 'length' <<< "$FLEET")
   echo "FOCAL STUDIO FLEET  ·  $ORG  ·  $count repos  ·  $(date '+%Y-%m-%d %H:%M')"
   echo
-  printf '%-26s %-8s %-9s %-28s %-8s %4s %7s  %s\n' \
-    REPO VER RELEASED DATABASE CI PRs ISSUES ROADMAP
-  printf '%s\n' "$(printf '%.0s─' $(seq 1 118))"
+  printf '%-26s %-8s %-9s %-9s %-26s %-8s %4s %7s  %s\n' \
+    REPO VER RELEASED TEMPLATE DATABASE CI PRs ISSUES ROADMAP
+  printf '%s\n' "$(printf '%.0s─' $(seq 1 128))"
 
-  local name version age db ci prs issues pct bar
-  while IFS=$'\t' read -r name version age db ci prs issues pct; do
+  local name version age tmpl db ci prs issues pct bar
+  while IFS=$'\t' read -r name version age tmpl db ci prs issues pct; do
     [[ -z "$name" ]] && continue
     if [[ "$pct" != "-" ]]; then
       bar="$(_bar "$pct") ${pct}%"
     else
       bar="—"
     fi
-    printf '%-26s %-8s %-9s %-28s %-8s %4s %7s  %s\n' \
-      "$name" "$version" "$(_age_label "$age")" "$db" "$ci" "$prs" "$issues" "$bar"
+    printf '%-26s %-8s %-9s %-9s %-26s %-8s %4s %7s  %s\n' \
+      "$name" "$version" "$(_age_label "$age")" "$tmpl" "$db" "$ci" "$prs" "$issues" "$bar"
   # Every field is non-empty on purpose: tab is an IFS whitespace character, so
   # `read` coalesces consecutive tabs and an empty column would shift the rest.
-  done <<< "$(jq -r '.[] | [
+  done <<< "$(jq -r --arg self "$TEMPLATE_SELF" '.[] | [
       .name,
       (if .version == "" then "-" else .version end),
       (.release.age_days // "never" | tostring),
+      (if .template_version == null then "-"
+       elif $self != "" and .template_version != $self then .template_version + "!"
+       else .template_version end),
       (if .kind == "site" then "n/a" else .database.verdict end),
       (if .ci.conclusion == "" then "-" else .ci.conclusion end),
       (.open.prs | tostring), (.open.issues | tostring),
@@ -404,8 +423,15 @@ render() {
   attention=$(jq -r '
     [ .[] | select(.kind == "app" or .kind == "template") ] as $apps
     | ([ $apps[] | .stack.expo | select(. != "") ] | group_by(.) | max_by(length) | .[0]) as $common
+    | ([ $apps[] | select(.kind == "template") | .template_version ] | first) as $self
     | [ $apps[]
-        | (if (.release.unreleased_commits // 0) > 0
+        | (if .kind == "app" and $self != null and .template_version != null and .template_version != $self
+             then "\(.name): on template \(.template_version) — the template is on \($self)"
+             else empty end),
+          (if .kind == "app" and .template_version == null
+             then "\(.name): no TEMPLATE_VERSION — adoption cannot tell what it is missing"
+             else empty end),
+          (if (.release.unreleased_commits // 0) > 0
              then "\(.name): \(.release.unreleased_commits) commit(s) on \(.default_branch) past \(.release.tag) — unreleased"
              else empty end),
           (if (.ci.conclusion // "") != "" and .ci.conclusion != "success"

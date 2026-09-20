@@ -81,6 +81,41 @@
       ]
     },
 
+    {
+      "glob": "src/env.ts",
+      "mode": "identical",
+      "$comment": "The isDevBuild gate. A bug here ships dev affordances to App Review, and it is pure framework - it holds no product knowledge at all."
+    },
+    {
+      "glob": "env.js",
+      "mode": "identical",
+      "$comment": "src/env.ts's build-time twin, read by app.config.js so validation runs before a bundle exists. The BACKEND/PAYWALL constants inside it ARE per-app, but add-backend.sh and add-paywall.sh rewrite exactly those two lines - so a diff that is only those lines is a wired backend, and anything else is real drift. Watch the first few runs; if the two-line case proves too noisy to read past, this moves to advisory rather than being dropped."
+    },
+    { "glob": "src/utils/storage.ts", "mode": "identical" },
+    { "glob": "src/hooks/useTheme.ts", "mode": "identical" },
+    {
+      "glob": "src/theme/spacing.ts",
+      "mode": "identical",
+      "$comment": "src/theme/ is named as a diverge-by-default directory, and colors.ts genuinely is - it carries [APP_COLOR]. spacing.ts is an iOS-native scale with no app content in it, so it is listed as one file rather than as src/theme/*. Restyling an app means colors.ts and the components, not the spacing scale."
+    },
+    {
+      "glob": "src/theme/typography.ts",
+      "mode": "advisory",
+      "$comment": "Listed identical first, and the first run disproved it: tick adds FontSize.clock (88pt, a glanceable timer face) and ultralight/light weights that only make sense above the body scale. That is a correct app-specific ADDITION on top of a shared base scale - the advisory case exactly, and the same shape as .maestro/*.yaml. A byte diff cannot separate 'this app added a display size' from 'this app never received a fix to the shared scale'."
+    },
+    {
+      "glob": "src/services/auth/*",
+      "mode": "identical",
+      "exclude": ["src/services/auth/__tests__/*"],
+      "$comment": "The auth PORT - types, validator, local adapter, messages. templates/backends/* (the adapters that plug into it) are already tracked identical, so tracking the adapter while leaving the port invisible was the sharpest asymmetry in this manifest. __tests__ is excluded because add-backend.sh copies the chosen backend's contract test in there, so its contents depend on which backend an app wired."
+    },
+    {
+      "glob": "src/services/paywall/*",
+      "mode": "identical",
+      "exclude": ["src/services/paywall/__tests__/*"],
+      "$comment": "Same shape as the auth port above, against templates/paywall/revenuecat.ts."
+    },
+
     { "glob": ".claude/CLAUDE.md", "mode": "advisory" },
     { "glob": ".maestro/*.yaml", "mode": "advisory" },
     { "glob": "docs/*.md", "mode": "advisory" },
