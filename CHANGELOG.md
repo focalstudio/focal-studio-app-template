@@ -9,6 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+- **A `local-first` app that ships analytics generated a privacy policy that contradicted
+  itself.** Section 2 asserted the data "never leaves your device and is never transmitted to us
+  or any third party" while section 3 listed the analytics provider receiving usage events — a
+  false statement, in the document App Review reads, produced by default. The local-first branch
+  emitted its absolute claim without consulting `collectsAnalytics` / `collectsCrashReports`.
+  It now scopes the claim to app content and names the exception, with singular/plural agreement
+  for one signal or both. An app collecting neither is unaffected and still gets the absolute
+  wording, which for it is true. Found while giving tick a privacy config — the template itself
+  can never hit this, because it always skips at the bootstrap gate.
+
 ---
 
 ## [0.15.0] — 2026-09-20
