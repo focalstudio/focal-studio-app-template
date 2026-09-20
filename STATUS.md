@@ -2,7 +2,13 @@
 
 _Updated: 2026-09-20_
 
-**Version:** 0.15.0 (on `main`, tagged `v0.15.0`)   **Stage:** Template / pre-app
+> Narrative only. Version, release age, CI, unreleased commits, roadmap percentage and
+> template currency are **derived** — they live on the dashboard
+> (`~/.focalstudio/fleet.html`, refreshed every 3 hours) and in `/standup`, both computed
+> from git and the GitHub API. Restating them here meant maintaining by hand a number a
+> script already knew, which is how this file went stale at 0.14.0 while `main` was on
+> 0.15.0. Keep this file to what no script can derive: what is going on, what is next,
+> and what is in the way.
 
 ## Now
 The propagation machinery is being made **version-aware and framework-aware**. PR #168 (open)

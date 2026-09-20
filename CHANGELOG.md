@@ -26,6 +26,21 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
   is read from the probed fleet data rather than the working tree, so a single-repo run does not
   compare against whatever happens to be checked out.
+- **Status tracking maintained without being asked.** The `Stop` hook used to tell the *user*
+  to run `/wrap`, which moved the forgetting one step along rather than fixing it — the nudge
+  lands at the end of a session, exactly when nobody wants to type another command, so sessions
+  ended unwrapped and `STATUS.md` drifted (it sat at 0.14.0 while `main` was on 0.15.0). It now
+  hands the session the commit subjects and the rules and has it write the update before
+  stopping. Bounded on purpose: only `STATUS.md` and `ROADMAP.md`, a `chore: refresh status`
+  commit on a feature branch and never a push, files left uncommitted on `main`/`dev` because
+  those take changes through a PR, and the change announced in one line rather than made
+  silently. `.claude/CLAUDE.md`'s "do not make secretive changes" gains this as its one named,
+  non-generalising exception.
+- **`STATUS.md` is narrative only.** Version, release age, CI, unreleased commits, roadmap
+  percentage and template currency are derived, and now live on the dashboard and in `/standup`
+  rather than being restated by hand in a header — which is exactly how that header went stale.
+  `/standup` reads `~/.focalstudio/fleet.json` when it is fresh instead of re-deriving from
+  `gh`, and says which source it used.
 - **The dashboard reports what each repo is built with, not just its Expo version.** An
   Expo-only column rendered blank for everything that is not Expo, so WildFocus (Capacitor 8.3
   + Vite 7.2) and the Pages site appeared to have no stack at all. A `framework` probe now
@@ -54,13 +69,20 @@ Versioning: [Semantic Versioning](https://semver.org/)
   Output lands in `~/.focalstudio/`, outside the repo, so fleet data about private apps cannot be
   committed to this public template by accident — structural rather than one `.gitignore` edit
   away. `npm run fleet` renders and opens it.
-- **The agent works from a repo in `~/Desktop`.** macOS blocks background agents from reading
-  `~/Desktop`, `~/Documents`, `~/Downloads` and iCloud Drive; pointed at a repo in one, the agent
-  exits 126 and the page silently never updates — worse than no agent, because a plausible-looking
-  stale page remains. Rather than asking for Full Disk Access on `/bin/bash`, the installer detects
-  a protected location and runs from a three-file copy in `~/.focalstudio/bin`. A copy that drifts
-  from its source is the exact problem this repo exists to solve, so `--status` compares the two
-  and says which file differs.
+- **The agent works from a repo in `~/Desktop`, and uses Full Disk Access when it is granted.**
+  macOS blocks background agents from reading `~/Desktop`, `~/Documents`, `~/Downloads` and
+  iCloud Drive; pointed at a repo in one, the agent exits 126 and the page silently never updates
+  — worse than no agent, because a plausible-looking stale page remains. The installer now
+  **tries running straight from the repo first and proves it** by executing the agent and reading
+  its exit code, because TCC state cannot be queried and a wrong guess reproduces exactly that
+  silent staleness. If the run is denied it falls back to a three-file copy in
+  `~/.focalstudio/bin` and prints how to grant access; granting Full Disk Access to `/bin/bash`
+  and re-running switches to direct mode with no flag. `--direct` refuses the fallback and fails
+  loudly with the denial message; `--copy` skips the attempt. `--status` reads the live mode from
+  the installed plist rather than inferring it, and only diffs the copy when one is in use —
+  a copy that drifts from its source being the problem this repo exists to solve.
+  Only *this* repo is ever read from disk; every other repo in the fleet comes from the GitHub
+  API, so nothing needs granting for them.
 - **The shared-path contract now covers `src/` framework code.** It previously contributed exactly
   one path, so the template's own seams — `src/env.ts` (the `isDevBuild` gate), `env.js`,
   `src/utils/storage.ts`, `src/hooks/useTheme.ts`, `src/theme/spacing.ts` and the
