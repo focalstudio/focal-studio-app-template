@@ -97,6 +97,22 @@ Versioning: [Semantic Versioning](https://semver.org/)
   structurally cannot: a repo nobody is editing, in a week nobody thought to look. It reports
   and never writes to another repo, and skips cleanly where the org App is not configured.
 
+- **The always-loaded instructions are a quarter smaller.** `.claude/CLAUDE.md`, `AGENTS.md` and
+  `.claude/SKILLS.md` enter every session, and roughly a fifth of them restated each other. Five
+  sections moved into `.claude/reference/` behind pointers, continuing the split those files
+  already document: release workflow, dependency gate, permission model, multi-agent
+  orchestration and the worktree rules. What stays is what must not wait for a file read — the
+  bootstrap trigger, the never-delegate rule, the permission denylist, the agent registry and
+  the `--delete-branch` release hazard. `AGENTS.md` stops restating the output format, the
+  dependency gate and the agent registry; `SKILLS.md`'s central routing matrix becomes an index,
+  which is what it already said the agent files were authoritative for. 54,438 → 40,788 bytes,
+  about 3,400 tokens back per session, with every removed heading verified to exist in a
+  reference file and every pointer checked to resolve.
+- **`scripts/drift-report.sh --clean`** removes the cached clones. The cache reaches hundreds of
+  megabytes inside the project tree — gitignored, so it costs nothing in review, but it makes a
+  project-wide grep return every shared file twice, once from this repo and once from a
+  sibling's copy.
+
 ### Fixed
 - **A `local-first` app that ships analytics generated a privacy policy that contradicted
   itself.** Section 2 asserted the data "never leaves your device and is never transmitted to us

@@ -85,80 +85,19 @@ focal-studio-app-template/
 
 ## Agent registry
 
-Eight specialist subagents live in [.claude/agents/](.claude/agents/). The main Claude Code session (Opus) is the orchestrator — it delegates, it does not do all the work itself.
+Eight specialists in [.claude/agents/](.claude/agents/). The table of who does what is in
+[.claude/CLAUDE.md](.claude/CLAUDE.md); which skills each loads and when is in
+[.claude/SKILLS.md](.claude/SKILLS.md). Both are authoritative — this file does not restate them.
 
-| Subagent | Use for |
-|---|---|
-| [`app-bootstrapper`](.claude/agents/app-bootstrapper.md) | **Start here for a new app.** Q&A → IDEA.md → placeholder replacement → GitHub repo + issues → onboarding slides + store listing draft. Trigger: "bootstrap a new app" or describe your idea. |
-| [`ios-frontend`](.claude/agents/ios-frontend.md) | React Native + Expo UI work: screens, components, theming, navigation, animation |
-| [`backend-integrator`](.claude/agents/backend-integrator.md) | Wiring Supabase, RevenueCat, PostHog, expo-notifications, AsyncStorage |
-| [`test-engineer`](.claude/agents/test-engineer.md) | Jest unit + screen-render tests. Owns `src/__tests__/**` — the only agent that writes test files |
-| [`release-manager`](.claude/agents/release-manager.md) | Cut a release — runs the full release workflow from `.claude/CLAUDE.md` |
-| [`aso-marketing`](.claude/agents/aso-marketing.md) | App Store / Google Play listing copy with hard char-limit enforcement |
-| [`qa-reviewer`](.claude/agents/qa-reviewer.md) | Read-only pre-PR review — async bugs, cleanup gaps, security, supply chain |
-| [`devops-agent`](.claude/agents/devops-agent.md) | Package risk assessment + controlled installation. **Never auto-spawned** — see Dependency Gate below |
+Delegate by domain; do it yourself when it is a one-line fix, a rename, or a question.
 
-Each agent declares its `model` and `effort` in frontmatter (tiered by cost-of-a-mistake), and declares which skills it loads **and under what conditions** — see [.claude/SKILLS.md](.claude/SKILLS.md) for both matrices.
-
-**Long-report handoff.** If a subagent's report would exceed ~50 lines, it writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only the path plus a 3-bullet summary. Keeps the orchestrator context lean. Full convention in [.claude/CLAUDE.md](.claude/CLAUDE.md) under "Multi-agent workflow".
-
-### When to delegate vs do it yourself
-
-- **Single trivial edit** (typo, one-line fix, rename) → do it yourself. Spawning a subagent adds a roundtrip without benefit.
-- **Anything that fits an agent's role** → delegate. Pass a self-contained brief (file paths, expected behavior, what to return). Don't make the subagent re-derive the plan.
-- **Mixed-domain request** → decompose into independent subtasks and spawn subagents in **parallel** (single message, multiple `Agent` tool calls).
-
----
 
 ## Dependency Gate
 
-Every task that requires new npm packages goes through the **Dependency Gate** before any code is written. This ensures the user reviews all installation risks upfront — so the coding workflow runs completely uninterrupted after approval.
+New npm package needed? It goes through `devops-agent` before any code is written. A subagent that discovers one mid-run **stops** and returns a `PACKAGES_NEEDED` block rather than installing.
 
-### Flow
+Full flow and the block format: [.claude/reference/dependency-gate.md](.claude/reference/dependency-gate.md).
 
-```
-Orchestrator: identify packages the task needs (not in package.json)
-    │
-    ├─ Packages needed? ──YES──► spawn devops-agent (pre-flight mode)
-    │                                │
-    │                                ▼
-    │                        Risk report (🟢/🟡/🔴 per package)
-    │                                │
-    │                        User: Approve / Reject / Substitute
-    │                                │
-    │                        devops-agent installs approved packages
-    │                                │
-    └─ No packages / post-approval ──► spawn coding subagent(s)
-                                              │
-                           [Mid-run: unexpected package discovered]
-                                              │
-                           Subagent STOPS → returns PACKAGES_NEEDED block
-                           Orchestrator gates through devops-agent again
-                           User approves → subagent resumes
-```
-
-### PACKAGES_NEEDED — the stop signal
-
-When `backend-integrator` or `ios-frontend` discovers a missing package mid-run, they return:
-
-```
-PACKAGES_NEEDED:
-  - package: @supabase/supabase-js
-    reason: Supabase JS client for auth and database
-STATUS: awaiting_approval
-```
-
-The orchestrator reads this, forwards to `devops-agent`, and resumes the coding agent after the receipt arrives.
-
-### Why this design
-
-| Alternative | Problem |
-|---|---|
-| Subagent auto-installs mid-run | Bypasses risk review; breaks user's "inspect upfront" expectation |
-| Orchestrator asks user each time | Interrupts coding context; multiple back-and-forths |
-| Pre-flight gate (this design) | User sees all risks before work starts; rest of workflow is uninterrupted |
-
----
 
 ## Top mistakes to avoid
 
@@ -177,16 +116,8 @@ The orchestrator reads this, forwards to `devops-agent`, and resumes the coding 
 
 ## Output format the user expects from you
 
-For most tasks, structure your response as:
+Stated once, in [.claude/CLAUDE.md](.claude/CLAUDE.md) under "Output format". Follow it there.
 
-1. **Plan** — one short paragraph or bullets.
-2. **Branch name** — the branch you will create or use.
-3. **Files to change** — short list.
-4. **Implementation notes** — concise.
-5. **Test steps** — concrete local checks.
-6. **Commit message** — one suggested message.
-
----
 
 ## Where to find more
 
