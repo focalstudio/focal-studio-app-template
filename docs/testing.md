@@ -358,6 +358,15 @@ flows swipe twice, land on slide 3, and tap `onboarding-cta`, which on a non-fin
 labelled "Next" and just advances the pager. The flow then waits for the auth wall from inside
 onboarding and dies on a timeout 20 minutes into a macOS run.
 
+Check 4 counts the swipes **before the first `- tapOn:` whose selector is `onboarding-cta`** —
+matching the tap, not the id. That distinction is load-bearing and was learned the hard way in a
+generated app (tick#17). Both flows also *wait* on `onboarding-cta` before the first swipe, as
+proof the pager has laid out before it is panned; an earlier version of the check cut the flow at
+the first appearance of the id, so it cut at that wait, counted zero swipes, and treated zero as
+"not comparable". The whole check reported green while examining nothing, and nothing anywhere
+said so. If you add another reference to that id ahead of the swipes, this is the thing to keep in
+mind: the guard reads the flow file, so where the id appears changes what the guard sees.
+
 **Checks 3 and 4 are deliberately loose**, because a generated app is allowed to restructure. If
 one false-fails on your app, that is the escape hatch, not a bug to work around:
 
@@ -367,6 +376,7 @@ one false-fails on your app, that is the escape hatch, not a bug to work around:
 | Alert copy behind i18n or a template literal | **false-fails** → drop the string from `APP_TEXT_SELECTORS`, or drop the text selector from the flows |
 | Onboarding driven by taps rather than swipes | skipped |
 | Onboarding slides renamed off `onboarding-slide-N` | skipped |
+| The CTA tap written in Maestro's inline-map form (`- tapOn: { id: "onboarding-cta" }`) | skipped |
 | A non-onboarding swipe before the onboarding CTA | false-fails (rare — the count stops at the first `onboarding-cta` tap) |
 
 Check 3's looseness also costs a false negative: `"Continue"` is a Button label in
@@ -417,7 +427,7 @@ npm run e2e -- .maestro/persistence.yaml     # or just one flow
 ```
 
 `npm run e2e` runs [`scripts/e2e.sh`](../scripts/e2e.sh), which preflights the four things that
-otherwise fail as a silent 60-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
+otherwise fail as a silent 180-second assertion timeout, then resolves `APP_ID` and `APP_SCHEME`
 out of `app.json` the same way [`maestro-e2e.yml`](../.github/workflows/maestro-e2e.yml) does so
 the two cannot drift. It refuses to run against an unbootstrapped template, where `app.json`
 still holds its unreplaced template placeholders. After the run it scans for the simulator crash
@@ -543,9 +553,55 @@ gate is worth ~20 minutes of macOS runner. Routine PRs to `dev` skip it. To opt 
 PR in, add the **`e2e`** label; the workflow re-triggers on `labeled`, so adding it to an
 already-open PR works.
 
-On this template repo the job checks out, hits the bootstrap gate and skips in seconds — the gate
-runs before any toolchain setup for exactly that reason. The signal only becomes real in an app
-generated from it.
+In an un-bootstrapped template checkout the job checks out, hits the bootstrap gate and skips in
+seconds — the gate runs before any toolchain setup for exactly that reason. The signal only
+becomes real in an app generated from it, which is why this paragraph does not say "on this repo":
+the sentence has to stay true after `init.sh` copies it downstream.
+
+---
+
+## Drift between this repo and the apps generated from it
+
+```bash
+bash scripts/drift-report.sh                       # everything in the registry
+bash scripts/drift-report.sh --app focalstudio/tick
+bash scripts/drift-report.sh --diff --path '.maestro/*'
+```
+
+Read-only, prints and exits 0. From the template it compares against every app in
+`.github/shared-paths.json`; from a generated app it compares that app against the
+template (which is public, so this needs no auth at all).
+
+**Why this belongs in the testing docs.** The E2E section above ends with "the signal only
+becomes real in an app generated from it" — that is not just a note about CI minutes. It
+means every runtime defect in `.maestro/*.yaml` is, by construction, discovered downstream.
+The template has no app to drive, so app → template is the *normal* direction for a whole
+category of fix rather than the exception, and nothing used to carry it back. Three of the
+four cases in #145 travelled that way; one of them (`tick#14`, a 60s cold-start wait against
+a measured 54s bundle serve) was still sitting unpropagated when this script was written,
+and is what it found on its first run.
+
+`.github/shared-paths.json` is the boundary itself — the list of paths meant to stay the
+same across the template and its apps. Two fields carry most of the weight:
+
+- **`mode: identical`** — compared byte-for-byte after `[APP_NAME]`/`[APP_SLUG]`/
+  `[GITHUB_REPO]` normalisation. Skip that normalisation and every file reads as drifted.
+- **`mode: advisory`** — compared by *commit subject*, not content. `.maestro` flows and
+  `docs/*.md` are shared in shape but legitimately carry app-specific prose; tick's
+  `full-journey.yaml` differs from ours by 59 lines, 58 of which are correct. A content diff
+  cannot separate those from the one line that mattered. A list of commit subjects can, and
+  needs no stored state to do it.
+
+Absences and one-sided files are listed as candidates, not defects — an app is entitled to
+add its own script, and that looks identical to a fix that needs to come upstream. Record the
+triage in the app's `skip` array so the second run is quieter than the first.
+
+**The script does not apply anything, and should not learn how.** Copying a shared file in
+either direction would have destroyed those 58 correct comment lines. The diff is for a human.
+
+Clones are cached under `.claude/scratch/drift/` (gitignored). `jest.config.js` and
+`eslint.config.js` both exclude that path — without it a local `npm test` runs every
+downstream app's suite and `npm run lint` reports several hundred findings from their code.
 
 ---
 

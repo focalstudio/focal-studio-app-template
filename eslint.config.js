@@ -10,6 +10,13 @@ module.exports = defineConfig([
   //
   // The trade-off: these files get no CI checking at all. Keep them thin, and
   // type-check them by running the scripts in a scratch app (see the docs).
-  { ignores: ["templates/**"] },
+  //
+  // `.claude/scratch/**` holds the generated-app clones that
+  // `scripts/drift-report.sh` caches. Gitignored, so CI never sees it — but ESLint
+  // walks dot-directories, and a local `npm run lint` after a drift run otherwise
+  // reports several hundred findings from other people's repos. (tsc and Jest do
+  // not need this: TypeScript's globs skip dot-directories, and jest.config.js
+  // ignores the path explicitly.)
+  { ignores: ["templates/**", ".claude/scratch/**"] },
   ...expoConfig,
 ]);

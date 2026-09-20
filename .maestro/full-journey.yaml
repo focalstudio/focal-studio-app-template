@@ -40,15 +40,28 @@ appId: ${APP_ID}
 # The slide count is app-specific: change the swipes if your app ships more or
 # fewer than the template's three.
 #
-# The first assertion after launch gets a generous explicit wait rather than
-# bare `assertVisible`: cold start has to mount the native runtime, load the JS
+# The first assertion after launch gets a long explicit wait rather than a bare
+# `assertVisible`: cold start has to mount the native runtime, load the JS
 # bundle, and settle both store hydrations before anything renders. Maestro's
 # default assertion timeout is far too short for that, so a bare assertVisible
 # here fails against an app that is merely still booting.
+#
+# 180s, not the 60s this used to be, and the number is measured rather than
+# guessed (tick#14). A cold GitHub-hosted macos-latest runner took 54,161 ms to
+# serve its FIRST bundle — 3,435 modules — and `clearState: true` above throws
+# the dev-client state away, so every launch in this file pays that cost again
+# rather than getting the 6-15s incremental rebuild a warm Metro gives. Stacked
+# on native launch, 60s expired while slide 1 was already on screen: the debug
+# artifact for that run has the element in the hierarchy dump, the screenshot
+# showing it rendered, and no crash. The wait was the only thing wrong.
+#
+# Read 180s as a ceiling, not an expectation. `extendedWaitUntil` returns the
+# moment the element appears, so this costs a healthy run nothing at all; the
+# only path that got slower is the one that was going to fail anyway.
 - extendedWaitUntil:
     visible:
       id: "onboarding-slide-1"
-    timeout: 60000
+    timeout: 180000
 # The slide title renders before the pager underneath it is ready to be panned.
 # Waiting on the CTA as well is the cheapest proof the whole screen has laid
 # out, and it is here because the first swipe was silently swallowed on a cold

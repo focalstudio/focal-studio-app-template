@@ -1,0 +1,232 @@
+name: Publish Privacy Policy
+
+# Publishes this app's generated privacy page to the focalstudio.github.io Pages repo as a
+# reviewed pull request. Phase 2 of #56; Phase 1 (the generator + verify-privacy.yml) ships
+# separately and is reused here verbatim.
+#
+# It opens a PR. It never commits to the Pages repo's main, and never merges. That is the
+# same conclusion scripts/drift-report.sh reached for the same reason: a live page can be
+# hand-tuned and richer than the generated one (MealCart's is), and nothing mechanical can
+# tell "stale" from "deliberately better". A human reads the diff. See .claude/CLAUDE.md.
+#
+# Cross-repo writes need a credential the default GITHUB_TOKEN cannot provide — see
+# .claude/reference/cross-repo-token.md for the GitHub App behind the two org secrets below.
+#
+# No-ops gracefully, in this order, so a run always says which of these it was:
+#   - org secrets absent          -> skip (the public template, or an org without the App)
+#   - App not installed on Pages  -> hard fail at the token step (a real misconfiguration)
+#   - no store-listing/privacy.config.json, or placeholder URL -> skip at the gate
+#   - generated page matches live -> success, no PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the diff against the live page and stop — do not push or open a PR"
+        type: boolean
+        default: false
+
+# Nothing here uses the default token; the cross-repo work runs on the App installation
+# token minted below.
+permissions:
+  contents: read
+
+env:
+  PAGES_REPO: focalstudio/focalstudio.github.io
+
+jobs:
+  publish:
+    name: Open privacy-page PR against the Pages repo
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Secrets can't be tested in a step-level `if:`, so they come through env first.
+      - name: Check for cross-repo credentials
+        id: creds
+        env:
+          APP_ID: ${{ secrets.FOCALSTUDIO_BOT_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.FOCALSTUDIO_BOT_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FOCALSTUDIO_BOT_APP_ID / FOCALSTUDIO_BOT_PRIVATE_KEY are not set — nothing to publish with. See .claude/reference/cross-repo-token.md."
+          fi
+
+      # Deliberately ahead of the bootstrap gate. The template repo always skips that gate,
+      # so this is the only step in the whole workflow it can actually execute — and it fails
+      # loudly if the App is not installed on the Pages repo. Dispatching this workflow from
+      # the template is therefore a real end-to-end check of the credential path.
+      - name: Mint a scoped installation token
+        id: app-token
+        if: steps.creds.outputs.has_creds == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FOCALSTUDIO_BOT_APP_ID }}
+          private-key: ${{ secrets.FOCALSTUDIO_BOT_PRIVATE_KEY }}
+          owner: focalstudio
+          # Narrowed to the one repo this workflow writes to. The App is installed org-wide
+          # for the other consumer; the token this job holds is not.
+          repositories: focalstudio.github.io
+
+      - name: Gate
+        id: gate
+        if: steps.creds.outputs.has_creds == 'true'
+        run: bash scripts/privacy-gate.sh
+
+      - name: Generate page (fails on incomplete config / missing anchor / URL mismatch)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/gen-privacy-policy.mjs
+
+      - name: Stage the page against the live Pages repo
+        id: stage
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+          SLUG: ${{ steps.gate.outputs.slug }}
+        run: |
+          set -euo pipefail
+          # Blobless rather than shallow: GitHub rejects pushes from some shallow clones,
+          # and this one gets pushed below.
+          git clone --quiet --filter=blob:none \
+            "https://x-access-token:${TOKEN}@github.com/${PAGES_REPO}.git" pages
+
+          cp "store-listing/privacy-${SLUG}.html" "pages/privacy-${SLUG}.html"
+          git -C pages add -A
+
+          if git -C pages diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Live privacy-${SLUG}.html already matches the generated page. Nothing to do."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git -C pages diff --cached --stat > diff.stat
+          git -C pages diff --cached > diff.patch
+
+          # A page that shrinks is the MealCart hazard: the live copy was hand-tuned and the
+          # config does not reproduce it yet. Cheap to detect, and the only signal a reviewer
+          # actually needs surfaced above the fold.
+          read -r ADDED REMOVED < <(git -C pages diff --cached --numstat \
+            | awk '{a+=$1; r+=$2} END {print a+0, r+0}')
+          echo "added=$ADDED" >> "$GITHUB_OUTPUT"
+          echo "removed=$REMOVED" >> "$GITHUB_OUTPUT"
+          if [ "$REMOVED" -gt "$ADDED" ]; then
+            echo "shrinks=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "shrinks=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compose the PR body
+        if: steps.stage.outputs.changed == 'true'
+        env:
+          SLUG: ${{ steps.gate.outputs.slug }}
+          URL: ${{ steps.gate.outputs.url }}
+          SHRINKS: ${{ steps.stage.outputs.shrinks }}
+          ADDED: ${{ steps.stage.outputs.added }}
+          REMOVED: ${{ steps.stage.outputs.removed }}
+        run: |
+          set -euo pipefail
+          {
+            if [ "$SHRINKS" = "true" ]; then
+              echo "> [!WARNING]"
+              echo "> **This removes more from the live page than it adds** (+${ADDED} / -${REMOVED})."
+              echo "> If \`privacy-${SLUG}.html\` was hand-written or hand-tuned, do **not** merge until"
+              echo "> the app's \`store-listing/privacy.config.json\` reproduces the content being dropped."
+              echo
+            fi
+            echo "Regenerated from \`store-listing/privacy.config.json\` by"
+            echo "[\`publish-privacy.yml\`](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "in \`${GITHUB_REPOSITORY}\`."
+            echo
+            echo "Live URL once merged: ${URL} (deletion anchor: \`#delete\`)"
+            echo
+            echo '```'
+            cat diff.stat
+            echo '```'
+            echo
+            echo "<details><summary>Full diff</summary>"
+            echo
+            echo '```diff'
+            # Bounded so a first-publish of a large page can't blow past the PR body limit.
+            head -c 50000 diff.patch
+            if [ "$(wc -c < diff.patch)" -gt 50000 ]; then
+              echo
+              echo "... truncated — see the workflow run for the full diff."
+            fi
+            echo '```'
+            echo
+            echo "</details>"
+          } > pr-body.md
+          echo "Composed $(wc -l < pr-body.md) lines."
+
+      - name: Open or update the PR
+        if: steps.stage.outputs.changed == 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
+          SLUG: ${{ steps.gate.outputs.slug }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          APP_ID: ${{ secrets.FOCALSTUDIO_BOT_APP_ID }}
+        run: |
+          set -euo pipefail
+          BRANCH="privacy/${SLUG}"
+          TITLE="chore: update privacy-${SLUG}.html"
+
+          git -C pages config user.name "${APP_SLUG}[bot]"
+          git -C pages config user.email "${APP_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git -C pages checkout -q -b "$BRANCH"
+          git -C pages commit -q -m "$TITLE"
+
+          # One stable branch per app, force-updated. A re-run then refreshes the existing PR
+          # instead of stacking a new one; the branch is bot-owned and carries nothing else,
+          # so there is no history to preserve on it.
+          git -C pages push -q --force origin "$BRANCH"
+
+          EXISTING=$(gh pr list --repo "$PAGES_REPO" --head "$BRANCH" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --repo "$PAGES_REPO" --title "$TITLE" --body-file pr-body.md
+            echo "Updated existing PR #${EXISTING}."
+          else
+            gh pr create --repo "$PAGES_REPO" --base main --head "$BRANCH" \
+              --title "$TITLE" --body-file pr-body.md
+          fi
+
+      - name: Summary
+        if: always()
+        env:
+          HAS_CREDS: ${{ steps.creds.outputs.has_creds }}
+          RUN: ${{ steps.gate.outputs.run }}
+          CHANGED: ${{ steps.stage.outputs.changed }}
+          SLUG: ${{ steps.gate.outputs.slug }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## Publish privacy policy"
+            echo
+            if [ "$HAS_CREDS" != "true" ]; then
+              echo "Skipped — cross-repo credentials are not configured in this org."
+            elif [ "$RUN" != "true" ]; then
+              echo "Skipped — this repo has no \`store-listing/privacy.config.json\`, or its"
+              echo "\`PRIVACY_POLICY_URL\` is still a placeholder. The credential path was exercised."
+            elif [ "$CHANGED" != "true" ]; then
+              echo "Live \`privacy-${SLUG}.html\` already matches the generated page. No PR needed."
+            elif [ "$DRY_RUN" = "true" ]; then
+              echo "**Dry run** — a PR was *not* opened. Diff against the live page:"
+              echo
+              echo '```diff'
+              head -c 50000 diff.patch
+              echo '```'
+            else
+              echo "Opened or updated a PR on \`${PAGES_REPO}\` for \`privacy-${SLUG}.html\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

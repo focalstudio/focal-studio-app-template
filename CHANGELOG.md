@@ -9,6 +9,229 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] — 2026-09-20
+
+### Added
+- **`/fleet` — a one-screen inventory of every repo in the org (`scripts/fleet-report.sh`).**
+  Answers "what database does each app use, what shipped last, and what needs attention" without
+  opening six repos by hand. Per repo: detected database, paywall and analytics, stack versions,
+  latest release and its notes, commits sitting on the default branch past the last tag, `dev`
+  divergence, last CI conclusion, open PRs and issues, and a roadmap bar.
+
+  Nothing about it is hand-maintained. The repo list comes from `gh repo list` against the org
+  derived from `origin`, so a new app appears the moment it is created — there is no manifest to
+  register it in and no inventory file to go stale. Database detection is ordered and prints the
+  evidence behind each verdict: `env.js`'s `BACKEND` constant is the app's own declaration and
+  wins where it exists, otherwise the verdict is inferred from `package.json` dependencies.
+  Dependencies are the only signal that reaches the whole fleet — `env.js` exists solely in repos
+  generated from the current template, so it is absent from three of the four apps, and inference
+  is what makes a Capacitor app and a pre-template Expo app legible alongside the rest.
+
+  Roadmap bars are read from `dev` where it exists rather than the default branch: read from
+  `main` this template reports 82% against its actual 77%, because `main` shows progress as of the
+  last release rather than as of now. The bar arithmetic is lifted from `/standup` so one app's
+  percentage means the same thing in both.
+
+  Read-only, and exit 0 regardless of what it finds — a report, not a gate, for the same reason
+  `drift-report.sh` is. Output is never committed: this repo is public, most app repos are not,
+  and the versions and release notes are the sensitive part, so `--write` targets gitignored
+  `.claude/scratch/`. `--json` exists as the seam a scheduled cross-repo version would consume
+  once the GitHub App in `.claude/reference/cross-repo-token.md` is built.
+
+### Fixed
+- **`drift-report.sh` reported half its content drift falsely, and hid four real defects doing it.**
+  Normalisation masked `[APP_NAME]` and friends to a sentinel on the template side only. The app
+  side never says `[APP_NAME]` — it says `Tick`, and always will — so the two sides could not
+  match, and every shared file containing a placeholder read as drifted permanently. No action on
+  either repo could clear it: 5 of tick's 10 content-drift hits were this and nothing else, which
+  is how a report meant to be read ends up skimmed.
+
+  It now **renders** instead of masking, doing to the template side what `init.sh` did to the app:
+  substituting the app's real identity — read from its own `app.json` and `origin` remote, so
+  there is nothing to configure per app — into the placeholders, then comparing bytes. Substitution
+  fires only where a placeholder literally appears, so unlike a reverse substitution (`Tick` → a
+  sentinel on the app side) it cannot mask a real difference in a line that merely contains the
+  app's name — and for a slug like `tick`, an ordinary English word, it certainly would have. The
+  rule set mirrors `init.sh` including its `[[APP_NAME ` wikilink special case; a placeholder with
+  no derivable value is left alone and reports as drift, over-reporting rather than masking.
+
+  Against tick this cleared 7 false entries and surfaced 4 the old masking had been suppressing —
+  among them the two `init.sh` bugs below, both of which had been live in every generated app.
+
+- **`init.sh` never substituted placeholders in YAML, so every generated app shipped a dead
+  security link and a form that greeted users as `[APP_NAME]`.** The `EXTS` filter listed
+  `.ts/.tsx/.json/.md/.sh` and no `.yml`, leaving
+  `.github/ISSUE_TEMPLATE/config.yml`'s "Report a security vulnerability" URL pointing at
+  `https://github.com/[GITHUB_REPO]/security/advisories/new` — a 404 — and `feature_request.yml`
+  thanking contributors "for suggesting an improvement to **[APP_NAME]**". The placeholder
+  assertion in `template-smoke-test.yml` used the same extension list, which is why CI never
+  caught it. Both now include `*.yml` and `*.yaml`. The three bootstrap gates that grep `app.json`
+  for `\[APP_SLUG\]` are unaffected: they escape the brackets, so the substitution never matched
+  them and still does not.
+
+- **`provision-supabase.sh` skipped OAuth redirect configuration for exactly the apps that needed
+  it.** The guard compared the scheme against a literal `"[APP_SLUG]"` to detect an
+  un-bootstrapped app — but `init.sh` rewrites `[APP_SLUG]` in every `.sh` it finds, so at
+  bootstrap the test became `[ "$SCHEME" != "myslug" ]` against an `app.json` whose scheme is
+  `myslug`. It inverted: every newly generated app fell to the else branch and printed "app.json
+  scheme is still myslug" while silently configuring no redirect URLs, the failure mode whose own
+  comment calls it "the single most common way the OAuth recipe fails". The sentinel is now tested
+  by shape rather than value, so `init.sh` cannot consume it.
+- **`docs/testing.md` documents the E2E guards the code already has.** Read from the advisory half
+  of `bash scripts/drift-report.sh --app focalstudio/tick`, where three of the differences turned
+  out to be a fix whose *code* travelled upstream while its *documentation* stayed behind.
+
+  Check 4 of the flow-contract suite counts swipes before the first `- tapOn:` matching
+  `onboarding-cta` — the tap, not the id — because both flows also *wait* on that id before the
+  first swipe. `src/__tests__/e2e-contract.test.ts` has carried `CTA_TAP` and the reasoning for it
+  since that fix landed; the testing docs never gained the corresponding section, so the one thing
+  a person adding another reference to that id needs to know was recorded only in a regex comment.
+  The escape-hatch table likewise never listed the inline-map form (`- tapOn: { id: "..." }`),
+  which `CTA_TAP` deliberately skips.
+
+  The preflight paragraph also still described "a silent 60-second assertion timeout" against flows
+  that have waited 180s since the cold-start measurement (`tick#14`: a cold `macos-latest` runner
+  took 54,161 ms to serve its first bundle).
+
+  `.github/shared-paths.json` records the rest of the advisory triage on tick's entry. That section
+  of the report never empties — an app adopts template work in squashed `chore: sync template`
+  commits, so subjects on both sides of the squash read as one-sided forever — and without a
+  written verdict per path the next run re-derives all of it. The `.maestro` flows and both backend
+  docs are noise; they differ in app-specific prose or not at all.
+- **`LICENSE` now matches the visibility of the repo it sits in.** The template shipped a single
+  license declaring the source the "proprietary and **confidential** property of Focal Studio",
+  while the template repo is public and readable by anyone. Nothing leaked — a security pass found
+  no credential file ever added on any ref, no `pull_request_target`, no self-hosted runners, and
+  no secret-consuming workflow triggered by `pull_request` — but the document asserted something
+  false about its own repo, and a reader resolving that contradiction the other way would flip
+  visibility and silently break both things that depend on it: free GitHub-hosted runners (the
+  `macos-latest` E2E job alone is 150–250 billable minutes per run against a 2,000-minute
+  allowance) and `drift-report.sh`'s anonymous clone from a generated app.
+
+  The file serves two audiences, hence two variants. `templates/licenses/private.txt` is the old
+  text verbatim; `templates/licenses/public.txt` drops the confidentiality claim and adds a
+  non-operative note recording why the repo is public at all. The legal posture is identical in
+  both — all rights reserved, no reproduction, no derivative works. Neither grants anything.
+
+  **`scripts/init.sh` now installs the right one instead of letting it be inherited.** `LICENSE`
+  is absent from `.github/shared-paths.json` and the script never rewrote it, so every bootstrapped
+  app took the template's copy verbatim into a private repo — which is why "confidential" was
+  correct downstream and wrong here. A new `VISIBILITY` variable drives both the license variant
+  and `gh repo create`'s flag, from one switch: private by default, `--public` for both. Coupling
+  them is the point — two independent settings disagreeing is the bug being repaired, so there is
+  deliberately no way to set one without the other. Existing apps keep the license they have;
+  nothing back-fills.
+
+  Supersedes the `LICENSE` line under 0.4.0 below, which describes the original file as codifying
+  a confidential stance.
+
+### Added
+- **Publishing an app's privacy page to `focalstudio.github.io` is now a workflow, not a manual
+  PR.** `.github/workflows/publish-privacy.yml` (manual dispatch, with a `dry_run` option)
+  regenerates `privacy-<slug>.html` with the existing Phase-1 generator, diffs it against the
+  live page, and opens a pull request on the Pages repo. Re-running refreshes that same PR
+  instead of stacking a new one. It no-ops with a clear message when the org has no cross-repo
+  credentials, when the repo has no `privacy.config.json`, or when the live page already
+  matches (#56).
+
+  **It opens a PR and stops** — no direct commit to the Pages repo, no auto-merge. A live page
+  can be hand-written and richer than the generated one (MealCart's is), and nothing mechanical
+  separates "stale" from "deliberately better"; the same conclusion `scripts/drift-report.sh`
+  reached for the same reason. The PR body carries the full diff and leads with a warning when
+  it would remove more lines than it adds.
+
+- **A single org-owned GitHub App now covers every cross-repo workflow.** The default
+  `GITHUB_TOKEN` cannot touch another repository, which had stalled both the privacy auto-PR
+  (#56) and the scheduled drift report (#145). One App, two org secrets
+  (`FOCALSTUDIO_BOT_APP_ID` / `FOCALSTUDIO_BOT_PRIVATE_KEY`), and each workflow mints a token
+  narrowed to just the repos it touches. Chosen over a fine-grained PAT, which applies one
+  permission union across every repo it selects and would have handed the four app repos write
+  access they never need — and over two PATs, which is the two-secrets-two-rotations outcome
+  the decision existed to avoid. New reference:
+  [`.claude/reference/cross-repo-token.md`](.claude/reference/cross-repo-token.md).
+
+- **The template ↔ generated-app boundary is now written down, and drift against it is
+  reportable.** `.github/shared-paths.json` lists the paths meant to stay the same across this
+  repo and the apps generated from it; `scripts/drift-report.sh` compares them and prints what
+  has diverged. Read-only in both directions — run it here to check every registered app, or
+  from inside a generated app to check that app against the template (public, so it needs no
+  auth). Nothing is ever written to another repo.
+
+  Fixes had failed to travel four times, three of them app → template, and every one was caught
+  by a person happening to remember (#145). That direction fails structurally rather than by
+  accident: `maestro-e2e.yml` skips at the `[APP_SLUG]` bootstrap gate, so `.maestro/*.yaml` is
+  only ever *executed* inside a generated app, and every runtime defect in those flows is
+  discovered downstream by construction.
+
+  **Files with app-specific prose are compared by commit subject, not by content.** tick's
+  `full-journey.yaml` differs from ours by 59 lines, 58 of which are correct — a content diff
+  cannot separate those from the one line that was a real unpropagated fix, and a list of commit
+  subjects can, without needing any stored state. Paths that must match exactly are diffed
+  byte-for-byte after `[APP_NAME]`/`[APP_SLUG]`/`[GITHUB_REPO]` normalisation; skip that step
+  and all 181 shared files read as drifted.
+
+  There is deliberately **no apply/sync half**, and there should not be one: copying a shared
+  file in either direction destroys those 58 correct lines to deliver the 1. The diff is for a
+  human. A scheduled cross-repo version is still absent, but no longer blocked — the token
+  decision above unblocks it; what remains is the workflow and token auth in `sync_clone`.
+
+- **`/wrap` now checks whether the session crossed that boundary** (new step 2). It intersects
+  the changed files with the manifest and asks whether the fix needs to travel, naming the
+  repos that carry each path. This is the outbound half only, by construction: it fires where
+  the fix was written and can say nothing about a repo sitting on a stale copy — that is what
+  the drift report is for.
+
+- **One-command Supabase provisioning.** `scripts/provision-supabase.sh` does every step
+  `add-backend.sh supabase` previously printed as manual work: creates the project, waits for it to
+  come up, reads back the publishable key, writes `.env.local`, applies `schema.sql`, and configures
+  redirect URLs, email confirmation, and the Google/Apple providers — all through the Supabase
+  Management API. Optional `--set-ci-secrets` sets the two repository secrets
+  `supabase-keepalive.yml` needs so it stops skipping.
+
+  It **verifies rather than assumes**. The three things it asserts afterwards — RLS actually enabled
+  on `profiles`, `delete_own_account()` present, `anon` able to execute `keepalive_ping()` — are
+  precisely the three that fail silently: a table with policies but RLS off is world-readable and
+  the dashboard does not warn you; a missing deletion RPC turns the store-compliance claim into a
+  no-op; a missing keep-alive grant pauses the project weeks later. These are read-only checks
+  rather than a call into `verify-backend-contract.mjs`, which is more thorough but needs the
+  `service_role` key and creates and deletes real users — right for a throwaway local instance,
+  wrong to point at a project bound for production.
+
+  The access token is read from `SUPABASE_ACCESS_TOKEN` for one run and never written to disk,
+  never passed in argv (`ps` is world-readable), and never echoed. It is account-wide and can delete
+  every project you own — the opposite of the publishable key the script writes into `.env.local`,
+  which is designed to ship inside a client binary.
+
+  **Firebase deliberately gets no equivalent**, and `docs/backends/firebase.md` now says why:
+  non-interactive auth needs a GCP service account that itself needs a pre-existing project, and
+  `firebase projects:create` is gated by per-account quota and billing. A script that works for its
+  author and fails for everyone else is worse than an honest checklist.
+
+### Fixed
+- **The Maestro cold-start waits were shorter than a cold start** — backported from `tick#14`,
+  and the first thing the drift report above found. Three `extendedWaitUntil` timeouts in
+  `.maestro/full-journey.yaml` and `.maestro/persistence.yaml` go from 60s to 180s. The number
+  is measured, not guessed: a cold GitHub `macos-latest` runner took **54,161 ms** to serve its
+  first bundle (3,435 modules), and `clearState: true` throws the dev-client state away so every
+  launch in these flows pays that cost again rather than getting a warm Metro's 6–15s
+  incremental rebuild. Stacked on native launch, 60s expired while slide 1 was already on
+  screen — the debug artifact has the element in the hierarchy dump, a screenshot showing it
+  rendered, and no crash.
+
+  180s is a ceiling, not an expectation: `extendedWaitUntil` returns the moment the element
+  appears, so a healthy run costs nothing and the only path made slower is one that was going
+  to fail anyway. The template's own CI never sees this — it skips at the bootstrap gate — but
+  every app generated from it inherited the too-short value.
+
+- **A local `npm test` or `npm run lint` no longer picks up the cached app clones.**
+  `scripts/drift-report.sh` caches clones under the gitignored `.claude/scratch/drift/`, which
+  CI never sees but Jest and ESLint both walk into: before the exclusions in `jest.config.js`
+  and `eslint.config.js`, a drift run left `npm test` executing every downstream app's suite and
+  `npm run lint` reporting 523 problems, of which only 10 were this repo's.
+
+
 ## [0.14.0] — 2026-08-10
 
 ### Added

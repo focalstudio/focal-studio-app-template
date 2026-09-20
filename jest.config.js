@@ -116,7 +116,18 @@ module.exports = {
    * `npm test` step picks it up. Running them here would fail on the missing
    * package every time.
    */
-  testPathIgnorePatterns: ["/node_modules/", "/__tests__/support/", "/templates/"],
+  /**
+   * `/.claude/scratch/` holds full clones of the generated apps, put there by
+   * `scripts/drift-report.sh`. It is gitignored, so CI never sees it and this
+   * entry looks unnecessary from a fresh checkout — but a local `npm test` after
+   * a drift run otherwise discovers and executes every downstream app's suite.
+   */
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "/__tests__/support/",
+    "/templates/",
+    "/\\.claude/scratch/",
+  ],
 
   /**
    * Without this, Jest only reports on files some test happened to import, so

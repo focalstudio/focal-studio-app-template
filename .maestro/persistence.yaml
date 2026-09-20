@@ -38,13 +38,15 @@ appId: ${APP_ID}
 # several steps later on `login-submit`, blaming the auth wall for a swipe that
 # raced.
 #
-# The CTA wait before the first swipe, and the 700ms duration, match
-# full-journey.yaml — see the reasoning there. Short version: a cold CI runner
-# swallowed the first swipe outright, with the app sitting on slide 1.
+# The CTA wait before the first swipe, the 700ms duration, and the 180s timeout
+# all match full-journey.yaml — see the reasoning there. Short version: a cold CI
+# runner swallowed the first swipe outright, with the app sitting on slide 1, and
+# 60s expired while the slide was already rendered (tick#14 measured a 54,161 ms
+# cold first-bundle serve).
 - extendedWaitUntil:
     visible:
       id: "onboarding-slide-1"
-    timeout: 60000
+    timeout: 180000
 - extendedWaitUntil:
     visible:
       id: "onboarding-cta"
@@ -123,10 +125,13 @@ appId: ${APP_ID}
 # to read back: onboarding means the onboarding flag was lost, the auth wall
 # means the session was. Both are exactly what the schemas are there to keep
 # from happening silently.
+#
+# 180s for the same reason as the launch wait above: this is the second cold start
+# in the flow, after a force-quit, so it pays the full bundle-serve cost again.
 - extendedWaitUntil:
     visible:
       id: "tab-home"
-    timeout: 60000
+    timeout: 180000
 # These stay flat, and must. `assertNotVisible` is the claim being made —
 # waiting for something to be *absent* would pass the instant the screen has not
 # rendered yet, which is precisely the failure it is here to catch. The wait

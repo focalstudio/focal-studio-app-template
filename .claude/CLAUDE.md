@@ -65,9 +65,37 @@ Two slash commands bracket every work session (defined in [.claude/commands/](co
 - **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
 - **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
 
+A third, **`/fleet`**, zooms out to every repo in the org rather than this one — database, last release, unreleased commits, CI, open work and roadmap bar per repo. `/standup` is one repo deep; `/fleet` is every repo shallow. Use it when picking up work after a gap, before a release, or when asked "what's the state of everything".
+
 `/wrap` is **enforced, not advisory**. `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping with a nudge to run `/wrap`. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn. The hook exists because "run `/wrap` at the end" as plain instruction text is something a session reliably forgets.
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
+
+### Fleet inventory
+
+`bash scripts/fleet-report.sh` answers "what is the state of every app" without opening six repos by hand. It is read-only and **hand-maintains nothing**: the repo list comes from `gh repo list` against the org derived from `origin`, so a new app appears the moment it is created and there is no manifest to keep in sync. Same call as the drift report — it reports, it never writes to a remote.
+
+- **Database detection is ordered, and prints its evidence.** `env.js`'s `BACKEND` constant is the app's own declaration and wins where it exists; otherwise the verdict is inferred from `package.json` dependencies (`@supabase/supabase-js` → Supabase, `firebase` → Firestore, `expo-sqlite` → SQLite, async-storage alone → local-only). Dependencies are the only signal that works fleet-wide: `env.js` exists solely in repos generated from the current template, so it is absent from mealcart, WildFocus and vestia.
+- **Roadmap bars come from `dev`, not the default branch**, falling back when there is no `dev`. Reading them from `main` reports progress as of the last release rather than as of now. The bar arithmetic is lifted from `/standup` so one app's percentage means the same thing in both.
+- **Output is never committed.** This template repo is public and most app repos are private; versions, release notes and issue titles are the part that matters, so `--write` targets gitignored `.claude/scratch/`.
+- **A scheduled cross-repo version is not built**, for exactly the reason the scheduled drift report isn't: it needs the GitHub App in [.claude/reference/cross-repo-token.md](reference/cross-repo-token.md). `--json` is the seam it would consume. The local script covers the need until the fleet grows.
+
+## Cross-repo propagation
+
+**`.github/shared-paths.json` is the template ↔ generated-app boundary, written down.** Everything listed in it is meant to stay the same across this repo and the apps generated from it (`.claude/**`, `.github/workflows/*`, `scripts/*`, `templates/**`, `.maestro/*`, `docs/*`). Everything outside it — `app/`, `src/store/`, `src/theme/`, `assets/`, `store-listing/` — is meant to diverge. Before this file existed that distinction was written down nowhere, which is half of why fixes kept failing to travel (#145).
+
+Two mechanisms consume it, one per direction:
+
+- **Outbound** — `/wrap` step 2 intersects the session's changed files with the manifest and asks whether the change needs to travel. Fires in the repo where the fix was written.
+- **Inbound** — `bash scripts/drift-report.sh` compares against every app in the manifest's `apps` list. Catches a repo sitting on a stale copy that nobody is currently editing, which is the half `/wrap` structurally cannot see. Run it when picking up template work after a gap, and before cutting a release.
+
+**The app → template direction is the one that fails.** Three of the four instances in #145 travelled that way, and the reason is structural rather than accidental: `maestro-e2e.yml` skips at the `[APP_SLUG]` bootstrap gate, so `.maestro/*.yaml` is only ever *executed* inside a generated app. Every runtime defect in those flows is discovered downstream by construction. The same shape applies to anything needing real data, real users, or a real Supabase project. When an app teaches you something, assume it belongs upstream.
+
+**Do not build a sync-and-apply script.** It has been considered and rejected, not deferred. tick's `.maestro` flows differ from the template's by 59 lines, 58 of which are correct app-specific prose and 1 of which was a real unpropagated fix; a copy in either direction destroys the 58 to deliver the 1. Nothing mechanical can tell them apart — that is the judgment the human diff read exists for. Extend the report, not the writer.
+
+A scheduled cross-repo version of the report is **unblocked but not yet built**. Reading private sibling repos from CI needs a credential the default `GITHUB_TOKEN` cannot provide; that decision was taken once, for both consumers, alongside #56 — see [.claude/reference/cross-repo-token.md](reference/cross-repo-token.md). What remains for #145 is the workflow itself plus token auth in `drift-report.sh`'s `sync_clone`, which currently clones anonymously over HTTPS. The local script covers the need until the fleet grows.
+
+**Any workflow writing to another repo opens a PR — never commits, never merges.** Same reason the drift report reports rather than applies: the receiving copy may be deliberately better. `publish-privacy.yml` is the reference implementation.
 
 ## Release workflow
 When the user says to cut a release:
@@ -421,6 +449,12 @@ When the user says any of the following, classify as `bootstrap` and **spawn `ap
 - "set up [app name]" (from a fresh clone)
 
 Pass the verbatim user message as the brief. The agent handles all Q&A and execution.
+
+**New repos are private, and the LICENSE follows.** `scripts/init.sh` creates the GitHub repo
+private and installs `templates/licenses/private.txt` — the variant that calls the source
+confidential. `--public` flips both from one switch, and is the only supported way to make a
+public app: the two settings are coupled precisely so they cannot drift apart, which is what
+happened to this template's own LICENSE. Pass it only on an explicit request.
 
 ### Orchestration playbook
 

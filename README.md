@@ -111,7 +111,7 @@ src/
 
 .github/workflows/     # CI/CD (see above)
 scripts/
-  init.sh              # New-app bootstrap (placeholder replacement + GitHub setup)
+  init.sh              # New-app bootstrap (placeholder replacement + GitHub setup + LICENSE)
   bump-version.sh      # Version bump across package.json, app.json, constants.ts
 ```
 
@@ -334,3 +334,8 @@ Current value: [PRIVACY_POLICY_URL]
 ## License
 
 © 2026 Focal Studio. All rights reserved.
+
+This repository is public so CI runs on free GitHub-hosted runners and so generated apps can
+diff themselves against it without credentials. Being readable grants no right to reuse it —
+see [`LICENSE`](LICENSE). Apps bootstrapped from the template get the stricter
+`templates/licenses/private.txt` instead, installed by `scripts/init.sh`.
