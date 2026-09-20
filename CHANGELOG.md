@@ -26,6 +26,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
   is read from the probed fleet data rather than the working tree, so a single-repo run does not
   compare against whatever happens to be checked out.
+- **A fleet dashboard that is current without being asked for.** `fleet-report.sh --html`
+  renders the same data `--json` already exposed into one self-contained page
+  (`scripts/fleet-html.mjs` — inline CSS, no CDN, no build step, dark mode, readable at phone
+  width), and `scripts/install-fleet-agent.sh` installs a launchd agent that refreshes it every
+  3 hours. Each repo gets a 🔴/🟡/🟢 with its reasons listed rather than just a colour, including
+  template currency: which release an app adopted and whether the template has moved past it. An
+  app with no `TEMPLATE_VERSION` renders as *unknown*, never as up to date.
+  Output lands in `~/.focalstudio/`, outside the repo, so fleet data about private apps cannot be
+  committed to this public template by accident — structural rather than one `.gitignore` edit
+  away. `npm run fleet` renders and opens it.
+- **The agent works from a repo in `~/Desktop`.** macOS blocks background agents from reading
+  `~/Desktop`, `~/Documents`, `~/Downloads` and iCloud Drive; pointed at a repo in one, the agent
+  exits 126 and the page silently never updates — worse than no agent, because a plausible-looking
+  stale page remains. Rather than asking for Full Disk Access on `/bin/bash`, the installer detects
+  a protected location and runs from a three-file copy in `~/.focalstudio/bin`. A copy that drifts
+  from its source is the exact problem this repo exists to solve, so `--status` compares the two
+  and says which file differs.
 - **The shared-path contract now covers `src/` framework code.** It previously contributed exactly
   one path, so the template's own seams — `src/env.ts` (the `isDevBuild` gate), `env.js`,
   `src/utils/storage.ts`, `src/hooks/useTheme.ts`, `src/theme/spacing.ts` and the
