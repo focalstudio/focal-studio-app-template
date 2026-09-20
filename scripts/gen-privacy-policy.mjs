@@ -154,7 +154,22 @@ ${provided}
             is encrypted over HTTPS, and access is restricted so that you can only read and
             write your own records.
           </p>`
-    : `          <p>
+    : cfg.collectsAnalytics || cfg.collectsCrashReports
+      ? `          <p>
+            Your app content is stored locally on your device. It is never transmitted to us or
+            to any third party, and it is cleared if you uninstall the app.
+          </p>
+          <p>
+            The one exception is the anonymous ${esc(
+              [cfg.collectsAnalytics && "usage analytics", cfg.collectsCrashReports && "crash reports"]
+                .filter(Boolean)
+                .join(" and "),
+            )} described below, which ${cfg.collectsAnalytics && cfg.collectsCrashReports ? "are" : "is"} sent to the
+            third-party service${cfg.collectsAnalytics && cfg.collectsCrashReports ? "s" : ""} listed in the next
+            section. ${cfg.collectsAnalytics && cfg.collectsCrashReports ? "They contain" : "It contains"} no app
+            content and nothing identifying you.
+          </p>`
+      : `          <p>
             All data is stored locally on your device. It never leaves your device and is
             never transmitted to us or any third party. It is cleared if you uninstall the app.
           </p>`;
