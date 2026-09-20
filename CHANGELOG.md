@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] — 2026-09-20
+
 ### Added
 - **`/fleet` — a one-screen inventory of every repo in the org (`scripts/fleet-report.sh`).**
   Answers "what database does each app use, what shipped last, and what needs attention" without
