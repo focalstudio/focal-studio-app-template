@@ -26,6 +26,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
   is read from the probed fleet data rather than the working tree, so a single-repo run does not
   compare against whatever happens to be checked out.
+- **The shared-path contract now covers `src/` framework code.** It previously contributed exactly
+  one path, so the template's own seams — `src/env.ts` (the `isDevBuild` gate), `env.js`,
+  `src/utils/storage.ts`, `src/hooks/useTheme.ts`, `src/theme/spacing.ts` and the
+  `src/services/{auth,paywall}/` ports — were invisible to drift. The sharpest case: the paywall
+  *adapter* (`templates/paywall/revenuecat.ts`) was tracked `identical` while the port it plugs
+  into was not tracked at all. `src/theme/typography.ts` is `advisory` rather than `identical`,
+  because the first run disproved the assumption it was listed under — tick correctly adds a
+  88pt `FontSize.clock` and sub-regular weights on top of the shared scale. The first run also
+  found MealCart missing `clearByPrefix` from `storage.ts`, the account-deletion purge helper.
 - **Scheduled cross-repo report (`cross-repo-report.yml`)** — runs the drift and fleet reports
   weekly and writes both to the run summary (#145, #163). Covers the half a local script
   structurally cannot: a repo nobody is editing, in a week nobody thought to look. It reports
