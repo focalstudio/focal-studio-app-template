@@ -16,6 +16,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   and never writes to another repo, and skips cleanly where the org App is not configured.
 
 ### Fixed
+- **A `local-first` app that ships analytics generated a privacy policy that contradicted
+  itself.** Section 2 asserted the data "never leaves your device and is never transmitted to us
+  or any third party" while section 3 listed the analytics provider receiving usage events — a
+  false statement, in the document App Review reads, produced by default. The local-first branch
+  emitted its absolute claim without consulting `collectsAnalytics` / `collectsCrashReports`.
+  It now scopes the claim to app content and names the exception, with singular/plural agreement
+  for one signal or both. An app collecting neither is unaffected and still gets the absolute
+  wording, which for it is true. Found while giving tick a privacy config — the template itself
+  can never hit this, because it always skips at the bootstrap gate.
 - **`drift-report.sh` could not clone private repos from CI.** `sync_clone` cloned anonymously
   over HTTPS, relying on the ambient git credential helper — which exists on a dev machine and
   not in Actions. It now embeds `GH_TOKEN` in the clone URL when one is set, and repoints a
