@@ -51,13 +51,20 @@ Versioning: [Semantic Versioning](https://semver.org/)
   Output lands in `~/.focalstudio/`, outside the repo, so fleet data about private apps cannot be
   committed to this public template by accident — structural rather than one `.gitignore` edit
   away. `npm run fleet` renders and opens it.
-- **The agent works from a repo in `~/Desktop`.** macOS blocks background agents from reading
-  `~/Desktop`, `~/Documents`, `~/Downloads` and iCloud Drive; pointed at a repo in one, the agent
-  exits 126 and the page silently never updates — worse than no agent, because a plausible-looking
-  stale page remains. Rather than asking for Full Disk Access on `/bin/bash`, the installer detects
-  a protected location and runs from a three-file copy in `~/.focalstudio/bin`. A copy that drifts
-  from its source is the exact problem this repo exists to solve, so `--status` compares the two
-  and says which file differs.
+- **The agent works from a repo in `~/Desktop`, and uses Full Disk Access when it is granted.**
+  macOS blocks background agents from reading `~/Desktop`, `~/Documents`, `~/Downloads` and
+  iCloud Drive; pointed at a repo in one, the agent exits 126 and the page silently never updates
+  — worse than no agent, because a plausible-looking stale page remains. The installer now
+  **tries running straight from the repo first and proves it** by executing the agent and reading
+  its exit code, because TCC state cannot be queried and a wrong guess reproduces exactly that
+  silent staleness. If the run is denied it falls back to a three-file copy in
+  `~/.focalstudio/bin` and prints how to grant access; granting Full Disk Access to `/bin/bash`
+  and re-running switches to direct mode with no flag. `--direct` refuses the fallback and fails
+  loudly with the denial message; `--copy` skips the attempt. `--status` reads the live mode from
+  the installed plist rather than inferring it, and only diffs the copy when one is in use —
+  a copy that drifts from its source being the problem this repo exists to solve.
+  Only *this* repo is ever read from disk; every other repo in the fleet comes from the GitHub
+  API, so nothing needs granting for them.
 - **The shared-path contract now covers `src/` framework code.** It previously contributed exactly
   one path, so the template's own seams — `src/env.ts` (the `isDevBuild` gate), `env.js`,
   `src/utils/storage.ts`, `src/hooks/useTheme.ts`, `src/theme/spacing.ts` and the
