@@ -66,6 +66,15 @@
 - [x] Privacy-policy generator and `verify-privacy.yml` drift check
 - [x] Google Play Data safety compliance — account deletion, analytics opt-out, policy URL
 - [x] Device-level Maestro flow from launch through account deletion (#80)
+- [ ] tick store-readiness audit — the drift sessions were its prerequisite, so a release would
+      not discover tick's `.maestro` and `docs/testing.md` were behind on E2E fixes. They no
+      longer are. Gate on the whole store push
+- [ ] Prove `publish-privacy.yml` end to end — nothing in the fleet can exercise it yet: `tick`
+      has no `privacy.config.json` and MealCart is outside the generator. Needs tick given a real
+      config on a branch first, which it wants anyway (#56)
+- [ ] Run `provision-supabase.sh` against a real Supabase org from a generated app — more urgent
+      since the redirect-URL guard was inverted for every app that ran it after bootstrap. CI can
+      only ever reach `--dry-run`
 - [ ] First template-generated app shipped through both stores end to end
 
 ## Phase 4 — Monetization & Growth
@@ -94,10 +103,10 @@
 - [x] `provision-supabase.sh`'s un-bootstrapped sentinel tested by shape — PR #157 merged. As
       a literal it was rewritten by `init.sh`, inverting the guard so every newly generated
       app silently configured no OAuth redirect URLs at all
-- [ ] tick at zero content drift and zero missing shared paths — **`tick#21` open, not
-      merged**. Against that branch `drift-report.sh` reports only the advisory set, which is
-      compared by commit subject and expected to differ. Includes two live tick defects: a
-      404 security-advisory link and a placeholder-addressed feature-request form (#145)
+- [x] tick at zero content drift — `tick#21` and `tick#22` both merged 2026-08-24. A drift run
+      on 2026-09-20 reports **0 content drift**; what remains is the advisory set, compared by
+      commit subject and expected to differ. The two live tick defects it carried (a 404
+      security-advisory link, a placeholder-addressed feature-request form) went with it (#145)
 - [ ] Act on the drift the report finds for **MealCart, WildFocus and vestia**. tick is
       handled; the other three have not been read since #151. Also re-triage MealCart's
       `skip` array — its 21 entries are a first-pass "known absent", not a verified reading
@@ -106,7 +115,16 @@
       two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself
       still needs provisioning — a browser-only flow, and the one step a session cannot do for
       itself
+- [x] Fleet inventory — `scripts/fleet-report.sh` / `/fleet` answers "what database does each app
+      use, what shipped last, what needs attention" across the org in one screen. Hand-maintains
+      nothing: the repo list comes from `gh repo list`, so a new app appears the moment it exists.
+      Database verdicts print their evidence, and are inferred from `package.json` where `env.js`
+      is absent — which is three of the four apps, and the only reason a Capacitor app and a
+      pre-template Expo app are legible alongside the rest. PR #162 merged
 - [ ] Scheduled cross-repo drift report — unblocked by the App above rather than blocked; needs
       the workflow plus token auth in `drift-report.sh`'s `sync_clone`, which clones anonymously
       today. Local script covers it meanwhile (#145)
+- [ ] Scheduled fleet report (#163) — shares the drift report's blocker exactly: the same GitHub
+      App, `contents: read` only. `fleet-report.sh --json` is the seam. A Pages variant must
+      filter to public repos only; four of the six are private
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)
