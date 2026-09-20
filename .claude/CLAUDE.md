@@ -65,9 +65,20 @@ Two slash commands bracket every work session (defined in [.claude/commands/](co
 - **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
 - **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
 
+A third, **`/fleet`**, zooms out to every repo in the org rather than this one — database, last release, unreleased commits, CI, open work and roadmap bar per repo. `/standup` is one repo deep; `/fleet` is every repo shallow. Use it when picking up work after a gap, before a release, or when asked "what's the state of everything".
+
 `/wrap` is **enforced, not advisory**. `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping with a nudge to run `/wrap`. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn. The hook exists because "run `/wrap` at the end" as plain instruction text is something a session reliably forgets.
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
+
+### Fleet inventory
+
+`bash scripts/fleet-report.sh` answers "what is the state of every app" without opening six repos by hand. It is read-only and **hand-maintains nothing**: the repo list comes from `gh repo list` against the org derived from `origin`, so a new app appears the moment it is created and there is no manifest to keep in sync. Same call as the drift report — it reports, it never writes to a remote.
+
+- **Database detection is ordered, and prints its evidence.** `env.js`'s `BACKEND` constant is the app's own declaration and wins where it exists; otherwise the verdict is inferred from `package.json` dependencies (`@supabase/supabase-js` → Supabase, `firebase` → Firestore, `expo-sqlite` → SQLite, async-storage alone → local-only). Dependencies are the only signal that works fleet-wide: `env.js` exists solely in repos generated from the current template, so it is absent from mealcart, WildFocus and vestia.
+- **Roadmap bars come from `dev`, not the default branch**, falling back when there is no `dev`. Reading them from `main` reports progress as of the last release rather than as of now. The bar arithmetic is lifted from `/standup` so one app's percentage means the same thing in both.
+- **Output is never committed.** This template repo is public and most app repos are private; versions, release notes and issue titles are the part that matters, so `--write` targets gitignored `.claude/scratch/`.
+- **A scheduled cross-repo version is not built**, for exactly the reason the scheduled drift report isn't: it needs the GitHub App in [.claude/reference/cross-repo-token.md](reference/cross-repo-token.md). `--json` is the seam it would consume. The local script covers the need until the fleet grows.
 
 ## Cross-repo propagation
 
