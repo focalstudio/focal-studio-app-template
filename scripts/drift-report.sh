@@ -189,10 +189,24 @@ norm_right() { if [[ "$DIRECTION" == "template" ]]; then normalise_app "$1";    
 # ── Clone cache ──────────────────────────────────────────────────────────────
 # .claude/scratch/ is already gitignored. Clones are reused rather than recreated,
 # which keeps repeat runs quick and means this script never has to delete anything.
+# Locally this clones anonymously and lets the ambient git credential helper (gh's,
+# on a dev machine) handle private repos. In CI there is no helper, so GH_TOKEN —
+# an installation token from the org App — is embedded in the URL instead. The
+# token is masked by Actions, but keep it out of `set -x` range regardless.
+_clone_url() {
+  local repo="$1"
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    echo "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git"
+  else
+    echo "https://github.com/${repo}.git"
+  fi
+}
+
 sync_clone() {
   local repo="$1" branch="$2" dir="$3"
   if [[ -d "$dir/.git" ]]; then
     if [[ "$FETCH" == "true" ]]; then
+      [[ -n "${GH_TOKEN:-}" ]] && git -C "$dir" remote set-url origin "$(_clone_url "$repo")" 2>/dev/null
       git -C "$dir" fetch --quiet --depth 500 origin "$branch" 2>/dev/null || return 1
       git -C "$dir" reset --quiet --hard "origin/$branch" 2>/dev/null || return 1
       # `reset --hard` leaves untracked files behind, and a stray file in the cache
@@ -203,7 +217,7 @@ sync_clone() {
   else
     mkdir -p "$(dirname "$dir")"
     git clone --quiet --filter=blob:none --depth 500 --single-branch \
-      --branch "$branch" "https://github.com/${repo}.git" "$dir" 2>/dev/null || return 1
+      --branch "$branch" "$(_clone_url "$repo")" "$dir" 2>/dev/null || return 1
   fi
   return 0
 }

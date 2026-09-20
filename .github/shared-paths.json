@@ -95,10 +95,12 @@
   "limitedScope": [
     ".claude/commands/*.md",
     ".claude/hooks/*.sh",
+    "scripts/drift-report.sh",
+    "scripts/fleet-report.sh",
     ".github/labels.tsv",
     ".github/ISSUE_TEMPLATE/*"
   ],
-  "$limitedScopeComment": "What a non-descendant repo is compared on. Deliberately tiny: these four are the only parts of the shared surface that mean anything to a repo on a different stack. Comparing a Capacitor app against .claude/skills/rn-* or .github/workflows/eas-preview.yml produces pages of output and zero decisions.",
+  "$limitedScopeComment": "What a non-descendant repo is compared on. Deliberately tiny: these are the only parts of the shared surface that mean anything to a repo on a different stack. Comparing a Capacitor app against .claude/skills/rn-* or .github/workflows/eas-preview.yml produces pages of output and zero decisions. The two scripts are here because .claude/commands/*.md is, and a command without the script it invokes is worse than neither: /fleet would be reported missing from WildFocus and vestia while scripts/fleet-report.sh stayed invisible, since scripts/* is full-scope only. Both are repo-agnostic by construction - drift-report.sh picks its direction from app.json, fleet-report.sh derives its org from the origin remote - so unlike the rest of scripts/ they mean something on any stack.",
 
   "apps": [
     {
