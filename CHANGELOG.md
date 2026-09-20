@@ -9,6 +9,33 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **`/fleet` — a one-screen inventory of every repo in the org (`scripts/fleet-report.sh`).**
+  Answers "what database does each app use, what shipped last, and what needs attention" without
+  opening six repos by hand. Per repo: detected database, paywall and analytics, stack versions,
+  latest release and its notes, commits sitting on the default branch past the last tag, `dev`
+  divergence, last CI conclusion, open PRs and issues, and a roadmap bar.
+
+  Nothing about it is hand-maintained. The repo list comes from `gh repo list` against the org
+  derived from `origin`, so a new app appears the moment it is created — there is no manifest to
+  register it in and no inventory file to go stale. Database detection is ordered and prints the
+  evidence behind each verdict: `env.js`'s `BACKEND` constant is the app's own declaration and
+  wins where it exists, otherwise the verdict is inferred from `package.json` dependencies.
+  Dependencies are the only signal that reaches the whole fleet — `env.js` exists solely in repos
+  generated from the current template, so it is absent from three of the four apps, and inference
+  is what makes a Capacitor app and a pre-template Expo app legible alongside the rest.
+
+  Roadmap bars are read from `dev` where it exists rather than the default branch: read from
+  `main` this template reports 82% against its actual 77%, because `main` shows progress as of the
+  last release rather than as of now. The bar arithmetic is lifted from `/standup` so one app's
+  percentage means the same thing in both.
+
+  Read-only, and exit 0 regardless of what it finds — a report, not a gate, for the same reason
+  `drift-report.sh` is. Output is never committed: this repo is public, most app repos are not,
+  and the versions and release notes are the sensitive part, so `--write` targets gitignored
+  `.claude/scratch/`. `--json` exists as the seam a scheduled cross-repo version would consume
+  once the GitHub App in `.claude/reference/cross-repo-token.md` is built.
+
 ### Fixed
 - **`drift-report.sh` reported half its content drift falsely, and hid four real defects doing it.**
   Normalisation masked `[APP_NAME]` and friends to a sentinel on the template side only. The app
