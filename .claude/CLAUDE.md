@@ -62,12 +62,20 @@ If a branch already exists for the task, use that branch instead of creating a s
 ## Session workflow
 Two slash commands bracket every work session (defined in [.claude/commands/](commands/)):
 
-- **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
-- **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
+- **`/standup`** — a read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files. Reads the dashboard's cached JSON (`~/.focalstudio/fleet.json`) where it is fresh, rather than re-deriving everything from `gh`.
+- **`/wrap`** — refreshes `STATUS.md` and `ROADMAP.md`. **You should not need to run this**: the `Stop` hook makes the session do it unprompted (below). It remains as a command for when you want the update mid-session.
 
 A third, **`/fleet`**, zooms out to every repo in the org rather than this one — database, last release, unreleased commits, CI, open work and roadmap bar per repo. `/standup` is one repo deep; `/fleet` is every repo shallow. Use it when picking up work after a gap, before a release, or when asked "what's the state of everything".
 
-`/wrap` is **enforced, not advisory**. `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping with a nudge to run `/wrap`. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn. The hook exists because "run `/wrap` at the end" as plain instruction text is something a session reliably forgets.
+**Status upkeep is automatic, not a ritual.** `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping and instructs it to do the update itself. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn.
+
+The hook used to tell the *user* to run `/wrap`. That moved the forgetting one step along rather than fixing it: the nudge lands at the end of a session, exactly when nobody wants to type another command, so sessions ended unwrapped anyway. It now hands over the commit subjects and the rules, and the session writes the update before stopping.
+
+Its scope is deliberately narrow, because it is the one place work happens without being asked for:
+
+- **Only `STATUS.md` and `ROADMAP.md`.** Nothing else is touched or staged.
+- **It commits on a feature branch, with `chore: refresh status`, and never pushes.** On `main` or `dev` it updates the files and leaves them in the working tree — those branches take changes through a PR, and a hook is not a PR.
+- **It is announced.** The session says in one line what it changed, so the write is visible rather than silent. This is what keeps it compatible with "do not make secretive changes" rather than an exception to it.
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
 
@@ -486,7 +494,7 @@ The orchestrator reads from disk on demand. This keeps the orchestrator context 
 ---
 
 ## What not to do
-- Do not make secretive changes.
+- Do not make secretive changes. **One named exception**: the `Stop` hook's `STATUS.md` / `ROADMAP.md` refresh happens unprompted, because a tracking file that depends on remembering a command drifts. It is bounded and announced — see "Session workflow". Nothing else gets written without being asked for, and this exception does not generalise.
 - Do not skip branch creation unless explicitly allowed.
 - Do not assume credentials are available.
 - Do not run destructive git commands without asking.

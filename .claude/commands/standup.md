@@ -5,12 +5,19 @@ description: Session-start briefing — where the project stands and how much ro
 You are giving the [APP_NAME] daily stand-up. Goal: in one screen, tell me exactly
 where we are and how much is left, with **live progress bars**. Everything you can
 derive from git/files you derive — do NOT trust anything hand-written except the
-Now/Next/Blockers in `STATUS.md`.
+Now/Next/Blockers in `STATUS.md`. That file is narrative only by design; every number
+that used to sit in its header is derived here or on the dashboard.
 
 ## Gather (all read-only — run in parallel where possible)
 
 1. `git branch --show-current`, `git log --oneline -8`, `git status -s`
 2. Open PRs: `/opt/homebrew/bin/gh pr list` and `/opt/homebrew/bin/gh pr status` (skip gracefully if gh is unavailable)
+2b. **Before spending API calls on anything fleet-shaped, check `~/.focalstudio/fleet.json`.**
+   The dashboard agent refreshes it every 3 hours. If its `generated` timestamp is within a
+   few hours, read this repo's entry from it (version, last release, CI, open counts,
+   template currency) instead of re-deriving — it is the same data from the same probes.
+   Re-derive when it is missing or stale, and say which you used. Never present a cached
+   number as live.
 3. Read `STATUS.md` (Now / Next / Blockers)
 4. Read `ROADMAP.md` (the phases + checkboxes)
 5. Read the top of `CHANGELOG.md` — the `[Unreleased]` block and the latest released version

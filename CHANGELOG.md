@@ -26,6 +26,21 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
   is read from the probed fleet data rather than the working tree, so a single-repo run does not
   compare against whatever happens to be checked out.
+- **Status tracking maintained without being asked.** The `Stop` hook used to tell the *user*
+  to run `/wrap`, which moved the forgetting one step along rather than fixing it — the nudge
+  lands at the end of a session, exactly when nobody wants to type another command, so sessions
+  ended unwrapped and `STATUS.md` drifted (it sat at 0.14.0 while `main` was on 0.15.0). It now
+  hands the session the commit subjects and the rules and has it write the update before
+  stopping. Bounded on purpose: only `STATUS.md` and `ROADMAP.md`, a `chore: refresh status`
+  commit on a feature branch and never a push, files left uncommitted on `main`/`dev` because
+  those take changes through a PR, and the change announced in one line rather than made
+  silently. `.claude/CLAUDE.md`'s "do not make secretive changes" gains this as its one named,
+  non-generalising exception.
+- **`STATUS.md` is narrative only.** Version, release age, CI, unreleased commits, roadmap
+  percentage and template currency are derived, and now live on the dashboard and in `/standup`
+  rather than being restated by hand in a header — which is exactly how that header went stale.
+  `/standup` reads `~/.focalstudio/fleet.json` when it is fresh instead of re-deriving from
+  `gh`, and says which source it used.
 - **A fleet dashboard that is current without being asked for.** `fleet-report.sh --html`
   renders the same data `--json` already exposed into one self-contained page
   (`scripts/fleet-html.mjs` — inline CSS, no CDN, no build step, dark mode, readable at phone
