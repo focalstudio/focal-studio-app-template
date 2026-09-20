@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Refreshes the fleet dashboard in the background so it is already current when you
+  look at it. Installed (with the __TOKENS__ below substituted) by
+  scripts/install-fleet-agent.sh — do not copy this file into ~/Library/LaunchAgents
+  by hand, the tokens are not optional.
+
+  StartInterval rather than StartCalendarInterval: the dashboard has no deadline, it
+  just needs to be recent. An interval agent also catches up after the Mac has been
+  asleep, where a calendar entry would simply miss its slot and leave the page stale
+  for a full day — which is the one failure mode that makes a status page untrusted.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.focalstudio.fleet</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/fleet-report.sh</string>
+    <string>--html</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <!-- launchd gives an agent a near-empty PATH: gh, jq and node all live in a
+       package-manager prefix and none would be found without this. __PATH__ is the
+       resolved prefix list at install time, not a guess about where Homebrew is. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <!-- Set only when the agent runs from a relocated copy, which has no .git to
+         derive the org from. Empty otherwise, and fleet-report.sh falls back to
+         `git remote get-url origin` exactly as it does in a terminal. -->
+    <key>ORG</key>
+    <string>__ORG__</string>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>10800</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Last run's output only; this is a diagnostic, not an archive. A failing `gh
+       auth` shows up here rather than as a silently stale page. -->
+  <key>StandardOutPath</key>
+  <string>__HOME__/.focalstudio/fleet.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.focalstudio/fleet.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+  <key>Nice</key>
+  <integer>5</integer>
+</dict>
+</plist>

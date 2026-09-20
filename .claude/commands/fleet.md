@@ -23,6 +23,19 @@ stale inventory to distrust. Useful flags:
 - `--releases N` — last N releases with their notes, when I ask "what shipped recently"
 - `--write` — also drop the report in `.claude/scratch/` (gitignored)
 - `--json` — only when you need to compute something the text output doesn't already say
+- `--html` — render the dashboard instead of the table (see below); prints the path it wrote
+
+## The dashboard is usually the better answer
+
+`~/.focalstudio/fleet.html` is the same data as a page, refreshed every 3 hours by a
+launchd agent (`bash scripts/install-fleet-agent.sh`). It carries what the terminal
+table cannot: a 🔴/🟡/🟢 per repo with the reasons spelled out, and template currency —
+which release each app adopted and whether the template has moved past it.
+
+**If the user asks something the dashboard already answers, say so and point at it**
+rather than spending a minute of API calls reproducing it in the terminal. Run the
+script when they want it in the conversation, when the page is stale, or when they ask
+for something it does not show (release notes, per-repo detail).
 
 If `gh` is unauthenticated the script says so and exits; relay that rather than guessing.
 

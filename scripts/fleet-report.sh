@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: bash scripts/fleet-report.sh [--repo NAME] [--releases N] [--json] [--write] [--all]
+# Usage: bash scripts/fleet-report.sh [--repo NAME] [--releases N] [--json] [--html [--out PATH]] [--write] [--all]
 #
 # One-screen inventory of every repo in the GitHub org this checkout belongs to:
 # what database each app uses, what its last release was, and what is in flight.
@@ -18,6 +18,9 @@
 #   --repo NAME       one repo only
 #   --releases N      show the last N releases with their notes (default 1)
 #   --json            machine-readable; the seam a scheduled/Pages consumer would use
+#   --html            render the same data to a self-contained page and print its path
+#                     (default ~/.focalstudio/fleet.html — outside the repo on purpose)
+#   --out PATH        where --html writes
 #   --write           also write .claude/scratch/fleet-YYYYMMDD-HHMM.md
 #   --all             include archived repos
 #
@@ -31,6 +34,8 @@ set -euo pipefail
 REPO_FILTER=""
 RELEASES=1
 AS_JSON=false
+AS_HTML=false
+HTML_OUT=""
 WRITE=false
 INCLUDE_ARCHIVED=false
 
@@ -39,6 +44,8 @@ while [[ $# -gt 0 ]]; do
     --repo)     REPO_FILTER="$2"; shift 2 ;;
     --releases) RELEASES="$2";    shift 2 ;;
     --json)     AS_JSON=true;     shift ;;
+    --html)     AS_HTML=true;     shift ;;
+    --out)      HTML_OUT="$2";    shift 2 ;;
     --write)    WRITE=true;       shift ;;
     --all)      INCLUDE_ARCHIVED=true; shift ;;
     -h|--help)  sed -n '2,26p' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -362,10 +369,37 @@ fi
 
 FLEET=$(jq -s 'sort_by(.name)' $VALID)
 
+FLEET_JSON=$(jq -n --arg org "$ORG" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson repos "$FLEET" \
+  '{org: $org, generated: $generated, repos: $repos}')
+
 if [[ "$AS_JSON" == "true" ]]; then
-  jq -n --arg org "$ORG" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson repos "$FLEET" \
-    '{org: $org, generated: $generated, repos: $repos}'
+  printf '%s\n' "$FLEET_JSON"
   exit 0
+fi
+
+# --html renders the same JSON through scripts/fleet-html.mjs. Output goes OUTSIDE
+# the repo by default (~/.focalstudio/), not to .claude/scratch/: this template is
+# public and most app repos are private, so keeping fleet output un-committable
+# should be structural rather than one .gitignore edit away from a leak. It also
+# means the file survives `git clean` and can be bookmarked once.
+if [[ "$AS_HTML" == "true" ]]; then
+  command -v node >/dev/null 2>&1 || { echo "Error: node is required for --html." >&2; exit 1; }
+  out="${HTML_OUT:-$HOME/.focalstudio/fleet.html}"
+  mkdir -p "$(dirname "$out")"
+  # Write JSON beside the page: /standup reads it instead of re-deriving from gh,
+  # and it is what a later diff ("what changed since I last looked") would compare.
+  printf '%s\n' "$FLEET_JSON" > "${out%.html}.json"
+  # Render to a temp file and move into place, so a failure part-way through leaves
+  # the previous page intact rather than truncating the one you are about to open.
+  if printf '%s\n' "$FLEET_JSON" | node "$SCRIPT_DIR/fleet-html.mjs" > "$out.tmp"; then
+    mv "$out.tmp" "$out"
+    echo "$out"
+    exit 0
+  else
+    rm -f "$out.tmp"
+    echo "Error: rendering failed; the existing page was left untouched." >&2
+    exit 1
+  fi
 fi
 
 # The template's own current version, for the TEMPLATE column's "behind" marker.
