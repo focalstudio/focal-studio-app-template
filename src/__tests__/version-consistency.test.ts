@@ -8,11 +8,6 @@ import packageJson from "../../package.json";
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
-// The template still carries its placeholders; a generated app does not. Same
-// bootstrap tell app.json gives maestro-e2e.yml's gate and drift-report.sh's
-// direction detection.
-const IS_TEMPLATE = JSON.stringify(appJson).includes("[APP_NAME]");
-
 describe("version consistency", () => {
   it("APP_VERSION in constants.ts matches package.json version", () => {
     expect(APP_VERSION).toBe(packageJson.version);
@@ -52,14 +47,13 @@ describe("TEMPLATE_VERSION", () => {
     expect(raw).toBe(`${raw.trim()}\n`);
   });
 
-  // In the template the file tracks the template's own version, and
-  // scripts/bump-version.sh moves both together. In a generated app the two are
-  // expected to differ — the app is on its own version while TEMPLATE_VERSION
-  // records the template release it last adopted — so this assertion is scoped.
-  (IS_TEMPLATE ? it : it.skip)(
-    "matches package.json version while this is still the template",
-    () => {
-      expect(raw.trim()).toBe(packageJson.version);
-    },
-  );
+  // Deliberately NOT asserted here: that TEMPLATE_VERSION equals
+  // package.json's version. That holds in the template and must NOT hold in a
+  // generated app, where the app is on its own version while TEMPLATE_VERSION
+  // records the template release it last adopted — and this same file runs in
+  // both. Branching on repo state inside the suite was tried and got it wrong
+  // (the branch read as "template" on a freshly bootstrapped checkout, failing
+  // template-smoke-test.yml on correct behaviour). The equality lives in
+  // template-smoke-test.yml instead, which gates on the placeholder in the
+  // shell before init.sh runs and so cannot be confused about which it is.
 });
