@@ -290,8 +290,27 @@ probe_repo() {
 REPOS=$(gh repo list "$ORG" --limit 100 \
   --json name,isPrivate,isArchived,defaultBranchRef 2>/dev/null || true)
 
+# `gh repo list` is a GraphQL org query, which a GitHub App installation token
+# cannot always answer. /installation/repositories is the REST endpoint that token
+# is actually for, and it returns exactly the repos the App is installed on — so
+# CI discovers the fleet without a manifest, same as a human does locally.
 if [[ -z "$REPOS" ]] || ! jq -e 'type == "array"' >/dev/null 2>&1 <<< "$REPOS"; then
-  echo "Error: could not list repos for org '$ORG'. Check 'gh auth status' and org access." >&2
+  REPOS=$(gh api --paginate /installation/repositories \
+    --jq '[.repositories[] | {name: .name, isPrivate: .private, isArchived: .archived,
+                              defaultBranchRef: {name: .default_branch},
+                              owner: .owner.login}]' 2>/dev/null \
+    | jq -s 'add // []' 2>/dev/null || true)
+  # That endpoint spans every org the App is installed on; keep only this one.
+  if [[ -n "$REPOS" ]]; then
+    REPOS=$(jq --arg o "$ORG" '[.[] | select(.owner == $o) | del(.owner)]' <<< "$REPOS" 2>/dev/null || echo "")
+  fi
+fi
+
+if [[ -z "$REPOS" ]] || ! jq -e 'type == "array" and length > 0' >/dev/null 2>&1 <<< "$REPOS"; then
+  echo "Error: could not list repos for org '$ORG'." >&2
+  echo "       Locally: check 'gh auth status' and org access." >&2
+  echo "       In CI: the installation token must come from an App installed on this org" >&2
+  echo "       with 'contents: read'. See .claude/reference/cross-repo-token.md." >&2
   exit 1
 fi
 

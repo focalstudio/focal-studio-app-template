@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+- **Scheduled cross-repo report (`cross-repo-report.yml`)** — runs the drift and fleet reports
+  weekly and writes both to the run summary (#145, #163). Covers the half a local script
+  structurally cannot: a repo nobody is editing, in a week nobody thought to look. It reports
+  and never writes to another repo, and skips cleanly where the org App is not configured.
+
 ### Fixed
 - **A `local-first` app that ships analytics generated a privacy policy that contradicted
   itself.** Section 2 asserted the data "never leaves your device and is never transmitted to us
@@ -19,6 +25,19 @@ Versioning: [Semantic Versioning](https://semver.org/)
   for one signal or both. An app collecting neither is unaffected and still gets the absolute
   wording, which for it is true. Found while giving tick a privacy config — the template itself
   can never hit this, because it always skips at the bootstrap gate.
+- **`drift-report.sh` could not clone private repos from CI.** `sync_clone` cloned anonymously
+  over HTTPS, relying on the ambient git credential helper — which exists on a dev machine and
+  not in Actions. It now embeds `GH_TOKEN` in the clone URL when one is set, and repoints a
+  cached clone's remote on fetch so an expired token in a stale URL does not wedge it.
+- **`fleet-report.sh` could not discover repos from CI.** `gh repo list` is a GraphQL org query
+  that a GitHub App installation token cannot always answer. It now falls back to
+  `/installation/repositories`, the REST endpoint that token is for, so CI finds the fleet with
+  no manifest — same as a human does locally.
+- **A limited-scope app was told to take `/fleet` without the script it calls.**
+  `.claude/commands/*.md` is in `limitedScope` but `scripts/*` is full-scope only, so the drift
+  report would name `fleet.md` as missing from WildFocus and vestia while `fleet-report.sh`
+  stayed invisible. Both repo-agnostic scripts are now in `limitedScope` alongside the commands
+  that invoke them.
 
 ---
 
