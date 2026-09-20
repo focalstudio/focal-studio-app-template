@@ -87,7 +87,18 @@ trap 'rm -rf "$TMP"' EXIT
 # Every probe is allowed to fail. A 404 is information (no releases yet, no
 # ROADMAP.md), not an error, so the caller gets an empty string and decides.
 _api() { gh api "$1" 2>/dev/null || true; }
-_raw() { gh api "$1" -H "Accept: application/vnd.github.raw" 2>/dev/null || true; }
+# On a 404 gh prints the JSON error body to STDOUT and the human message to stderr,
+# so `|| true` alone hands the caller {"message":"Not Found",...} as if it were file
+# content. That body is valid JSON, so it survived the package.json parse check and
+# every repo without a package.json was read from an error document — which is how
+# the Pages site reported a Node stack instead of being a static site. Swallow the
+# body when the request failed, so absent reads as absent.
+_raw() {
+  local body status
+  body=$(gh api "$1" -H "Accept: application/vnd.github.raw" 2>/dev/null); status=$?
+  [[ $status -ne 0 ]] && return 0
+  printf '%s' "$body"
+}
 
 # Days since an ISO-8601 timestamp. BSD date on macOS, GNU date in CI.
 _days_since() {
@@ -122,11 +133,40 @@ probe_repo() {
   local pkg deps version expo rn react
   pkg=$(_raw "repos/$ORG/$name/contents/package.json")
   if ! jq -e . >/dev/null 2>&1 <<< "$pkg"; then pkg='{}'; fi
-  deps=$(jq -r '[(.dependencies // {}) | keys[]] | join(" ")' <<< "$pkg")
+  # devDependencies too: vite and vitest live there, and a build tool is as much a
+  # part of "what is this repo" as a runtime dependency.
+  deps=$(jq -r '[((.dependencies // {}) + (.devDependencies // {})) | keys[]] | join(" ")' <<< "$pkg")
   version=$(jq -r '.version // ""' <<< "$pkg")
   expo=$(jq -r '.dependencies.expo // ""' <<< "$pkg")
   rn=$(jq -r '.dependencies["react-native"] // ""' <<< "$pkg")
   react=$(jq -r '.dependencies.react // ""' <<< "$pkg")
+
+  # ── Framework ───────────────────────────────────────────────────────────────
+  # An "Expo version" column reads as blank for every repo that is not Expo, which
+  # is how WildFocus (Capacitor + Vite) and the Pages site showed up as having no
+  # stack at all. The question is really "what is this repo built with", so the
+  # answer is a name and a version, and the dashboard compares versions only within
+  # a framework — an Expo app being on a different major than a Vite app is not drift.
+  _dep_ver() { jq -r --arg k "$1" '((.dependencies // {}) + (.devDependencies // {}))[$k] // ""' <<< "$pkg"; }
+  local fw_name="" fw_version="" fw_secondary=""
+  if [[ -n "$expo" ]]; then
+    fw_name="Expo";      fw_version="$expo"
+    [[ -n "$rn" ]] && fw_secondary="React Native $rn"
+  elif [[ -n "$(_dep_ver '@capacitor/core')" ]]; then
+    fw_name="Capacitor"; fw_version="$(_dep_ver '@capacitor/core')"
+    [[ -n "$(_dep_ver vite)" ]] && fw_secondary="Vite $(_dep_ver vite)"
+  elif [[ -n "$(_dep_ver next)" ]]; then
+    fw_name="Next.js";   fw_version="$(_dep_ver next)"
+  elif [[ -n "$(_dep_ver vite)" ]]; then
+    fw_name="Vite";      fw_version="$(_dep_ver vite)"
+    [[ -n "$react" ]] && fw_secondary="React $react"
+  elif [[ "$pkg" == "{}" ]]; then
+    # No package.json at all. For the Pages repo that is the correct answer rather
+    # than a gap: it is hand-written HTML with no build step.
+    fw_name="static";    fw_version=""
+  else
+    fw_name="Node";      fw_version=""
+  fi
 
   _has_dep() { grep -qE "(^| )$1( |$)" <<< "$deps"; }
 
@@ -264,6 +304,7 @@ probe_repo() {
     --arg paywall "$paywall" --arg paywall_ev "$paywall_ev" \
     --arg analytics "$analytics" --arg analytics_ev "$analytics_ev" \
     --arg expo "$expo" --arg rn "$rn" --arg react "$react" \
+    --arg fw_name "$fw_name" --arg fw_version "$fw_version" --arg fw_secondary "$fw_secondary" \
     --arg tag "$tag" --arg pub "$pub" --arg age "$age" \
     --arg unreleased "$unreleased" --arg notes "$notes" --argjson releases "$rel_list" \
     --arg dev_ahead "$dev_ahead" --arg dev_behind "$dev_behind" \
@@ -283,6 +324,11 @@ probe_repo() {
       paywall:   { verdict: $paywall,   evidence: $paywall_ev },
       analytics: { verdict: $analytics, evidence: $analytics_ev },
       stack: { expo: $expo, react_native: $rn, react: $react },
+      framework: {
+        name:      (if $fw_name == "" then null else $fw_name end),
+        version:   (if $fw_version == "" then null else $fw_version end),
+        secondary: (if $fw_secondary == "" then null else $fw_secondary end)
+      },
       release: {
         tag: (if $tag == "" then null else $tag end),
         published: (if $pub == "" then null else ($pub | split("T")[0]) end),

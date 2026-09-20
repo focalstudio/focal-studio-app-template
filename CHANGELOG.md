@@ -41,6 +41,24 @@ Versioning: [Semantic Versioning](https://semver.org/)
   rather than being restated by hand in a header — which is exactly how that header went stale.
   `/standup` reads `~/.focalstudio/fleet.json` when it is fresh instead of re-deriving from
   `gh`, and says which source it used.
+- **The dashboard reports what each repo is built with, not just its Expo version.** An
+  Expo-only column rendered blank for everything that is not Expo, so WildFocus (Capacitor 8.3
+  + Vite 7.2) and the Pages site appeared to have no stack at all. A `framework` probe now
+  reports a name, a version and a secondary (Expo/React Native, Capacitor/Vite, Next.js, Vite,
+  static, Node), and version-outlier detection compares **only within a framework** — an Expo
+  app on a different major than a Vite app is not drift.
+- **Fixed: `_raw` handed callers GitHub's 404 error body as if it were file content.** On a
+  missing file `gh` prints `{"message":"Not Found",...}` to stdout, which is valid JSON, so it
+  survived the `package.json` parse check — every repo without a `package.json` was read from an
+  error document. That is how the Pages site reported a Node stack. Absent now reads as absent,
+  which also fixes `version` and the dependency-inferred verdicts for such repos.
+- **Dashboard redesign.** "Needs a look" is grouped per repo rather than repeating the name on
+  every line, each reason still carrying its own severity. Added fleet summary tiles, three
+  hand-rolled inline-SVG charts (release recency, unmerged work on `dev`, and framework/version
+  distribution — the last making the outlier visible inside its own band rather than against a
+  different stack), an *In flight* section using the previously unused `open.pr_titles`, and a
+  *Last shipped* grid using `release.notes`. Still self-contained: no CDN, no webfonts, one
+  inline script for the theme toggle.
 - **A fleet dashboard that is current without being asked for.** `fleet-report.sh --html`
   renders the same data `--json` already exposed into one self-contained page
   (`scripts/fleet-html.mjs` — inline CSS, no CDN, no build step, dark mode, readable at phone
