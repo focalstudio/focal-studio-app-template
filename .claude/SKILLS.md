@@ -10,17 +10,21 @@ The table below lists what an agent *may* load. The agent's own `.md` holds the 
 
 ## Agent → skills matrix
 
-| Agent | Always | Conditional |
-|---|---|---|
-| `ios-frontend` | — | `frontend_design`, `ui-ux-pro-max`, `rn-building-ui` (new screen / restyle) · `rn-react-native`, `rn-react-best-practices` (perf) · `rn-composition-patterns` (component API) · `design-for-ai` (unspecced design calls) · `design-review` (new or restructured screen) |
-| `backend-integrator` | `expo-services` | `react-native-expert` (native module) · `rn-data-fetching` (network) · `typescript-pro` (non-obvious types) · `claude-api` (Anthropic SDK) |
-| `test-engineer` | — | `react-native-expert` (native-module mock failures only) |
-| `release-manager` | `parallel-release` | `commit`, `commit-push-pr`, `review`, `verify` |
-| `aso-marketing` | `aso-rules` | `ralph-copywriter` (full descriptions / voice shift) · `web-asset-generator` (OG images) |
-| `qa-reviewer` | `review`, `security-review` | `tob-differential-review` (>~200 lines or >5 files) · `tob-insecure-defaults` (auth/storage/network/config) · `tob-supply-chain-risk-auditor` (`package.json` changed) · `simplify` (new module/abstraction) |
-| `devops-agent` | `tob-supply-chain-risk-auditor`, `tob-insecure-defaults` | `react-native-expert`, `expo-services` (RN/Expo-ecosystem packages) |
+**Each agent's own `.md` holds its routing conditions and is authoritative.** A central copy of
+that table was maintained here and went out of date the moment an agent changed — so this is an
+index of where to look, not a second source of truth.
 
-`test-engineer` deliberately loads nothing by default — the harness conventions live in [`docs/testing.md`](../docs/testing.md), which it reads directly.
+| Agent | Skills it may load |
+|---|---|
+| `ios-frontend` | `frontend_design`, `ui-ux-pro-max`, `rn-building-ui`, `rn-react-native`, `rn-react-best-practices`, `rn-composition-patterns`, `design-for-ai`, `design-review` |
+| `backend-integrator` | `expo-services` (always), `react-native-expert`, `rn-data-fetching`, `typescript-pro`, `claude-api` |
+| `qa-reviewer` | `review` + `security-review` (always), `tob-differential-review`, `tob-insecure-defaults`, `tob-supply-chain-risk-auditor`, `simplify` |
+| `devops-agent` | `tob-supply-chain-risk-auditor` + `tob-insecure-defaults` (always), `react-native-expert`, `expo-services` |
+| `release-manager` | `parallel-release` (first), `commit`, `commit-push-pr`, `review`, `verify` |
+| `aso-marketing` | `aso-rules` (always), `ralph-copywriter`, `web-asset-generator` |
+| `app-bootstrapper` | `ralph-copywriter`, `aso-rules` |
+| `test-engineer` | none by default; `react-native-expert` on a native-module test failure |
+
 
 ## Picking among overlapping skills
 

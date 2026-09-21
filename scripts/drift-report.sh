@@ -22,6 +22,7 @@
 #   --path GLOB       restrict to shared paths matching GLOB
 #   --diff            print full diffs for content drift, not just the file list
 #   --no-fetch        use the cached clones as-is; no network for the app side
+#   --clean           delete the cached clones and exit (they reach hundreds of MB)
 #
 # Exit status is 0 whether or not drift was found. This is a report, not a gate. A
 # gate on a boundary this soft gets switched off within a week, and the whole point
@@ -33,6 +34,7 @@ APP_FILTER=""
 PATH_FILTER=""
 SHOW_DIFF=false
 FETCH=true
+DO_CLEAN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --path)      PATH_FILTER="$2"; shift 2 ;;
     --diff)      SHOW_DIFF=true;   shift ;;
     --no-fetch)  FETCH=false;      shift ;;
+    --clean)     DO_CLEAN=true;    shift ;;
     -h|--help)   sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -49,6 +52,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$ROOT/.github/shared-paths.json"
 CACHE="$ROOT/.claude/scratch/drift"
+
+# --clean: the cache holds a full working copy of every app compared, which reaches
+# hundreds of megabytes inside the project tree. It is gitignored so it costs nothing
+# in review, but it does make a project-wide grep or glob return every match twice —
+# once from this repo and once from a sibling's copy of the same shared file.
+if [[ "$DO_CLEAN" == "true" ]]; then
+  if [[ -d "$CACHE" ]]; then
+    echo "Removing the drift cache at $CACHE"
+    du -sh "$CACHE" 2>/dev/null | sed 's/^/  /'
+    rm -rf "$CACHE"
+    echo "Done. The next run re-clones what it needs."
+  else
+    echo "No cache at $CACHE — nothing to remove."
+  fi
+  exit 0
+fi
 
 for dep in jq git; do
   command -v "$dep" >/dev/null 2>&1 || { echo "Error: $dep is required." >&2; exit 1; }
