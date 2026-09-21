@@ -10,6 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+
+## [0.16.0] — 2026-09-21
+
+### Added
+- **`cross-repo-report.yml` reaches `main` for the first time**, which is what lets the weekly
+  scheduled drift + fleet report actually run: scheduled workflows only run from a repo's default
+  branch (#161). It runs the drift and fleet reports weekly and writes both to the run summary
+  (#145, #163) — covering the half a local script structurally cannot, a repo nobody is editing
+  in a week nobody thought to look. It reports and never writes to another repo, and skips
+  cleanly where the org App is not configured.
 - **`TEMPLATE_VERSION` records which template release an app is on.** Nothing recorded it before,
   so "which apps are behind?" meant diffing every shared file, and `drift-report.sh` derived its
   fork point by grepping commit subjects for `from focal-studio-app-template` and taking that
@@ -92,11 +102,6 @@ Versioning: [Semantic Versioning](https://semver.org/)
   because the first run disproved the assumption it was listed under — tick correctly adds a
   88pt `FontSize.clock` and sub-regular weights on top of the shared scale. The first run also
   found MealCart missing `clearByPrefix` from `storage.ts`, the account-deletion purge helper.
-- **Scheduled cross-repo report (`cross-repo-report.yml`)** — runs the drift and fleet reports
-  weekly and writes both to the run summary (#145, #163). Covers the half a local script
-  structurally cannot: a repo nobody is editing, in a week nobody thought to look. It reports
-  and never writes to another repo, and skips cleanly where the org App is not configured.
-
 - **The always-loaded instructions are a quarter smaller.** `.claude/CLAUDE.md`, `AGENTS.md` and
   `.claude/SKILLS.md` enter every session, and roughly a fifth of them restated each other. Five
   sections moved into `.claude/reference/` behind pointers, continuing the split those files
