@@ -98,7 +98,24 @@ human reading a diff does. See the cross-repo propagation section of `.claude/CL
 
 ## Provisioning and rotation
 
-Creating the App is a browser flow — there is no API for it.
+```bash
+bash scripts/provision-cross-repo-app.sh
+```
+
+Creating the App is **not** a browser-only chore. GitHub's [App Manifest flow] takes the name,
+permissions and webhook settings as a POSTed document and returns the App ID and private key over
+the API, so the script declares all of it up front and reduces what you do by hand to two consent
+clicks: *Create GitHub App* on a page it pre-fills, and *Install* on the org. It then sets both org
+secrets itself. The key is never printed, never written inside the repo, and is shredded on exit.
+
+[App Manifest flow]: https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest
+
+It re-runs safely: if both secrets already exist it says so and stops, rather than leaving two
+identically-named Apps and one live secret pair. `--dry-run` prints the manifest and the URLs
+without creating anything. It does **not** rotate — see below.
+
+The manual steps it replaces, kept as the fallback for when the script cannot run (no `python3`, a
+locked-down browser, or an org whose settings differ):
 
 1. `https://github.com/organizations/focalstudio/settings/apps/new`
 2. Name `Focal Studio Cross-Repo Bot`; homepage the template repo; untick **Webhook → Active**.
