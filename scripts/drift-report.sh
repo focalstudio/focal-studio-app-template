@@ -22,6 +22,7 @@
 #   --path GLOB       restrict to shared paths matching GLOB
 #   --diff            print full diffs for content drift, not just the file list
 #   --no-fetch        use the cached clones as-is; no network for the app side
+#   --clean           delete the cached clones and exit (they reach hundreds of MB)
 #
 # Exit status is 0 whether or not drift was found. This is a report, not a gate. A
 # gate on a boundary this soft gets switched off within a week, and the whole point
@@ -33,6 +34,7 @@ APP_FILTER=""
 PATH_FILTER=""
 SHOW_DIFF=false
 FETCH=true
+DO_CLEAN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --path)      PATH_FILTER="$2"; shift 2 ;;
     --diff)      SHOW_DIFF=true;   shift ;;
     --no-fetch)  FETCH=false;      shift ;;
+    --clean)     DO_CLEAN=true;    shift ;;
     -h|--help)   sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -49,6 +52,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$ROOT/.github/shared-paths.json"
 CACHE="$ROOT/.claude/scratch/drift"
+
+# --clean: the cache holds a full working copy of every app compared, which reaches
+# hundreds of megabytes inside the project tree. It is gitignored so it costs nothing
+# in review, but it does make a project-wide grep or glob return every match twice —
+# once from this repo and once from a sibling's copy of the same shared file.
+if [[ "$DO_CLEAN" == "true" ]]; then
+  if [[ -d "$CACHE" ]]; then
+    echo "Removing the drift cache at $CACHE"
+    du -sh "$CACHE" 2>/dev/null | sed 's/^/  /'
+    rm -rf "$CACHE"
+    echo "Done. The next run re-clones what it needs."
+  else
+    echo "No cache at $CACHE — nothing to remove."
+  fi
+  exit 0
+fi
 
 for dep in jq git; do
   command -v "$dep" >/dev/null 2>&1 || { echo "Error: $dep is required." >&2; exit 1; }
@@ -189,10 +208,30 @@ norm_right() { if [[ "$DIRECTION" == "template" ]]; then normalise_app "$1";    
 # ── Clone cache ──────────────────────────────────────────────────────────────
 # .claude/scratch/ is already gitignored. Clones are reused rather than recreated,
 # which keeps repeat runs quick and means this script never has to delete anything.
+# Locally this clones anonymously and lets the ambient git credential helper (gh's,
+# on a dev machine) handle private repos. In CI there is no helper, so GH_TOKEN —
+# an installation token from the org App — is embedded in the URL instead. The
+# token is masked by Actions, but keep it out of `set -x` range regardless.
+_clone_url() {
+  local repo="$1"
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    echo "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git"
+  else
+    echo "https://github.com/${repo}.git"
+  fi
+}
+
+# want_tags: only the UPSTREAM clone needs them. TEMPLATE_VERSION resolves against
+# the template's release tags, and those tags point at commits on `main` — which a
+# `--single-branch --branch dev` clone does not fetch. A separate --depth 1 refspec
+# gets the tag objects and their tips, which is all `log -1 <tag>` needs, without
+# pulling main's history. Best-effort: without it the fork point falls back to the
+# bootstrap-commit grep, which is the behaviour that existed before.
 sync_clone() {
-  local repo="$1" branch="$2" dir="$3"
+  local repo="$1" branch="$2" dir="$3" want_tags="${4:-false}"
   if [[ -d "$dir/.git" ]]; then
     if [[ "$FETCH" == "true" ]]; then
+      [[ -n "${GH_TOKEN:-}" ]] && git -C "$dir" remote set-url origin "$(_clone_url "$repo")" 2>/dev/null
       git -C "$dir" fetch --quiet --depth 500 origin "$branch" 2>/dev/null || return 1
       git -C "$dir" reset --quiet --hard "origin/$branch" 2>/dev/null || return 1
       # `reset --hard` leaves untracked files behind, and a stray file in the cache
@@ -203,7 +242,10 @@ sync_clone() {
   else
     mkdir -p "$(dirname "$dir")"
     git clone --quiet --filter=blob:none --depth 500 --single-branch \
-      --branch "$branch" "https://github.com/${repo}.git" "$dir" 2>/dev/null || return 1
+      --branch "$branch" "$(_clone_url "$repo")" "$dir" 2>/dev/null || return 1
+  fi
+  if [[ "$want_tags" == "true" ]]; then
+    git -C "$dir" fetch --quiet --depth 1 origin 'refs/tags/*:refs/tags/*' 2>/dev/null || true
   fi
   return 0
 }
@@ -251,11 +293,30 @@ compare() {
   # Per app, not per file: the placeholder rendering above needs the app's identity,
   # and app_dir is already the side that has one.
   load_identity "$app_dir"
+  # Preferred: TEMPLATE_VERSION, the template release this app last adopted. It is
+  # an explicit statement rather than an inference, it survives a squashed or
+  # reworded history, and it moves forward as the app adopts later releases —
+  # where the bootstrap commit is frozen at day one and over-reports for ever after.
+  # Resolved against the TEMPLATE's tag dates, which is the side that has the tags.
+  local adopted
+  # `cat` rather than `< file`: a redirection on a missing file is reported by the
+  # shell itself, before tr runs, so `2>/dev/null` on the command would not catch it
+  # — and every app that predates this file would print an error into the report.
+  adopted=$(cat "$app_dir/TEMPLATE_VERSION" 2>/dev/null | tr -d '[:space:]' || true)
+  if [[ "$adopted" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # The template checkout is whichever side is not the app.
+    local tmpl_dir
+    if [[ "$DIRECTION" == "template" ]]; then tmpl_dir="$ROOT"; else tmpl_dir="$right_dir"; fi
+    bootstrap_date=$(git -C "$tmpl_dir" log -1 --format='%aI' "v${adopted}" 2>/dev/null || true)
+  fi
+
   # `|| true` on both: a repo that predates init.sh (WildFocus, vestia — transferred
   # in rather than generated) has no such commit, and under `set -o pipefail` the
   # empty grep would take the whole run down before the later apps are reached.
-  bootstrap_date=$(git -C "$app_dir" log --format='%aI%x09%s' 2>/dev/null \
-    | grep -i 'from focal-studio-app-template' | tail -1 | cut -f1 || true)
+  if [[ -z "$bootstrap_date" ]]; then
+    bootstrap_date=$(git -C "$app_dir" log --format='%aI%x09%s' 2>/dev/null \
+      | grep -i 'from focal-studio-app-template' | tail -1 | cut -f1 || true)
+  fi
   if [[ -z "$bootstrap_date" ]]; then
     # Pre-init.sh app, or history deeper than the clone. Fall back to the oldest
     # commit we actually have, which over-reports rather than hiding anything.
@@ -425,7 +486,7 @@ else
   echo "Drift report — this app vs the template ($UPSTREAM)"
   echo "Manifest: .github/shared-paths.json"
   dir="$CACHE/template"
-  if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir"; then
+  if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir" true; then
     echo "  ⚠️  Could not fetch $UPSTREAM@$UPSTREAM_BRANCH."
     exit 0
   fi

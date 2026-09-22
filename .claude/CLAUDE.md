@@ -62,12 +62,20 @@ If a branch already exists for the task, use that branch instead of creating a s
 ## Session workflow
 Two slash commands bracket every work session (defined in [.claude/commands/](commands/)):
 
-- **`/standup`** — run at the **start of a session**, or any time I ask "where are we / what's the status". A read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files.
-- **`/wrap`** — run at the **end of a session**, before stopping. Refreshes `STATUS.md` and `ROADMAP.md` so the next `/standup` is accurate.
+- **`/standup`** — a read-only, git-derived one-screen briefing with live roadmap progress bars. Never edits files. Reads the dashboard's cached JSON (`~/.focalstudio/fleet.json`) where it is fresh, rather than re-deriving everything from `gh`.
+- **`/wrap`** — refreshes `STATUS.md` and `ROADMAP.md`. **You should not need to run this**: the `Stop` hook makes the session do it unprompted (below). It remains as a command for when you want the update mid-session.
 
 A third, **`/fleet`**, zooms out to every repo in the org rather than this one — database, last release, unreleased commits, CI, open work and roadmap bar per repo. `/standup` is one repo deep; `/fleet` is every repo shallow. Use it when picking up work after a gap, before a release, or when asked "what's the state of everything".
 
-`/wrap` is **enforced, not advisory**. `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping with a nudge to run `/wrap`. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn. The hook exists because "run `/wrap` at the end" as plain instruction text is something a session reliably forgets.
+**Status upkeep is automatic, not a ritual.** `.claude/hooks/wrap-reminder.sh` runs on the `Stop` hook (wired in `.claude/settings.json`): if the branch has commits that post-date the last `STATUS.md` commit, it blocks the session from stopping and instructs it to do the update itself. It fires at most once per session — a session-scoped marker in `/tmp` keyed on `session_id` stops it nagging every turn.
+
+The hook used to tell the *user* to run `/wrap`. That moved the forgetting one step along rather than fixing it: the nudge lands at the end of a session, exactly when nobody wants to type another command, so sessions ended unwrapped anyway. It now hands over the commit subjects and the rules, and the session writes the update before stopping.
+
+Its scope is deliberately narrow, because it is the one place work happens without being asked for:
+
+- **Only `STATUS.md` and `ROADMAP.md`.** Nothing else is touched or staged.
+- **It commits on a feature branch, with `chore: refresh status`, and never pushes.** On `main` or `dev` it updates the files and leaves them in the working tree — those branches take changes through a PR, and a hook is not a PR.
+- **It is announced.** The session says in one line what it changed, so the write is visible rather than silent. This is what keeps it compatible with "do not make secretive changes" rather than an exception to it.
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.
 
@@ -98,33 +106,13 @@ A scheduled cross-repo version of the report is **unblocked but not yet built**.
 **Any workflow writing to another repo opens a PR — never commits, never merges.** Same reason the drift report reports rather than applies: the receiving copy may be deliberately better. `publish-privacy.yml` is the reference implementation.
 
 ## Release workflow
-When the user says to cut a release:
 
-1. Create `release/x.x.x` off `dev`.
-2. Run `bash scripts/bump-version.sh x.x.x` — updates `package.json` and `app.json` version in one step. **`src/constants.ts` needs no edit**: `APP_VERSION` and `DEV_MODE_KEY` are derived from `package.json`, so they track the bump automatically. The script deliberately does not touch it.
-3. Move `## [Unreleased]` in `CHANGELOG.md` to `## [x.x.x] — YYYY-MM-DD`; add a fresh empty `## [Unreleased]` section above it.
-4. **Pre-emptive code review**: before opening the PR, review every file changed since `dev`. For each changed TypeScript and React file, check for: broken async contracts, state not reset on all exit paths, missing guards in async callbacks, resource cleanup gaps (notifications, timers), timing races, and type contract mismatches. Fix all real bugs found before opening the PR. This prevents cascading review rounds from CI.
-5. **Sync with main before opening the PR**: run `git fetch origin main && git merge origin/main` on the release branch. Conflicts, if any, will only be version strings; keep ours. This prevents GitHub rejecting the PR with a merge conflict.
-6. Open a PR: `release/x.x.x` → `main`.
-7. The `release.yml` GitHub Actions workflow automatically creates tag `vx.x.x` and publishes a GitHub Release on merge — no manual tagging needed.
-8. **Immediately after step 6** (do not wait for main merge), open a second PR: `release/x.x.x` → `dev` (to keep dev in sync).
-   > **Critical**: when merging the `release/x.x.x` → `main` PR via `gh pr merge`, **never use `--delete-branch`**. Deleting the head branch auto-closes the backmerge PR. Use `gh pr merge NNN --merge` only. Delete the release branch manually after both PRs are merged.
-9. Follow the **Apple App Store checklist** in [.claude/reference/store-submission.md](reference/store-submission.md) for the iOS upload.
-10. Follow the **Google Play checklist** in the same file for the Android upload — `release.yml` calls `android-release.yml` automatically as part of the same run right after creating the `vx.x.x` tag in step 7, but Play Console review steps are still manual.
-11. Verify dev mode is off on device before store submission.
+Cut from `dev` into `release/x.x.x`, bump with `bash scripts/bump-version.sh x.x.x`, move `## [Unreleased]` in `CHANGELOG.md`, review every changed file before opening the PR, sync with `main`, then open **two** PRs: `release/x.x.x` → `main` and `release/x.x.x` → `dev`. `release.yml` tags and publishes on merge; it also chains the Android build.
 
-## Automated release workflow
-`.github/workflows/release.yml` triggers on every push to `main`. It:
-1. Reads the version from `package.json`.
-2. Checks whether tag `vVERSION` already exists (skips all steps if it does — safe to re-run).
-3. Extracts the matching `## [VERSION]` section from `CHANGELOG.md` as release notes.
-4. Creates and pushes an annotated git tag `vVERSION`.
-5. Creates a GitHub Release with the extracted release notes.
-6. If (and only if) a new tag was actually created in this run, calls `.github/workflows/android-release.yml` as a reusable workflow (`uses:` + `secrets: inherit`) in a dependent job — no PAT or extra secret needed, since a `push: tags:` trigger would never fire for a tag pushed with the default `GITHUB_TOKEN`.
+> **Never `gh pr merge --delete-branch` on the release → main PR** — deleting the head branch auto-closes the backmerge PR.
 
-`.github/workflows/android-release.yml` itself has no tag trigger — it's `workflow_call` (invoked by `release.yml` above) plus `workflow_dispatch` for manual reruns (e.g. re-submitting after fixing something in Play Console). It runs `eas build --platform android --profile production` then `eas submit --platform android --profile production --latest` against the `internal` Play track. Requires the one-time keystore + service-account setup in [KEYSTORE.md](../KEYSTORE.md) — it will no-op with a clear message if the app hasn't been bootstrapped yet, but will fail if bootstrapped and the setup hasn't been done.
+Full step-by-step, what `release.yml` and `android-release.yml` each do, and the store checklists: [.claude/reference/release-workflow.md](reference/release-workflow.md) and the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`), which is authoritative for a simultaneous iOS + Android release.
 
-> **For the full simultaneous iOS + Android release procedure — recurring flow, the one-time Android bootstrap, what's automated vs manual, and verification — use the [`parallel-release`](skills/parallel-release/SKILL.md) skill (`/parallel-release`).** The checklists below are the per-store manual tails of that procedure.
 
 ## Store submission checklists
 
@@ -147,37 +135,12 @@ First-ever Android release for a newly bootstrapped app also needs the one-time 
 
 ## Parallel sessions: use a worktree, never a shared checkout
 
-If more than one Claude Code session (or a session running alongside your own manual work)
-will touch this repo at the same time, **each one gets its own `git worktree`, never the same
-checkout.** Two sessions sharing one working directory can silently step on each other:
+If more than one session (or a session alongside your own manual work) will touch this repo at the same time, **each gets its own `git worktree`**. Two sessions sharing one checkout silently step on each other: a `git checkout` in one moves the other's `HEAD`, and commits land on the wrong branch. Both of the failures this rule exists for happened here, in one session.
 
-- `git checkout <branch>` in one session moves the *other* session's `HEAD` out from under it.
-  A commit made right after looks like it landed on the branch you intended — it actually lands
-  on whatever the other session most recently checked out.
-- A PR left conflicting against its base (from either session's changes) makes GitHub silently
-  skip **every `pull_request`-triggered workflow** for that PR — `mergeable` flips to
-  `CONFLICTING`, and CI shows green only because the one check still reporting is a
-  `push`-triggered one. It reads as "tests pass" when most of the suite never ran.
+If a branch or `HEAD` moves unexpectedly mid-session, stop and check `git reflog` before doing anything else.
 
-Both of the above happened in the same session on this repo and cost real time to untangle —
-this rule exists because of that, not hypothetically.
+Setup commands and the CI-goes-green-while-most-of-it-never-ran hazard: [.claude/reference/worktrees.md](reference/worktrees.md).
 
-**To set up a worktree:**
-
-```bash
-git worktree add ../focal-studio-app-template-<branch> -b <branch> origin/dev
-cd ../focal-studio-app-template-<branch>
-npm ci --legacy-peer-deps   # each worktree has its own node_modules
-```
-
-Each worktree is a full separate directory with its own `HEAD`, so parallel sessions can
-`git checkout`, commit, and push independently with no shared mutable state. Remove it once its
-branch is merged: `git worktree remove ../focal-studio-app-template-<branch>` from the main
-checkout (after `cd` back out of it).
-
-If you notice mid-session that another session's branch or `HEAD` has moved unexpectedly, stop
-and check `git reflog` before taking any further action — don't assume the working directory
-still reflects what you last left it in.
 
 ## Expo Router navigation patterns
 - Every screen is a file in `app/`. To add a new screen: create `app/new-screen.tsx`.
@@ -349,144 +312,49 @@ Store metadata is version-controlled in `store-listing/ios-appstore-listing.md` 
 
 ## Permission model
 
-This repo ships a **three-layer permission system** so Claude can work autonomously without prompts for routine operations, while hard-blocking genuinely destructive commands.
+Three layers: project-shared `.claude/settings.json` (tracked, travels to every generated app), project-personal `.claude/settings.local.json` (gitignored), and global `~/.claude/settings.json`. Safe dev operations are allowlisted so routine work runs unprompted.
 
-### Layer 1 — Project shared (`.claude/settings.json`, tracked)
-Committed to git → propagates automatically to every repo cloned from this template. Contains:
-- **Allowlist:** all safe dev operations (git workflow, npm project-scoped, expo, gh CLI, shell utilities, WebFetch to dev domains)
-- **Denylist (always blocked, no override):**
-  - `git push --force` / `git push -f` — no remote history rewrites
-  - `git push origin main` — no direct push to main; always via PR
-  - `rm -rf` / `rm -r` — no recursive deletes
-  - `sudo` — no privilege escalation
-- **Hooks:** a `Stop` hook running `.claude/hooks/wrap-reminder.sh` — blocks a session from stopping with unwrapped commits (see "Session workflow" above). Requires `jq`; no-ops silently if it's absent.
+**Always blocked, no override:** `git push --force`, `git push origin main`, `rm -rf` / `rm -r`, `sudo`.
 
-### Layer 2 — Project personal (`.claude/settings.local.json`, gitignored)
-Your machine-specific overrides. Copy `.claude/settings.local.json.template` to `.claude/settings.local.json` to activate. Use this to add permissions that are personal (e.g., custom Homebrew paths) or that you explicitly trust `devops-agent` to use autonomously (e.g., `brew install`, `npm install -g`).
+A command in neither list **prompts** — that is deliberate for `brew install`, `pip install` and `npm install -g`. Layer detail and how to grant something to `devops-agent`: [.claude/reference/permissions.md](reference/permissions.md).
 
-### Layer 3 — Global (`~/.claude/settings.json`, user home)
-Applies to all projects. Lowest specificity — project settings take precedence.
-
-### What "neither allow nor deny" means
-If a command is not in the allowlist AND not in the denylist, Claude Code **prompts the user**. This is intentional for extended operations like `brew install`, `pip install`, and `npm install -g` — they prompt, which gives the user a second confirmation after the devops-agent's risk report.
-
----
 
 ## Dependency Gate
 
-Every task that requires new npm packages goes through the **Dependency Gate** before any code is written. This keeps the user in control of what enters the project and ensures the coding workflow runs uninterrupted after approval.
+Every task needing new npm packages goes through `devops-agent` **before any code is written**: it assesses supply-chain risk, surfaces a report, you approve, it installs and returns an `INSTALLATION_RECEIPT`. Coding subagents are then spawned with the receipt attached.
 
-### Orchestrator pre-flight checklist
+A subagent that discovers an unexpected package need mid-run **stops** and returns a `PACKAGES_NEEDED` block with `STATUS: awaiting_approval` rather than installing anything.
 
-When the user's request implies new packages:
+Full checklist, the `PACKAGES_NEEDED` format and the invocation modes: [.claude/reference/dependency-gate.md](reference/dependency-gate.md). `devops-agent` is never auto-spawned for non-package tasks, and it never spawns other agents.
 
-1. Identify the packages needed (check `package.json` — only flag what's missing).
-2. Spawn `devops-agent` in pre-flight mode with the package list.
-3. `devops-agent` assesses risk and surfaces a report to the user.
-4. User approves / rejects / substitutes.
-5. `devops-agent` installs approved packages and returns an `INSTALLATION_RECEIPT`.
-6. Spawn the coding subagent(s) with the receipt attached: "Pre-approved packages: X, Y, Z (installed)."
-
-### Mid-run discovery
-
-If a coding subagent discovers an unexpected package need mid-run:
-
-1. The subagent **stops** and returns a `PACKAGES_NEEDED` block + `STATUS: awaiting_approval`.
-2. The orchestrator forwards to `devops-agent`.
-3. After the receipt, the orchestrator resumes the subagent with "Package X is now installed."
-
-### PACKAGES_NEEDED format
-
-```
-PACKAGES_NEEDED:
-  - package: @supabase/supabase-js
-    reason: Supabase JS client for auth and database access
-  - package: expo-camera
-    reason: Native camera access for QR scan feature
-
-STATUS: awaiting_approval
-```
-
-### devops-agent invocation modes
-
-| Mode | Trigger | Who calls it |
-|---|---|---|
-| Pre-flight | Orchestrator predicts packages before coding starts | Orchestrator |
-| Mid-run discovery | Subagent returns `PACKAGES_NEEDED` block | Orchestrator (relays from subagent) |
-| Explicit user request | "use the devops agent to install X" | Orchestrator (direct) |
-
-**`devops-agent` is never auto-spawned for non-package tasks.** It is a leaf agent — it does not spawn other agents.
-
----
 
 ## Multi-agent workflow
 
-All eight specialist subagents live in [.claude/agents/](agents/) and ship with the template — no per-machine install. The main Claude Code session (running Opus) acts as the **orchestrator** — it never does all the work itself, it delegates.
-
-Each agent declares its own `model` and `effort` in frontmatter, tiered by how expensive a mistake is. Do not override these per-spawn unless the brief is genuinely atypical.
+All eight specialist subagents live in [.claude/agents/](agents/) and ship with the template. The main session acts as the **orchestrator** — it plans and delegates; it does not do all the work itself.
 
 | Agent | Purpose |
 |---|---|
 | `ios-frontend` | React Native + Expo UI work |
 | `backend-integrator` | Third-party service integration |
 | `test-engineer` | Jest unit + screen-render tests; owns `src/__tests__/**` |
-| `release-manager` | Runs the full release workflow above |
+| `release-manager` | Runs the full release workflow |
 | `aso-marketing` | Store-listing copy with hard char-limit enforcement |
 | `qa-reviewer` | Read-only pre-PR review |
 | `devops-agent` | Package risk assessment + controlled installation |
-| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → GitHub repo + issues → onboarding slides + store listing |
+| `app-bootstrapper` | Full new-app bootstrap: Q&A → IDEA.md → init.sh → repo + issues |
 
-Model/effort per agent and which skills each agent loads — and the conditions under which it loads them — is in [.claude/SKILLS.md](SKILLS.md), the single source of truth for both. Do not duplicate that data here.
+Each agent declares its own `model` and `effort` in frontmatter. Do not override per-spawn unless the brief is genuinely atypical. Which skills each loads, and under what conditions, is in [.claude/SKILLS.md](SKILLS.md) — do not duplicate that data here.
 
-### Bootstrap trigger
+**Two routing rules that must not wait for a file read:**
 
-When the user says any of the following, classify as `bootstrap` and **spawn `app-bootstrapper` immediately** — no pre-planning needed, the agent owns the full workflow:
+- **Bootstrap.** "bootstrap a new app" / "start a new app from the template" / "I have an idea for an app: …" / "set up [name]" → spawn `app-bootstrapper` immediately with the verbatim message. It owns the whole workflow; no pre-planning. New repos are **private**, and `scripts/init.sh` installs the matching LICENSE; `--public` flips both and is the only supported way to make a public app — pass it only on explicit request.
+- **Do not delegate** a single trivial edit (one-line fix, typo, rename) or a pure information question. The roundtrip costs more than the work.
 
-- "bootstrap a new app"
-- "start a new app from the template"
-- "I have an idea for an app: …"
-- "initialise / initialize a new project"
-- "set up [app name]" (from a fresh clone)
+**How to brief, decompose, run agents in parallel, and hand back long reports:** [.claude/reference/orchestration.md](reference/orchestration.md). Subagents never open PRs — the orchestrator handles commits, `CHANGELOG.md` and PR creation.
 
-Pass the verbatim user message as the brief. The agent handles all Q&A and execution.
-
-**New repos are private, and the LICENSE follows.** `scripts/init.sh` creates the GitHub repo
-private and installs `templates/licenses/private.txt` — the variant that calls the source
-confidential. `--public` flips both from one switch, and is the only supported way to make a
-public app: the two settings are coupled precisely so they cannot drift apart, which is what
-happened to this template's own LICENSE. Pass it only on an explicit request.
-
-### Orchestration playbook
-
-When a user request arrives:
-
-1. **Classify** into `bootstrap`, `frontend`, `backend`, `test`, `release`, `marketing`, `review`, `devops`, or `mixed`.
-2. **Check for package needs** — if the task requires new packages, run the Dependency Gate (see above) before spawning coding agents.
-3. **For single-domain requests:** spawn the matching subagent with a *fully self-contained brief* — exact file paths, expected behavior, what to return. The orchestrator plans, the subagent executes. **Never** delegate planning ("figure out what to do") — that wastes the subagent's context re-deriving what the orchestrator already knows.
-4. **For mixed requests:** decompose into independent subtasks and spawn subagents in parallel (single message, multiple `Agent` tool calls) when there are no cross-dependencies.
-5. **Subagents return reports.** The orchestrator handles commits, `CHANGELOG.md` updates, and PR creation. Subagents must not open PRs themselves — this avoids race conditions when multiple agents touch the same branch.
-6. **Skills inside subagents.** Each subagent's `.md` declares which skills it loads and **under what conditions** — most are conditional, because loading a skill costs context. The subagent decides from the brief; the orchestrator doesn't specify skills. Write briefs that describe the task shape ("restyle the paywall header", "one-line spacing fix") so the subagent can match the right row.
-
-### When NOT to delegate
-
-Skip subagent delegation when the task is a single trivial edit (one-line fix, typo, rename) or a pure information question. Spawning a subagent for those just adds a roundtrip.
-
-### Long-report handoff
-
-When a subagent's report would exceed ~50 lines (full `qa-reviewer` audit, deep backend integration write-up, design analysis), the subagent writes the full report to `.claude/scratch/<agent>-<YYYYMMDD-HHMM>.md` and returns only:
-
-1. The file path.
-2. A 3-bullet executive summary (blockers / decisions / what changed).
-
-The orchestrator reads from disk on demand. This keeps the orchestrator context lean during mixed/parallel runs and avoids context degradation when summaries get re-summarized across roundtrips. `.claude/scratch/` is gitignored.
-
-- **Filename timestamp:** generate with `date +%Y%m%d-%H%M`.
-- **Directory creation:** agents do not need to `mkdir` — `Write` creates parent dirs automatically.
-
----
 
 ## What not to do
-- Do not make secretive changes.
+- Do not make secretive changes. **One named exception**: the `Stop` hook's `STATUS.md` / `ROADMAP.md` refresh happens unprompted, because a tracking file that depends on remembering a command drifts. It is bounded and announced — see "Session workflow". Nothing else gets written without being asked for, and this exception does not generalise.
 - Do not skip branch creation unless explicitly allowed.
 - Do not assume credentials are available.
 - Do not run destructive git commands without asking.

@@ -109,7 +109,13 @@
       security-advisory link, a placeholder-addressed feature-request form) went with it (#145)
 - [ ] Act on the drift the report finds for **MealCart, WildFocus and vestia**. tick is
       handled; the other three have not been read since #151. Also re-triage MealCart's
-      `skip` array — its 21 entries are a first-pass "known absent", not a verified reading
+      `skip` array — its 24 entries are a first-pass "known absent", not a verified reading
+
+  > Extending the contract into `src/` (PR #168) sharpened this: **MealCart's `storage.ts` is
+  > missing `clearByPrefix`**, the helper that purges the app's own AsyncStorage on account
+  > deletion, plus the zod-validation overload. That is on the path the Play Data Safety work
+  > depends on. MealCart is also missing `src/env.ts` and both service ports entirely — left
+  > reported rather than skipped, because deciding it does not need the ports is a product call.
 - [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
       two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself
@@ -121,10 +127,17 @@
       Database verdicts print their evidence, and are inferred from `package.json` where `env.js`
       is absent — which is three of the four apps, and the only reason a Capacitor app and a
       pre-template Expo app are legible alongside the rest. PR #162 merged
-- [ ] Scheduled cross-repo drift report — unblocked by the App above rather than blocked; needs
-      the workflow plus token auth in `drift-report.sh`'s `sync_clone`, which clones anonymously
-      today. Local script covers it meanwhile (#145)
-- [ ] Scheduled fleet report (#163) — shares the drift report's blocker exactly: the same GitHub
-      App, `contents: read` only. `fleet-report.sh --json` is the seam. A Pages variant must
-      filter to public repos only; four of the six are private
+- [x] Scheduled cross-repo drift **and** fleet report — `cross-repo-report.yml` runs both weekly
+      and writes them to the run summary, and `sync_clone` now authenticates with `GH_TOKEN`
+      instead of cloning anonymously. PR #166 merged. It covers the half a local script
+      structurally cannot: a repo nobody is editing, in a week nobody thought to look. Skips
+      cleanly where the org App is not configured — which is still everywhere (#145, #163)
+- [x] `scripts/drift-report.sh` and `scripts/fleet-report.sh` added to `limitedScope`, so
+      WildFocus and vestia stop being told to adopt `/fleet` the command without the script it
+      calls. PR #166 merged
+- [ ] Version-aware and framework-aware boundary — `TEMPLATE_VERSION` records which template
+      release an app is on (replacing a commit-subject grep that degraded silently), and the
+      contract extends into the template's own seams: `src/env.ts`, `env.js`, `storage.ts`,
+      `useTheme.ts`, the spacing scale and both service ports. The paywall adapter was tracked
+      while the port it plugs into was not. PR #168 open
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)

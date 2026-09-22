@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: bash scripts/fleet-report.sh [--repo NAME] [--releases N] [--json] [--write] [--all]
+# Usage: bash scripts/fleet-report.sh [--repo NAME] [--releases N] [--json] [--html [--out PATH]] [--write] [--all]
 #
 # One-screen inventory of every repo in the GitHub org this checkout belongs to:
 # what database each app uses, what its last release was, and what is in flight.
@@ -18,6 +18,9 @@
 #   --repo NAME       one repo only
 #   --releases N      show the last N releases with their notes (default 1)
 #   --json            machine-readable; the seam a scheduled/Pages consumer would use
+#   --html            render the same data to a self-contained page and print its path
+#                     (default ~/.focalstudio/fleet.html — outside the repo on purpose)
+#   --out PATH        where --html writes
 #   --write           also write .claude/scratch/fleet-YYYYMMDD-HHMM.md
 #   --all             include archived repos
 #
@@ -31,6 +34,8 @@ set -euo pipefail
 REPO_FILTER=""
 RELEASES=1
 AS_JSON=false
+AS_HTML=false
+HTML_OUT=""
 WRITE=false
 INCLUDE_ARCHIVED=false
 
@@ -39,6 +44,8 @@ while [[ $# -gt 0 ]]; do
     --repo)     REPO_FILTER="$2"; shift 2 ;;
     --releases) RELEASES="$2";    shift 2 ;;
     --json)     AS_JSON=true;     shift ;;
+    --html)     AS_HTML=true;     shift ;;
+    --out)      HTML_OUT="$2";    shift 2 ;;
     --write)    WRITE=true;       shift ;;
     --all)      INCLUDE_ARCHIVED=true; shift ;;
     -h|--help)  sed -n '2,26p' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -80,7 +87,18 @@ trap 'rm -rf "$TMP"' EXIT
 # Every probe is allowed to fail. A 404 is information (no releases yet, no
 # ROADMAP.md), not an error, so the caller gets an empty string and decides.
 _api() { gh api "$1" 2>/dev/null || true; }
-_raw() { gh api "$1" -H "Accept: application/vnd.github.raw" 2>/dev/null || true; }
+# On a 404 gh prints the JSON error body to STDOUT and the human message to stderr,
+# so `|| true` alone hands the caller {"message":"Not Found",...} as if it were file
+# content. That body is valid JSON, so it survived the package.json parse check and
+# every repo without a package.json was read from an error document — which is how
+# the Pages site reported a Node stack instead of being a static site. Swallow the
+# body when the request failed, so absent reads as absent.
+_raw() {
+  local body status
+  body=$(gh api "$1" -H "Accept: application/vnd.github.raw" 2>/dev/null); status=$?
+  [[ $status -ne 0 ]] && return 0
+  printf '%s' "$body"
+}
 
 # Days since an ISO-8601 timestamp. BSD date on macOS, GNU date in CI.
 _days_since() {
@@ -115,11 +133,40 @@ probe_repo() {
   local pkg deps version expo rn react
   pkg=$(_raw "repos/$ORG/$name/contents/package.json")
   if ! jq -e . >/dev/null 2>&1 <<< "$pkg"; then pkg='{}'; fi
-  deps=$(jq -r '[(.dependencies // {}) | keys[]] | join(" ")' <<< "$pkg")
+  # devDependencies too: vite and vitest live there, and a build tool is as much a
+  # part of "what is this repo" as a runtime dependency.
+  deps=$(jq -r '[((.dependencies // {}) + (.devDependencies // {})) | keys[]] | join(" ")' <<< "$pkg")
   version=$(jq -r '.version // ""' <<< "$pkg")
   expo=$(jq -r '.dependencies.expo // ""' <<< "$pkg")
   rn=$(jq -r '.dependencies["react-native"] // ""' <<< "$pkg")
   react=$(jq -r '.dependencies.react // ""' <<< "$pkg")
+
+  # ── Framework ───────────────────────────────────────────────────────────────
+  # An "Expo version" column reads as blank for every repo that is not Expo, which
+  # is how WildFocus (Capacitor + Vite) and the Pages site showed up as having no
+  # stack at all. The question is really "what is this repo built with", so the
+  # answer is a name and a version, and the dashboard compares versions only within
+  # a framework — an Expo app being on a different major than a Vite app is not drift.
+  _dep_ver() { jq -r --arg k "$1" '((.dependencies // {}) + (.devDependencies // {}))[$k] // ""' <<< "$pkg"; }
+  local fw_name="" fw_version="" fw_secondary=""
+  if [[ -n "$expo" ]]; then
+    fw_name="Expo";      fw_version="$expo"
+    [[ -n "$rn" ]] && fw_secondary="React Native $rn"
+  elif [[ -n "$(_dep_ver '@capacitor/core')" ]]; then
+    fw_name="Capacitor"; fw_version="$(_dep_ver '@capacitor/core')"
+    [[ -n "$(_dep_ver vite)" ]] && fw_secondary="Vite $(_dep_ver vite)"
+  elif [[ -n "$(_dep_ver next)" ]]; then
+    fw_name="Next.js";   fw_version="$(_dep_ver next)"
+  elif [[ -n "$(_dep_ver vite)" ]]; then
+    fw_name="Vite";      fw_version="$(_dep_ver vite)"
+    [[ -n "$react" ]] && fw_secondary="React $react"
+  elif [[ "$pkg" == "{}" ]]; then
+    # No package.json at all. For the Pages repo that is the correct answer rather
+    # than a gap: it is hand-written HTML with no build step.
+    fw_name="static";    fw_version=""
+  else
+    fw_name="Node";      fw_version=""
+  fi
 
   _has_dep() { grep -qE "(^| )$1( |$)" <<< "$deps"; }
 
@@ -225,6 +272,14 @@ probe_repo() {
                    | select([.labels[]?.name] | any(. == "critical" or . == "high"))] | length' \
                  <<< "$issues" 2>/dev/null || echo 0)
 
+  # Which template release this repo last adopted. Absent for anything not generated
+  # from the template (WildFocus, vestia) and for apps bootstrapped before the file
+  # existed — absent and behind are different facts, so a missing file stays null
+  # rather than reading as 0.0.0.
+  local template_version
+  template_version=$(_raw "repos/$ORG/$name/contents/TEMPLATE_VERSION?ref=$default_branch" | tr -d '[:space:]')
+  [[ ! "$template_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && template_version=""
+
   # Roadmap. Absent and zero are different facts, so a missing file stays null.
   local roadmap done_n total_n percent="" roadmap_ref="$default_branch"
   roadmap=$(_raw "repos/$ORG/$name/contents/ROADMAP.md?ref=dev")
@@ -249,6 +304,7 @@ probe_repo() {
     --arg paywall "$paywall" --arg paywall_ev "$paywall_ev" \
     --arg analytics "$analytics" --arg analytics_ev "$analytics_ev" \
     --arg expo "$expo" --arg rn "$rn" --arg react "$react" \
+    --arg fw_name "$fw_name" --arg fw_version "$fw_version" --arg fw_secondary "$fw_secondary" \
     --arg tag "$tag" --arg pub "$pub" --arg age "$age" \
     --arg unreleased "$unreleased" --arg notes "$notes" --argjson releases "$rel_list" \
     --arg dev_ahead "$dev_ahead" --arg dev_behind "$dev_behind" \
@@ -257,15 +313,22 @@ probe_repo() {
     --argjson issues "${issue_count:-0}" --argjson issues_hot "${issues_hot:-0}" \
     --arg done_n "$done_n" --arg total_n "$total_n" --arg percent "$percent" \
     --arg roadmap_ref "$roadmap_ref" \
+    --arg template_version "$template_version" \
     '{
       name: $name, kind: $kind, private: $private,
       scope: (if $scope == "" then null else $scope end),
       default_branch: $default_branch,
       version: $version,
+      template_version: (if $template_version == "" then null else $template_version end),
       database:  { verdict: $db,        evidence: $db_ev },
       paywall:   { verdict: $paywall,   evidence: $paywall_ev },
       analytics: { verdict: $analytics, evidence: $analytics_ev },
       stack: { expo: $expo, react_native: $rn, react: $react },
+      framework: {
+        name:      (if $fw_name == "" then null else $fw_name end),
+        version:   (if $fw_version == "" then null else $fw_version end),
+        secondary: (if $fw_secondary == "" then null else $fw_secondary end)
+      },
       release: {
         tag: (if $tag == "" then null else $tag end),
         published: (if $pub == "" then null else ($pub | split("T")[0]) end),
@@ -290,8 +353,27 @@ probe_repo() {
 REPOS=$(gh repo list "$ORG" --limit 100 \
   --json name,isPrivate,isArchived,defaultBranchRef 2>/dev/null || true)
 
+# `gh repo list` is a GraphQL org query, which a GitHub App installation token
+# cannot always answer. /installation/repositories is the REST endpoint that token
+# is actually for, and it returns exactly the repos the App is installed on — so
+# CI discovers the fleet without a manifest, same as a human does locally.
 if [[ -z "$REPOS" ]] || ! jq -e 'type == "array"' >/dev/null 2>&1 <<< "$REPOS"; then
-  echo "Error: could not list repos for org '$ORG'. Check 'gh auth status' and org access." >&2
+  REPOS=$(gh api --paginate /installation/repositories \
+    --jq '[.repositories[] | {name: .name, isPrivate: .private, isArchived: .archived,
+                              defaultBranchRef: {name: .default_branch},
+                              owner: .owner.login}]' 2>/dev/null \
+    | jq -s 'add // []' 2>/dev/null || true)
+  # That endpoint spans every org the App is installed on; keep only this one.
+  if [[ -n "$REPOS" ]]; then
+    REPOS=$(jq --arg o "$ORG" '[.[] | select(.owner == $o) | del(.owner)]' <<< "$REPOS" 2>/dev/null || echo "")
+  fi
+fi
+
+if [[ -z "$REPOS" ]] || ! jq -e 'type == "array" and length > 0' >/dev/null 2>&1 <<< "$REPOS"; then
+  echo "Error: could not list repos for org '$ORG'." >&2
+  echo "       Locally: check 'gh auth status' and org access." >&2
+  echo "       In CI: the installation token must come from an App installed on this org" >&2
+  echo "       with 'contents: read'. See .claude/reference/cross-repo-token.md." >&2
   exit 1
 fi
 
@@ -333,11 +415,44 @@ fi
 
 FLEET=$(jq -s 'sort_by(.name)' $VALID)
 
+FLEET_JSON=$(jq -n --arg org "$ORG" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson repos "$FLEET" \
+  '{org: $org, generated: $generated, repos: $repos}')
+
 if [[ "$AS_JSON" == "true" ]]; then
-  jq -n --arg org "$ORG" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson repos "$FLEET" \
-    '{org: $org, generated: $generated, repos: $repos}'
+  printf '%s\n' "$FLEET_JSON"
   exit 0
 fi
+
+# --html renders the same JSON through scripts/fleet-html.mjs. Output goes OUTSIDE
+# the repo by default (~/.focalstudio/), not to .claude/scratch/: this template is
+# public and most app repos are private, so keeping fleet output un-committable
+# should be structural rather than one .gitignore edit away from a leak. It also
+# means the file survives `git clean` and can be bookmarked once.
+if [[ "$AS_HTML" == "true" ]]; then
+  command -v node >/dev/null 2>&1 || { echo "Error: node is required for --html." >&2; exit 1; }
+  out="${HTML_OUT:-$HOME/.focalstudio/fleet.html}"
+  mkdir -p "$(dirname "$out")"
+  # Write JSON beside the page: /standup reads it instead of re-deriving from gh,
+  # and it is what a later diff ("what changed since I last looked") would compare.
+  printf '%s\n' "$FLEET_JSON" > "${out%.html}.json"
+  # Render to a temp file and move into place, so a failure part-way through leaves
+  # the previous page intact rather than truncating the one you are about to open.
+  if printf '%s\n' "$FLEET_JSON" | node "$SCRIPT_DIR/fleet-html.mjs" > "$out.tmp"; then
+    mv "$out.tmp" "$out"
+    echo "$out"
+    exit 0
+  else
+    rm -f "$out.tmp"
+    echo "Error: rendering failed; the existing page was left untouched." >&2
+    exit 1
+  fi
+fi
+
+# The template's own current version, for the TEMPLATE column's "behind" marker.
+# Read from the fleet data rather than this checkout: running `--repo tick` alone
+# would otherwise compare against whatever is in the working tree. Empty when the
+# template itself was not probed, which suppresses the marker rather than guessing.
+TEMPLATE_SELF=$(jq -r '[.[] | select(.kind == "template") | .template_version] | first // ""' <<< "$FLEET")
 
 # ── Render ───────────────────────────────────────────────────────────────────
 _age_label() {
@@ -352,26 +467,29 @@ render() {
   count=$(jq 'length' <<< "$FLEET")
   echo "FOCAL STUDIO FLEET  ·  $ORG  ·  $count repos  ·  $(date '+%Y-%m-%d %H:%M')"
   echo
-  printf '%-26s %-8s %-9s %-28s %-8s %4s %7s  %s\n' \
-    REPO VER RELEASED DATABASE CI PRs ISSUES ROADMAP
-  printf '%s\n' "$(printf '%.0s─' $(seq 1 118))"
+  printf '%-26s %-8s %-9s %-9s %-26s %-8s %4s %7s  %s\n' \
+    REPO VER RELEASED TEMPLATE DATABASE CI PRs ISSUES ROADMAP
+  printf '%s\n' "$(printf '%.0s─' $(seq 1 128))"
 
-  local name version age db ci prs issues pct bar
-  while IFS=$'\t' read -r name version age db ci prs issues pct; do
+  local name version age tmpl db ci prs issues pct bar
+  while IFS=$'\t' read -r name version age tmpl db ci prs issues pct; do
     [[ -z "$name" ]] && continue
     if [[ "$pct" != "-" ]]; then
       bar="$(_bar "$pct") ${pct}%"
     else
       bar="—"
     fi
-    printf '%-26s %-8s %-9s %-28s %-8s %4s %7s  %s\n' \
-      "$name" "$version" "$(_age_label "$age")" "$db" "$ci" "$prs" "$issues" "$bar"
+    printf '%-26s %-8s %-9s %-9s %-26s %-8s %4s %7s  %s\n' \
+      "$name" "$version" "$(_age_label "$age")" "$tmpl" "$db" "$ci" "$prs" "$issues" "$bar"
   # Every field is non-empty on purpose: tab is an IFS whitespace character, so
   # `read` coalesces consecutive tabs and an empty column would shift the rest.
-  done <<< "$(jq -r '.[] | [
+  done <<< "$(jq -r --arg self "$TEMPLATE_SELF" '.[] | [
       .name,
       (if .version == "" then "-" else .version end),
       (.release.age_days // "never" | tostring),
+      (if .template_version == null then "-"
+       elif $self != "" and .template_version != $self then .template_version + "!"
+       else .template_version end),
       (if .kind == "site" then "n/a" else .database.verdict end),
       (if .ci.conclusion == "" then "-" else .ci.conclusion end),
       (.open.prs | tostring), (.open.issues | tostring),
@@ -385,8 +503,15 @@ render() {
   attention=$(jq -r '
     [ .[] | select(.kind == "app" or .kind == "template") ] as $apps
     | ([ $apps[] | .stack.expo | select(. != "") ] | group_by(.) | max_by(length) | .[0]) as $common
+    | ([ $apps[] | select(.kind == "template") | .template_version ] | first) as $self
     | [ $apps[]
-        | (if (.release.unreleased_commits // 0) > 0
+        | (if .kind == "app" and $self != null and .template_version != null and .template_version != $self
+             then "\(.name): on template \(.template_version) — the template is on \($self)"
+             else empty end),
+          (if .kind == "app" and .template_version == null
+             then "\(.name): no TEMPLATE_VERSION — adoption cannot tell what it is missing"
+             else empty end),
+          (if (.release.unreleased_commits // 0) > 0
              then "\(.name): \(.release.unreleased_commits) commit(s) on \(.default_branch) past \(.release.tag) — unreleased"
              else empty end),
           (if (.ci.conclusion // "") != "" and .ci.conclusion != "success"

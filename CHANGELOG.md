@@ -9,6 +9,151 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+
+## [0.16.0] — 2026-09-22
+
+### Added
+- **`cross-repo-report.yml` reaches `main` for the first time**, which is what lets the weekly
+  scheduled drift + fleet report actually run: scheduled workflows only run from a repo's default
+  branch (#161). It runs the drift and fleet reports weekly (#145, #163) — covering the half a
+  local script structurally cannot, a repo nobody is editing in a week nobody thought to look.
+  It reports and never writes to another repo, and skips cleanly where the org App is not
+  configured.
+
+  **It publishes counts only.** This repo is public, and on a public repo the run summary *and*
+  the step log are readable by anyone, unauthenticated — while both reports describe private
+  repos: names, versions, release notes, CI state, database/paywall/analytics verdicts with
+  their evidence, and verbatim commit subjects from private apps via `drift-report.sh`'s
+  `_capped`. Writing either body there would have been the same leak `fleet-report.sh --html`
+  avoids by writing outside the repo, reached by a different route — and the org App was
+  provisioned the day before this release, so the first Monday cron after the merge would have
+  published it for real rather than skipping. Each report's output is now captured to a file on
+  the runner and never echoed; only integers reach the summary. That is enough for the one thing
+  this workflow exists to say — there is something to look at — and the detail is one local
+  command away, which is where it was always meant to be read.
+- **`TEMPLATE_VERSION` records which template release an app is on.** Nothing recorded it before,
+  so "which apps are behind?" meant diffing every shared file, and `drift-report.sh` derived its
+  fork point by grepping commit subjects for `from focal-studio-app-template` and taking that
+  commit's *date* — a heuristic that degrades silently when history is squashed, reworded, or
+  (as for WildFocus and vestia, transferred in rather than generated) never existed. The file
+  tracks release **tags**, not `dev`, so an app adopts work that has already been through
+  `release-review.yml`. `scripts/bump-version.sh` moves it in the template and deliberately
+  leaves it alone in a generated app, where the app's own version says nothing about which
+  template it is on. `scripts/init.sh` carries it through bootstrap untouched — structurally, not
+  by exception: it has no file extension, so the `EXTS` filter driving `replace()` never reaches
+  it. Against tick, supplying it removed 13 lines of already-adopted history from the report.
+- **Fleet report gains a `TEMPLATE` column**, flagging with `!` any app behind the template's own
+  version, plus two `NEEDS A LOOK` lines: an app on an older release, and an app with no
+  `TEMPLATE_VERSION` at all — which adoption cannot reason about. The template's current version
+  is read from the probed fleet data rather than the working tree, so a single-repo run does not
+  compare against whatever happens to be checked out.
+- **Status tracking maintained without being asked.** The `Stop` hook used to tell the *user*
+  to run `/wrap`, which moved the forgetting one step along rather than fixing it — the nudge
+  lands at the end of a session, exactly when nobody wants to type another command, so sessions
+  ended unwrapped and `STATUS.md` drifted (it sat at 0.14.0 while `main` was on 0.15.0). It now
+  hands the session the commit subjects and the rules and has it write the update before
+  stopping. Bounded on purpose: only `STATUS.md` and `ROADMAP.md`, a `chore: refresh status`
+  commit on a feature branch and never a push, files left uncommitted on `main`/`dev` because
+  those take changes through a PR, and the change announced in one line rather than made
+  silently. `.claude/CLAUDE.md`'s "do not make secretive changes" gains this as its one named,
+  non-generalising exception.
+- **`STATUS.md` is narrative only.** Version, release age, CI, unreleased commits, roadmap
+  percentage and template currency are derived, and now live on the dashboard and in `/standup`
+  rather than being restated by hand in a header — which is exactly how that header went stale.
+  `/standup` reads `~/.focalstudio/fleet.json` when it is fresh instead of re-deriving from
+  `gh`, and says which source it used.
+- **The dashboard reports what each repo is built with, not just its Expo version.** An
+  Expo-only column rendered blank for everything that is not Expo, so WildFocus (Capacitor 8.3
+  + Vite 7.2) and the Pages site appeared to have no stack at all. A `framework` probe now
+  reports a name, a version and a secondary (Expo/React Native, Capacitor/Vite, Next.js, Vite,
+  static, Node), and version-outlier detection compares **only within a framework** — an Expo
+  app on a different major than a Vite app is not drift.
+- **Fixed: `_raw` handed callers GitHub's 404 error body as if it were file content.** On a
+  missing file `gh` prints `{"message":"Not Found",...}` to stdout, which is valid JSON, so it
+  survived the `package.json` parse check — every repo without a `package.json` was read from an
+  error document. That is how the Pages site reported a Node stack. Absent now reads as absent,
+  which also fixes `version` and the dependency-inferred verdicts for such repos.
+- **Dashboard redesign.** "Needs a look" is grouped per repo rather than repeating the name on
+  every line, each reason still carrying its own severity. Added fleet summary tiles, three
+  hand-rolled inline-SVG charts (release recency, unmerged work on `dev`, and framework/version
+  distribution — the last making the outlier visible inside its own band rather than against a
+  different stack), an *In flight* section using the previously unused `open.pr_titles`, and a
+  *Last shipped* grid using `release.notes`. Still self-contained: no CDN, no webfonts, one
+  inline script for the theme toggle.
+- **A fleet dashboard that is current without being asked for.** `fleet-report.sh --html`
+  renders the same data `--json` already exposed into one self-contained page
+  (`scripts/fleet-html.mjs` — inline CSS, no CDN, no build step, dark mode, readable at phone
+  width), and `scripts/install-fleet-agent.sh` installs a launchd agent that refreshes it every
+  3 hours. Each repo gets a 🔴/🟡/🟢 with its reasons listed rather than just a colour, including
+  template currency: which release an app adopted and whether the template has moved past it. An
+  app with no `TEMPLATE_VERSION` renders as *unknown*, never as up to date.
+  Output lands in `~/.focalstudio/`, outside the repo, so fleet data about private apps cannot be
+  committed to this public template by accident — structural rather than one `.gitignore` edit
+  away. `npm run fleet` renders and opens it.
+- **The agent works from a repo in `~/Desktop`, and uses Full Disk Access when it is granted.**
+  macOS blocks background agents from reading `~/Desktop`, `~/Documents`, `~/Downloads` and
+  iCloud Drive; pointed at a repo in one, the agent exits 126 and the page silently never updates
+  — worse than no agent, because a plausible-looking stale page remains. The installer now
+  **tries running straight from the repo first and proves it** by executing the agent and reading
+  its exit code, because TCC state cannot be queried and a wrong guess reproduces exactly that
+  silent staleness. If the run is denied it falls back to a three-file copy in
+  `~/.focalstudio/bin` and prints how to grant access; granting Full Disk Access to `/bin/bash`
+  and re-running switches to direct mode with no flag. `--direct` refuses the fallback and fails
+  loudly with the denial message; `--copy` skips the attempt. `--status` reads the live mode from
+  the installed plist rather than inferring it, and only diffs the copy when one is in use —
+  a copy that drifts from its source being the problem this repo exists to solve.
+  Only *this* repo is ever read from disk; every other repo in the fleet comes from the GitHub
+  API, so nothing needs granting for them.
+- **The shared-path contract now covers `src/` framework code.** It previously contributed exactly
+  one path, so the template's own seams — `src/env.ts` (the `isDevBuild` gate), `env.js`,
+  `src/utils/storage.ts`, `src/hooks/useTheme.ts`, `src/theme/spacing.ts` and the
+  `src/services/{auth,paywall}/` ports — were invisible to drift. The sharpest case: the paywall
+  *adapter* (`templates/paywall/revenuecat.ts`) was tracked `identical` while the port it plugs
+  into was not tracked at all. `src/theme/typography.ts` is `advisory` rather than `identical`,
+  because the first run disproved the assumption it was listed under — tick correctly adds a
+  88pt `FontSize.clock` and sub-regular weights on top of the shared scale. The first run also
+  found MealCart missing `clearByPrefix` from `storage.ts`, the account-deletion purge helper.
+- **The always-loaded instructions are a quarter smaller.** `.claude/CLAUDE.md`, `AGENTS.md` and
+  `.claude/SKILLS.md` enter every session, and roughly a fifth of them restated each other. Five
+  sections moved into `.claude/reference/` behind pointers, continuing the split those files
+  already document: release workflow, dependency gate, permission model, multi-agent
+  orchestration and the worktree rules. What stays is what must not wait for a file read — the
+  bootstrap trigger, the never-delegate rule, the permission denylist, the agent registry and
+  the `--delete-branch` release hazard. `AGENTS.md` stops restating the output format, the
+  dependency gate and the agent registry; `SKILLS.md`'s central routing matrix becomes an index,
+  which is what it already said the agent files were authoritative for. 54,438 → 40,788 bytes,
+  about 3,400 tokens back per session, with every removed heading verified to exist in a
+  reference file and every pointer checked to resolve.
+- **`scripts/drift-report.sh --clean`** removes the cached clones. The cache reaches hundreds of
+  megabytes inside the project tree — gitignored, so it costs nothing in review, but it makes a
+  project-wide grep return every shared file twice, once from this repo and once from a
+  sibling's copy.
+
+### Fixed
+- **A `local-first` app that ships analytics generated a privacy policy that contradicted
+  itself.** Section 2 asserted the data "never leaves your device and is never transmitted to us
+  or any third party" while section 3 listed the analytics provider receiving usage events — a
+  false statement, in the document App Review reads, produced by default. The local-first branch
+  emitted its absolute claim without consulting `collectsAnalytics` / `collectsCrashReports`.
+  It now scopes the claim to app content and names the exception, with singular/plural agreement
+  for one signal or both. An app collecting neither is unaffected and still gets the absolute
+  wording, which for it is true. Found while giving tick a privacy config — the template itself
+  can never hit this, because it always skips at the bootstrap gate.
+- **`drift-report.sh` could not clone private repos from CI.** `sync_clone` cloned anonymously
+  over HTTPS, relying on the ambient git credential helper — which exists on a dev machine and
+  not in Actions. It now embeds `GH_TOKEN` in the clone URL when one is set, and repoints a
+  cached clone's remote on fetch so an expired token in a stale URL does not wedge it.
+- **`fleet-report.sh` could not discover repos from CI.** `gh repo list` is a GraphQL org query
+  that a GitHub App installation token cannot always answer. It now falls back to
+  `/installation/repositories`, the REST endpoint that token is for, so CI finds the fleet with
+  no manifest — same as a human does locally.
+- **A limited-scope app was told to take `/fleet` without the script it calls.**
+  `.claude/commands/*.md` is in `limitedScope` but `scripts/*` is full-scope only, so the drift
+  report would name `fleet.md` as missing from WildFocus and vestia while `fleet-report.sh`
+  stayed invisible. Both repo-agnostic scripts are now in `limitedScope` alongside the commands
+  that invoke them.
+
 ---
 
 ## [0.15.0] — 2026-09-20

@@ -1,0 +1,140 @@
+# Weekly cross-repo visibility: what has drifted across the template ↔ app boundary,
+# and what state every app in the org is in.
+#
+# Both reports already exist as local scripts and are the primary way to run them.
+# This workflow exists for the half a local script structurally cannot cover: a repo
+# nobody is currently editing, and a week where nobody thought to look. It never writes
+# to another repo — same call the scripts make, for the same reason (#145, #163).
+#
+# It publishes COUNTS ONLY to the run summary. This repo is public; the repos it reports
+# on are not. See the comment above the report steps.
+#
+# Needs the org GitHub App from .claude/reference/cross-repo-token.md. Without the
+# secrets it skips cleanly rather than failing, so a fork or a fresh org is quiet.
+
+name: Cross-Repo Report
+
+on:
+  schedule:
+    # Mondays 08:00 UTC — before the week's work, after the weekend's merges.
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Drift + fleet report
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Secrets can't be tested in a step-level `if:`, so they come through env first.
+      - name: Check for cross-repo credentials
+        id: creds
+        env:
+          APP_ID: ${{ secrets.FOCALSTUDIO_BOT_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.FOCALSTUDIO_BOT_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FOCALSTUDIO_BOT_APP_ID / FOCALSTUDIO_BOT_PRIVATE_KEY are not set — nothing to report against. See .claude/reference/cross-repo-token.md."
+          fi
+
+      # Read-only, org-wide. Unlike publish-privacy.yml this names no `repositories:`
+      # narrowing: the whole point is to discover repos that are not listed anywhere,
+      # so the token has to span the installation. It carries no write permission.
+      - name: Mint a scoped installation token
+        id: app-token
+        if: steps.creds.outputs.has_creds == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FOCALSTUDIO_BOT_APP_ID }}
+          private-key: ${{ secrets.FOCALSTUDIO_BOT_PRIVATE_KEY }}
+          owner: focalstudio
+          permission-contents: read
+          permission-metadata: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      # ── Why only counts are published ────────────────────────────────────────
+      # This repo is PUBLIC, and on a public repo both the run summary and the step
+      # log are readable by anyone, unauthenticated. Both reports carry private-repo
+      # detail: repo names, versions, release tags and notes, CI conclusions, open
+      # PR/issue counts, database/paywall/analytics verdicts with their evidence, and
+      # — via drift-report.sh's `_capped` — verbatim commit subjects from private app
+      # repos. Publishing that to a world-readable page is the same leak that
+      # fleet-report.sh's --html block avoids by writing outside the repo, reached by
+      # a different route.
+      #
+      # So each report's output is captured to a file on the runner and NEVER echoed:
+      # not to the summary, not to stdout. Only integers cross the boundary. That is
+      # enough for the job this workflow exists to do — telling you, in a week nobody
+      # thought to look, that there is something to look at. The detail is one local
+      # command away and is where it was always meant to be read.
+      - name: Drift report (#145)
+        id: drift
+        if: steps.creds.outputs.has_creds == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # `|| rc=$?` rather than a bare call: Actions runs this block under `bash -e`,
+          # and a failing report must not fail the job. That is deliberate but wrong —
+          # a dead report stays green forever. Tracked in #175, not fixed here.
+          rc=0
+          bash scripts/drift-report.sh > "$RUNNER_TEMP/drift.txt" 2>&1 || rc=$?
+          {
+            echo "## Drift — template ↔ apps"
+            echo
+            if [ "$rc" -ne 0 ]; then
+              echo "Report exited \`$rc\`. No detail is published here — run it locally."
+            elif grep -q '^Clean — ' "$RUNNER_TEMP/drift.txt"; then
+              echo "**Clean** — nothing in the shared surface has drifted."
+            else
+              n="$(sed -n 's/^\([0-9][0-9]*\) drifted path(s).*/\1/p' "$RUNNER_TEMP/drift.txt" | tail -1 || true)"
+              echo "**${n:-An unknown number of} drifted path(s).** Run the report locally for the list."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fleet report (#163)
+        id: fleet
+        if: steps.creds.outputs.has_creds == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          rc=0
+          bash scripts/fleet-report.sh > "$RUNNER_TEMP/fleet.txt" 2>&1 || rc=$?
+          {
+            echo "## Fleet"
+            echo
+            if [ "$rc" -ne 0 ]; then
+              echo "Report exited \`$rc\`. No detail is published here — run it locally."
+            else
+              # `grep -c` exits 1 on no match while still printing 0, hence `|| true`.
+              repos="$(grep -c '^── ' "$RUNNER_TEMP/fleet.txt" || true)"
+              flags="$(grep -c '^  • ' "$RUNNER_TEMP/fleet.txt" || true)"
+              echo "**${repos:-0} repo(s) probed, ${flags:-0} flagged as needing a look.**"
+              if [ "${flags:-0}" -gt 0 ] 2>/dev/null; then
+                echo
+                echo "Reasons name private repos, so they are not published here."
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Neither script gates — both exit 0 whether or not they find something, because a
+      # gate on a boundary this soft gets switched off within a week. The summary is the
+      # deliverable; this step only says where to look.
+      - name: Where to read it
+        if: always()
+        run: |
+          if [ "${{ steps.creds.outputs.has_creds }}" != "true" ]; then
+            echo "Skipped — no cross-repo credentials configured." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Counts only — this repo is public, and the reports describe private ones._" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Read the detail with \`bash scripts/drift-report.sh\` and \`bash scripts/fleet-report.sh\`._" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -168,6 +168,14 @@ replace "\[GITHUB_REPO\]" "$GITHUB_REPO"
 # src/constants.ts is deliberately not touched: APP_VERSION and DEV_MODE_KEY are
 # derived from package.json, so rewriting it here would only reintroduce the
 # desync the derivation exists to prevent.
+#
+# TEMPLATE_VERSION is deliberately NOT reset either, and for the opposite reason:
+# it records which template release this app was generated from, so it must keep
+# the template's version while package.json/app.json drop to 0.1.0. It survives
+# by construction rather than by exception — it has no file extension, so the
+# EXTS filter that drives replace() never reaches it, and the seds below target
+# a `"version": "x.y.z"` JSON pattern it does not contain. drift-report.sh and
+# fleet-report.sh both read it; the adoption workflow bumps it.
 echo "  Resetting version to 0.1.0..."
 if [[ "$(uname)" == "Darwin" ]]; then
   sed -i '' 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "0.1.0"/' package.json
@@ -190,7 +198,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 EOF
-echo "  ✅  Version reset to 0.1.0"
+echo "  ✅  Version reset to 0.1.0 (TEMPLATE_VERSION stays at $(cat TEMPLATE_VERSION 2>/dev/null || echo '?'))"
 
 # ── Tracking-file reset (STATUS.md / ROADMAP.md track the TEMPLATE's own work) ─
 # Both files are ordinary *.md, so the replace() pass above only swaps the app-name
