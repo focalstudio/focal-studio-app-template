@@ -1,6 +1,6 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-09-20_
+_Updated: 2026-09-21_
 
 > Narrative only. Version, release age, CI, unreleased commits, roadmap percentage and
 > template currency are **derived** — they live on the dashboard
@@ -11,33 +11,43 @@ _Updated: 2026-09-20_
 > and what is in the way.
 
 ## Now
-The propagation machinery is being made **version-aware and framework-aware**. PR #168 (open)
-adds `TEMPLATE_VERSION` — which template release an app is on, tracked by release tag rather than
-`dev` — replacing a commit-subject grep that degraded silently on squashed or transferred history.
-The same PR extends the contract into the template's own seams (`src/env.ts`, `env.js`,
-`storage.ts`, `useTheme.ts`, the spacing scale, both service ports), which had been invisible to
-drift while the paywall *adapter* was tracked and the *port* it plugs into was not.
+**Release 0.16.0 is being cut.** The whole plan-length arc landed on `dev` in one stretch and none
+of it has shipped: `TEMPLATE_VERSION` and the `src/` seams (#168/#170), the fleet dashboard and its
+launchd agent (#169, #172, #173), the `Stop`-hook status refresh (#171) and the context diet (#174).
+The headline for the release notes is that **`cross-repo-report.yml` reaches `main` for the first
+time**, which is what makes the weekly scheduled drift + fleet report able to run at all (#161).
 
-Upstream of it, #166 shipped `cross-repo-report.yml` — the weekly scheduled drift + fleet report —
-and gave `sync_clone` token auth. Both were listed as open work; both are done.
+`qa-reviewer` audited `origin/main...origin/dev` first — 28 files, +2356/−312, almost all shell,
+workflows and a 1009-line HTML renderer rather than React Native, so it was weighted at `set -euo
+pipefail` interactions, `jq` on non-JSON input and HTML escaping in `scripts/fleet-html.mjs`
+(escaping came back sound). It found one blocker: `cross-repo-report.yml` wrote both report bodies
+into a run summary that is world-readable on a public repo, while the reports describe private
+apps. Fixed on the release branch — the summary now carries counts only. The three should-fixes
+are deferred to #175, #176 and #177.
 
 A session-long plan for the wider goal (one dashboard, apps that adopt template releases
 themselves, a site that stays current) is at `~/.claude/plans/i-want-to-make-dreamy-zebra.md`.
 
 ## Next
-- **Provision the GitHub App.** Unchanged, and now blocking more: `cross-repo-report.yml` exists
-  and skips cleanly every week because the secrets are absent, so the scheduled reports are built
-  and inert. Browser-only flow plus `gh auth refresh -h github.com -s admin:org`; steps in
-  `.claude/reference/cross-repo-token.md`.
-- **Fleet dashboard (plan PR 2).** `fleet-report.sh --html` writing a self-contained page to
-  `~/.focalstudio/`, refreshed by a launchd agent so it is current without a command being typed.
-  `--json` is already the seam.
+- **The GitHub App is already provisioned** — `FOCALSTUDIO_BOT_APP_ID` and
+  `FOCALSTUDIO_BOT_PRIVATE_KEY` have been org secrets since 2026-09-20 and 2026-08-11. This file
+  and the reference doc both said otherwise, and a release was nearly cut on that assumption:
+  `cross-repo-report.yml` had not run only because `schedule:` fires from the default branch and
+  the file had not reached `main`. Merging 0.16.0 arms it for real. `scripts/provision-cross-repo-app.sh`
+  (PR #180) is therefore documentation and disaster-recovery, not a pending task — its creation
+  path has never run and cannot be exercised while the App exists.
+  The App was exercised the same day it was created: `publish-privacy.yml` ran green on
+  2026-09-20. It is `workflow_dispatch`-only, so it has no cron to arm — which is why it was
+  provable immediately and `cross-repo-report.yml` was not.
+- **Merge the two release PRs**, then delete `release/0.16.0` by hand. Never `--delete-branch` on
+  the main PR: it auto-closes the backmerge.
 - **MealCart is missing `clearByPrefix` from `storage.ts`** — the account-deletion purge helper —
   found by #168's first run. It sits on the path the Play Data Safety work depends on. Decide
   whether to open an issue downstream.
 
 ## Blockers
-None blocking work; the GitHub App gates three scheduled/cross-repo consumers from doing anything.
+None. The GitHub App is provisioned and no longer gates anything — that entry stood here long
+after it stopped being true, which is the failure worth remembering from this session.
 
 **Carrying forward** (live context, not blocking):
 - **`provision-supabase.sh` has never run against a live Supabase account**, and CI can only ever
