@@ -11,15 +11,27 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
-## [0.16.0] — 2026-09-21
+## [0.16.0] — 2026-09-22
 
 ### Added
 - **`cross-repo-report.yml` reaches `main` for the first time**, which is what lets the weekly
   scheduled drift + fleet report actually run: scheduled workflows only run from a repo's default
-  branch (#161). It runs the drift and fleet reports weekly and writes both to the run summary
-  (#145, #163) — covering the half a local script structurally cannot, a repo nobody is editing
-  in a week nobody thought to look. It reports and never writes to another repo, and skips
-  cleanly where the org App is not configured.
+  branch (#161). It runs the drift and fleet reports weekly (#145, #163) — covering the half a
+  local script structurally cannot, a repo nobody is editing in a week nobody thought to look.
+  It reports and never writes to another repo, and skips cleanly where the org App is not
+  configured.
+
+  **It publishes counts only.** This repo is public, and on a public repo the run summary *and*
+  the step log are readable by anyone, unauthenticated — while both reports describe private
+  repos: names, versions, release notes, CI state, database/paywall/analytics verdicts with
+  their evidence, and verbatim commit subjects from private apps via `drift-report.sh`'s
+  `_capped`. Writing either body there would have been the same leak `fleet-report.sh --html`
+  avoids by writing outside the repo, reached by a different route — and the org App was
+  provisioned the day before this release, so the first Monday cron after the merge would have
+  published it for real rather than skipping. Each report's output is now captured to a file on
+  the runner and never echoed; only integers reach the summary. That is enough for the one thing
+  this workflow exists to say — there is something to look at — and the detail is one local
+  command away, which is where it was always meant to be read.
 - **`TEMPLATE_VERSION` records which template release an app is on.** Nothing recorded it before,
   so "which apps are behind?" meant diffing every shared file, and `drift-report.sh` derived its
   fork point by grepping commit subjects for `from focal-studio-app-template` and taking that
