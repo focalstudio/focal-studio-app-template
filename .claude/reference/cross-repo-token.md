@@ -18,7 +18,7 @@ Two consumers share it, which is why it exists at all rather than a per-workflow
 | Consumer | Target repos | Uses |
 |---|---|---|
 | `.github/workflows/publish-privacy.yml` (#56) | `focalstudio.github.io` | `contents:write`, `pull_requests:write` |
-| scheduled drift report (#145, not yet built) | `tick`, `mealcart`, `WildFocus`, `vestia-portfolio-manager` | `contents:read`, `issues:write` |
+| `.github/workflows/cross-repo-report.yml` (#145, #163) | `tick`, `mealcart`, `WildFocus`, `vestia-portfolio-manager` | `contents:read`, `metadata:read`, `issues:read`, `pull_requests:read` |
 
 **Why not a fine-grained PAT.** A PAT applies **one permission union across every repo it
 selects**, so a single PAT serving both consumers would hand the four app repos

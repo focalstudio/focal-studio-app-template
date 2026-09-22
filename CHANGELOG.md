@@ -10,6 +10,40 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **`scripts/provision-cross-repo-app.sh` creates the org GitHub App.** It was written down as a
+  browser-only chore — note the App ID, download the `.pem`, set two secrets by hand — and then
+  sat undone long enough to block four workflows, which is the usual fate of a documented manual
+  procedure. GitHub's App Manifest flow removes almost all of it: the manifest declares name,
+  permissions and webhook settings up front and a code exchange returns the App ID and private
+  key over the API, leaving two consent clicks that should stay human. The key never reaches
+  stdout and never lands in the repo — a 0600 file in a temp dir, straight into the org secret,
+  overwritten before unlinking. Re-running is safe; `admin:org` is checked before the browser
+  flow rather than after, since finding out afterwards means the App exists, the one-time code is
+  spent and the key is in a temp file about to be cleaned up. **Its creation path is unproven** —
+  the App already exists, so only the idempotency guard is reachable.
+
+### Fixed
+- **Three stale pointers in `.claude/agents/`.** `release-manager` was told to follow the release
+  workflow in `.claude/CLAUDE.md`, but #174 moved the full procedure to
+  `.claude/reference/release-workflow.md` and left a summary — and the pre-emptive review, the
+  step that stops review rounds cascading out of CI, now exists only in the reference. Both agent
+  files also named skills called `review` and `verify`; neither has ever existed, and
+  `qa-reviewer` listed one under "**Always**". Replaced by the inline checklists those files
+  already carry and by running `npx jest` / `npm run type-check` / `npm run lint` directly, with
+  the absence stated in place so the next reader does not go hunting for a skill to install.
+  `.claude/agents/*.md` is `identical` in the shared-path manifest, so all three were sitting in
+  every generated app.
+- **Documentation that described the cross-repo report as unbuilt.** `.claude/CLAUDE.md` said in
+  two places that a scheduled cross-repo version "is not built" and that what remained was the
+  workflow plus token auth in `sync_clone`; both shipped in #166, and the workflow reached `main`
+  in 0.16.0. `cross-repo-token.md`'s consumer table still listed it as "not yet built" and
+  claimed it needs `issues:write` — it mints four read-only permissions. The same section's claim
+  that creating the App is "a browser flow — there is no API for it" is replaced by the script
+  above, with the manual steps kept as the fallback.
+
+  These mattered more than a typo: `STATUS.md` asserting the App still needed provisioning is
+  what led a release review to defer a blocker as "cannot fire — the secrets do not exist". They
+  had existed since 2026-09-20, and the merge would have armed the cron for real.
 
 ## [0.16.0] — 2026-09-22
 
