@@ -135,9 +135,27 @@
 - [x] `scripts/drift-report.sh` and `scripts/fleet-report.sh` added to `limitedScope`, so
       WildFocus and vestia stop being told to adopt `/fleet` the command without the script it
       calls. PR #166 merged
-- [ ] Version-aware and framework-aware boundary — `TEMPLATE_VERSION` records which template
-      release an app is on (replacing a commit-subject grep that degraded silently), and the
-      contract extends into the template's own seams: `src/env.ts`, `env.js`, `storage.ts`,
-      `useTheme.ts`, the spacing scale and both service ports. The paywall adapter was tracked
-      while the port it plugs into was not. PR #168 open
+- [x] Version-aware boundary — `TEMPLATE_VERSION` records which template release an app is on
+      (replacing a commit-subject grep that degraded silently on squashed or transferred
+      history), and the contract extends into the template's own seams: `src/env.ts`, `env.js`,
+      `storage.ts`, `useTheme.ts`, the spacing scale and both service ports. The paywall adapter
+      was tracked while the port it plugs into was not. `bump-version.sh` moves the file in the
+      template and deliberately leaves it alone in a generated app. PR #168/#170 merged
+- [x] Fleet dashboard — `fleet-report.sh --html` renders the same data `--json` exposed into one
+      self-contained page (`scripts/fleet-html.mjs`), and `install-fleet-agent.sh` installs a
+      launchd agent refreshing it every 3 hours, so it is current without a command being typed.
+      Output lands in `~/.focalstudio/`, outside the repo, so fleet data about private apps
+      cannot be committed to this public template by accident. The agent proves whether it can
+      read the repo directly rather than guessing at macOS TCC state, because a wrong guess
+      leaves a plausible-looking stale page. Framework-aware: version-outlier detection compares
+      only within a framework, so a Capacitor app and an Expo app are not drift.
+      PRs #169, #172, #173 merged
+- [x] Status tracking maintained without being asked — the `Stop` hook hands the session the
+      commit subjects and the rules and has it write `STATUS.md`/`ROADMAP.md` before stopping,
+      rather than telling the user to run `/wrap` at the one moment nobody wants to type another
+      command. Bounded: two files, a `chore:` commit on a feature branch only, never a push,
+      and announced in one line. PR #171 merged
+- [x] Context diet — `.claude/CLAUDE.md`, `AGENTS.md` and `.claude/SKILLS.md` enter every
+      session and roughly a fifth of them restated each other. Five sections moved behind
+      pointers into `.claude/reference/`; 54,438 → 40,788 bytes. PR #174 merged
 - [ ] Resolve `react-native-reanimated`'s 25–30% memory regression on SDK 56 (#67)
