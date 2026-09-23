@@ -54,14 +54,15 @@
       silently — found while shipping #155
 - [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
       flaked ~1-in-3; found in a generated app, invisible from here (#143)
-- [ ] `eas-preview.yml` stops paying for builds a push cannot change — no `paths-ignore` meant
+- [x] `eas-preview.yml` stops paying for builds a push cannot change — no `paths-ignore` meant
       every docs-only, CI-only or tooling-only push to `dev` ran the full `[ios, android]` matrix,
       ~2h30m of EAS time for a byte-identical binary. 19 of the 30 `dev` pushes before the fix
       qualify. `scripts/**` is the biggest line and holds only while nothing in it runs at build
       time, which the workflow header now records as an invariant. Ignoring `.github/**` costs the
       workflow its own self-trigger, so `workflow_dispatch` came with it. Found downstream in
       MealCart, whose copy merged a narrower list already and triggers on `main` — `scripts/**` is
-      the only part that should travel. PR #183 open (#160)
+      the only part that should travel. PR #183 merged; the merge itself was the first push
+      it skipped. MealCart follow-up in `mealcart#143` (#160)
 - [ ] Comments that say "this repo" invert when `init.sh` copies them downstream —
       `maestro-e2e.yml` tells a generated app its E2E job skips at the bootstrap gate, which is
       backwards. Unlike the placeholder bug they survive bootstrap intact, and `identical` mode
@@ -119,10 +120,11 @@
       handled; the other three have not been read since #151. Also re-triage MealCart's
       `skip` array — its 24 entries are a first-pass "known absent", not a verified reading
 
-  > Extending the contract into `src/` (PR #168) sharpened this: **MealCart's `storage.ts` is
-  > missing `clearByPrefix`**, the helper that purges the app's own AsyncStorage on account
-  > deletion, plus the zod-validation overload. That is on the path the Play Data Safety work
-  > depends on. MealCart is also missing `src/env.ts` and both service ports entirely — left
+  > Extending the contract into `src/` (PR #168) surfaced a `storage.ts` difference that was
+  > first read backwards. **MealCart has `clearByPrefix` and the template does not.** The
+  > template's `deleteAccount` only leaves a comment asking implementers to clear
+  > `STORAGE_PREFIX`, so upstreaming the helper is template work (#184). MealCart lacks only the
+  > zod-validation overload. MealCart is also missing `src/env.ts` and both service ports entirely — left
   > reported rather than skipped, because deciding it does not need the ports is a product call.
 - [x] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
