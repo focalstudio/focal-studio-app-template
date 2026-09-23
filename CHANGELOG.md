@@ -23,6 +23,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
   the App already exists, so only the idempotency guard is reachable.
 
 ### Fixed
+- **`eas-preview.yml` built the app on pushes that cannot change it.** The workflow triggered on
+  every push to `dev` with no path filter, so a docs-only, CI-only or store-listing-only push ran
+  the full `[ios, android]` matrix — ~2h30m of EAS build time for a binary byte-identical to the
+  last one. `dev` is the integration branch, which makes this worse here than in a generated app:
+  of the 30 pushes to `dev` before the fix, **19 changed nothing the bundle can see**. Added a
+  `paths-ignore` covering `**.md`, `.github/**`, `.claude/**`, `store-listing/**`, `scripts/**`,
+  `supabase/migrations/**`, `LICENSE` and `.gitignore`. Anything that can reach the bundle stays
+  off it — `app/`, `src/`, `assets/`, `app.json`, `app.config.js`, `env.js`, `package.json`,
+  `eas.json`, `templates/`, `.maestro/` — and GitHub skips a run only when *every* changed path
+  matches, so a mixed docs+source push still builds. `scripts/**` is the single biggest line (11 of
+  the 19) and is safe only as long as nothing in it runs at build time: there is no `postinstall`,
+  no `eas-build-*` hook and no reference from `eas.json`/`app.config.js`/`metro.config.js`, which
+  the file now records as an invariant to re-check rather than leaving to be rediscovered.
+  Ignoring `.github/**` means this workflow no longer triggers itself, so it also gained a
+  `workflow_dispatch:` trigger — the manual button is a better self-test than a 2h30m build that
+  only proves one YAML key parsed. Found downstream in MealCart, where a one-file fix to
+  `supabase-keepalive.yml` burned a full dual-platform build (#160).
 - **Three stale pointers in `.claude/agents/`.** `release-manager` was told to follow the release
   workflow in `.claude/CLAUDE.md`, but #174 moved the full procedure to
   `.claude/reference/release-workflow.md` and left a summary — and the pre-emptive review, the

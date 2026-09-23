@@ -1,9 +1,46 @@
 name: EAS Preview Build
 
+# Builds a preview binary for every push to dev.
+#
+# The paths-ignore list exists because this workflow costs a ~2h30m iOS + Android
+# matrix build every time it fires, and a push that cannot change the app bundle
+# should not pay that. `dev` is the integration branch, so it takes far more
+# pushes than main does: over the 30 dev pushes before this filter landed, 19
+# changed nothing the bundle can see.
+#
+# GitHub skips a run only when EVERY changed path in the push matches the list,
+# so a mixed docs+source push still builds. The only way to get this wrong is to
+# list something that genuinely reaches the bundle — keep app/, src/, assets/,
+# app.json, app.config.js, env.js, package.json, eas.json, templates/ and
+# .maestro/ OFF this list.
+#
+# scripts/ is on the list because nothing in it runs during a build: there is no
+# postinstall in package.json, no eas-build-* hook, and no reference to it from
+# eas.json, app.config.js, metro.config.js or babel.config.js. If you ever add a
+# build hook that shells into scripts/, remove that line.
+#
+# Note that cancelling the GitHub Actions run does NOT stop a build already
+# queued on EAS — once the `eas build` step has run, the build lives on Expo's
+# servers and needs `eas build:cancel <id>` (find ids via `eas build:list`).
+#
+# workflow_dispatch is the escape hatch for .github/** being ignored: a change to
+# this file no longer triggers this file, so use the Run workflow button to test
+# an edit to it.
+
 on:
   push:
     branches:
       - dev
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - '.claude/**'
+      - 'store-listing/**'
+      - 'scripts/**'
+      - 'supabase/migrations/**'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'

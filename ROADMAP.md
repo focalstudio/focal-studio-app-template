@@ -54,6 +54,14 @@
       silently — found while shipping #155
 - [x] Maestro flow reliability — the Danger Zone scroll was a no-op and post-gesture assertions
       flaked ~1-in-3; found in a generated app, invisible from here (#143)
+- [ ] `eas-preview.yml` stops paying for builds a push cannot change — no `paths-ignore` meant
+      every docs-only, CI-only or tooling-only push to `dev` ran the full `[ios, android]` matrix,
+      ~2h30m of EAS time for a byte-identical binary. 19 of the 30 `dev` pushes before the fix
+      qualify. `scripts/**` is the biggest line and holds only while nothing in it runs at build
+      time, which the workflow header now records as an invariant. Ignoring `.github/**` costs the
+      workflow its own self-trigger, so `workflow_dispatch` came with it. Found downstream in
+      MealCart, whose copy merged a narrower list already and triggers on `main` — `scripts/**` is
+      the only part that should travel. PR #183 open (#160)
 - [ ] Comments that say "this repo" invert when `init.sh` copies them downstream —
       `maestro-e2e.yml` tells a generated app its E2E job skips at the bootstrap gate, which is
       backwards. Unlike the placeholder bug they survive bootstrap intact, and `identical` mode
@@ -116,11 +124,14 @@
   > deletion, plus the zod-validation overload. That is on the path the Play Data Safety work
   > depends on. MealCart is also missing `src/env.ts` and both service ports entirely — left
   > reported rather than skipped, because deciding it does not need the ports is a product call.
-- [ ] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
+- [x] Cross-repo privacy auto-PR workflow (#56) — `publish-privacy.yml` opens a reviewed PR on
       the Pages repo, and the shared token decision was taken with it: one org-owned GitHub App,
-      two org secrets, `.claude/reference/cross-repo-token.md`. Merged as PR #154; the App itself
-      still needs provisioning — a browser-only flow, and the one step a session cannot do for
-      itself
+      two org secrets, `.claude/reference/cross-repo-token.md`. PR #154 merged. **The App is
+      provisioned** and the workflow ran green on 2026-09-20; it is `workflow_dispatch`-only, so
+      it had no cron to arm and was provable the same day. `scripts/provision-cross-repo-app.sh`
+      (PR #180) turned the browser-only chore into a scripted one, but is disaster-recovery
+      rather than a pending step — its creation path cannot run while the App exists.
+      Proving it against a *real* app config is separately tracked in Phase 3
 - [x] Fleet inventory — `scripts/fleet-report.sh` / `/fleet` answers "what database does each app
       use, what shipped last, what needs attention" across the org in one screen. Hand-maintains
       nothing: the repo list comes from `gh repo list`, so a new app appears the moment it exists.

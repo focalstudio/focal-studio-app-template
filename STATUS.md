@@ -1,6 +1,6 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-09-21_
+_Updated: 2026-09-22_
 
 > Narrative only. Version, release age, CI, unreleased commits, roadmap percentage and
 > template currency are **derived** — they live on the dashboard
@@ -11,43 +11,44 @@ _Updated: 2026-09-21_
 > and what is in the way.
 
 ## Now
-**Release 0.16.0 is being cut.** The whole plan-length arc landed on `dev` in one stretch and none
-of it has shipped: `TEMPLATE_VERSION` and the `src/` seams (#168/#170), the fleet dashboard and its
-launchd agent (#169, #172, #173), the `Stop`-hook status refresh (#171) and the context diet (#174).
-The headline for the release notes is that **`cross-repo-report.yml` reaches `main` for the first
-time**, which is what makes the weekly scheduled drift + fleet report able to run at all (#161).
+**0.16.0 is out** — tagged `v0.16.0`, `release/0.16.0` deleted, and `cross-repo-report.yml` on
+`main` for the first time, which is what lets its `schedule:` fire at all. Everything that had
+piled up on `dev` unshipped went with it: `TEMPLATE_VERSION` and the `src/` seams (#168/#170), the
+fleet dashboard and its launchd agent (#169, #172, #173), the `Stop`-hook status refresh (#171) and
+the context diet (#174).
 
-`qa-reviewer` audited `origin/main...origin/dev` first — 28 files, +2356/−312, almost all shell,
-workflows and a 1009-line HTML renderer rather than React Native, so it was weighted at `set -euo
-pipefail` interactions, `jq` on non-JSON input and HTML escaping in `scripts/fleet-html.mjs`
-(escaping came back sound). It found one blocker: `cross-repo-report.yml` wrote both report bodies
-into a run summary that is world-readable on a public repo, while the reports describe private
-apps. Fixed on the release branch — the summary now carries counts only. The three should-fixes
-are deferred to #175, #176 and #177.
+Since the release, four smaller things on `dev`: `scripts/provision-cross-repo-app.sh` (#180),
+three stale pointers in `.claude/agents/` to a moved workflow and two skills that never existed
+(#181), and a docs catch-up correcting two places that still described the cross-repo report as
+unbuilt (#182).
+
+**In flight: PR #183** gives `eas-preview.yml` a `paths-ignore` (#160). It had none, so every
+docs-only, CI-only or tooling-only push to `dev` ran the full `[ios, android]` matrix — ~2h30m of
+EAS time for a byte-identical binary. Checked against real history: **19 of the last 30 pushes to
+`dev` would have skipped**, 11 of them on `scripts/**` alone. Two calls stated in the PR —
+`scripts/**` is safe only while nothing in it runs at build time (recorded as an invariant in the
+workflow header), and ignoring `.github/**` costs the workflow its own self-trigger, so
+`workflow_dispatch` came with it. Found downstream in MealCart.
 
 A session-long plan for the wider goal (one dashboard, apps that adopt template releases
 themselves, a site that stays current) is at `~/.claude/plans/i-want-to-make-dreamy-zebra.md`.
 
 ## Next
-- **The GitHub App is already provisioned** — `FOCALSTUDIO_BOT_APP_ID` and
-  `FOCALSTUDIO_BOT_PRIVATE_KEY` have been org secrets since 2026-09-20 and 2026-08-11. This file
-  and the reference doc both said otherwise, and a release was nearly cut on that assumption:
-  `cross-repo-report.yml` had not run only because `schedule:` fires from the default branch and
-  the file had not reached `main`. Merging 0.16.0 arms it for real. `scripts/provision-cross-repo-app.sh`
-  (PR #180) is therefore documentation and disaster-recovery, not a pending task — its creation
-  path has never run and cannot be exercised while the App exists.
-  The App was exercised the same day it was created: `publish-privacy.yml` ran green on
-  2026-09-20. It is `workflow_dispatch`-only, so it has no cron to arm — which is why it was
-  provable immediately and `cross-repo-report.yml` was not.
-- **Merge the two release PRs**, then delete `release/0.16.0` by hand. Never `--delete-branch` on
-  the main PR: it auto-closes the backmerge.
+- **Propagate #183 to MealCart and tick.** MealCart's `eas-preview.yml` is on its `skip` list in
+  `.github/shared-paths.json`, so the drift report will not surface it — this has to be carried by
+  hand. It already merged the narrower list in `mealcart#133` and already has `workflow_dispatch`,
+  so **only `scripts/**` needs to travel**, and its `main` trigger must not be copied across in
+  either direction. tick is full-scope and will show up in the report normally.
 - **MealCart is missing `clearByPrefix` from `storage.ts`** — the account-deletion purge helper —
-  found by #168's first run. It sits on the path the Play Data Safety work depends on. Decide
-  whether to open an issue downstream.
+  found by #168's first run. It sits on the path the Play Data Safety work depends on. Still
+  undecided whether to open an issue downstream; it has carried over two sessions now.
+- **Watch the first scheduled `cross-repo-report.yml` run.** It has never fired: the workflow only
+  reached `main` with 0.16.0, and `schedule:` fires from the default branch. First real proof that
+  the org App works from a cron rather than a `workflow_dispatch`.
 
 ## Blockers
 None. The GitHub App is provisioned and no longer gates anything — that entry stood here long
-after it stopped being true, which is the failure worth remembering from this session.
+after it stopped being true, which is the failure worth remembering from the 0.16.0 session.
 
 **Carrying forward** (live context, not blocking):
 - **`provision-supabase.sh` has never run against a live Supabase account**, and CI can only ever
