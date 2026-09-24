@@ -200,7 +200,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 EOF
 echo "  ✅  Version reset to 0.1.0 (TEMPLATE_VERSION stays at $(cat TEMPLATE_VERSION 2>/dev/null || echo '?'))"
 
-# ── Tracking-file reset (STATUS.md / ROADMAP.md track the TEMPLATE's own work) ─
+# ── Tracking-file reset (STATUS.md / ROADMAP.md / PARKING.md track the TEMPLATE's own work) ─
 # Both files are ordinary *.md, so the replace() pass above only swaps the app-name
 # placeholder inside them — a new app would otherwise start life owning the
 # template's own status and roadmap. Overwrite them with genuine starters instead.
@@ -214,7 +214,7 @@ echo "  ✅  Version reset to 0.1.0 (TEMPLATE_VERSION stays at $(cat TEMPLATE_VE
 #      The app name is echoed separately instead, expanded from the variable.
 #      (Execution is safe regardless: sed -i renames, so the running shell keeps
 #      reading the original unlinked inode.)
-echo "  Resetting STATUS.md and ROADMAP.md..."
+echo "  Resetting STATUS.md, ROADMAP.md and PARKING.md..."
 {
   echo "# $APP_NAME — Status"
   echo ""
@@ -264,7 +264,21 @@ EOF
 - [ ] Post-launch iteration backlog triaged
 EOF
 } > ROADMAP.md
-echo "  ✅  STATUS.md and ROADMAP.md reset to starters"
+# PARKING.md is the template's own backlog of out-of-scope findings; an app starts
+# with an empty one, keeping the header that points at the rule in AGENTS.md.
+cat << 'EOF' > PARKING.md
+# Parking lot
+
+> Findings spotted mid-session and **deliberately not fixed there**. The rule and the entry
+> format are in [AGENTS.md](AGENTS.md), under "One issue per session — the parking lot".
+> Append-only. Triaged at each release cut: every entry is filed as an issue (labelled `parked`)
+> or dropped with a reason, then moved to `## Triaged`.
+
+## Parked
+
+## Triaged
+EOF
+echo "  ✅  STATUS.md, ROADMAP.md and PARKING.md reset to starters"
 
 # ── Regenerate lockfile so it carries the real app name/version ───────────────
 # package-lock.json is excluded from sed replacements above (wrong tool for JSON

@@ -21,6 +21,7 @@ that used to sit in its header is derived here or on the dashboard.
 3. Read `STATUS.md` (Now / Next / Blockers)
 4. Read `ROADMAP.md` (the phases + checkboxes)
 5. Read the top of `CHANGELOG.md` — the `[Unreleased]` block and the latest released version
+5b. Count untriaged entries in `PARKING.md` (`- [ ]` lines under `## Parked`); skip if the file is absent
 6. Read the project's Claude memory for any pending hand-off: the memory index (`MEMORY.md`)
    and any `project_*.md` hand-off files under the project memory dir, if present. Skip
    gracefully if absent.
@@ -57,6 +58,7 @@ In flight : <one line — the [Unreleased] CHANGELOG summary / current branch in
 Open PRs  : <list, or "none">
 Next up   : <the Next items from STATUS.md>
 Blockers  : <from STATUS.md, or "none">
+Parked    : <n untriaged in PARKING.md — triaged at the next release cut, or "none">
 ```
 
 End with a single sentence: **"You are here: <phase name>, ~<overall>% through the roadmap — <one-line what to do next>."**

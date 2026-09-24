@@ -47,6 +47,14 @@ It is idempotent — existing labels are updated in place, so it is safe to re-r
 |-------|--------------|
 | `e2e` | Runs the Maestro E2E suite on a PR to `dev`. PRs to `main` run it unconditionally, so the label is only needed when you want the pre-merge signal on a `dev` PR — see [.github/workflows/maestro-e2e.yml](../../.github/workflows/maestro-e2e.yml). Adding it to an already-open PR re-triggers the run. |
 
+### Planning labels (optional, on top of type + priority + milestone)
+| Label | When to use |
+|-------|-------------|
+| `next-release` | Scheduled for the next tagged release. **Rolling**: at each release cut, closed issues keep it as history, and open issues planned for the following release get it. No per-version labels to pile up. `gh issue list --label next-release` is the release scope |
+| `qa-review` | Found by a pre-release QA review (`qa-reviewer`, release step 4) and deferred rather than fixed in the release |
+| `parked` | Filed during a `PARKING.md` triage — a finding a session spotted and deliberately did not fix. See the parking-lot rule in [AGENTS.md](../../AGENTS.md) |
+| `tracking` | Watch-only. No fix is planned until an outside trigger fires (an upstream fix, an app that needs it). Keeps it from reading as neglected work |
+
 The remaining GitHub defaults (`duplicate`, `good first issue`, `help wanted`, `invalid`, `wontfix`) exist for triage and are not part of the type/priority/milestone convention.
 
 ### Typical combinations

@@ -51,7 +51,7 @@ When asked for code changes, follow this workflow unless explicitly told otherwi
 2. Explain briefly what you plan to change.
 3. **Branch off `dev`** (not `main`) before editing files.
 4. Use a clear branch name (see naming convention below).
-5. Make the smallest set of changes needed.
+5. Make the smallest set of changes needed. **Only the issue in hand** — any other finding goes to `PARKING.md`, not the diff ([AGENTS.md](../AGENTS.md), "One issue per session").
 6. Update `CHANGELOG.md` under `## [Unreleased]` for any user-visible change.
 7. Show which files changed and why.
 8. Push the branch and **open a PR targeting `dev`** using `gh pr create --base dev`.
@@ -355,6 +355,7 @@ Each agent declares its own `model` and `effort` in frontmatter. Do not override
 
 ## What not to do
 - Do not make secretive changes. **One named exception**: the `Stop` hook's `STATUS.md` / `ROADMAP.md` refresh happens unprompted, because a tracking file that depends on remembering a command drifts. It is bounded and announced — see "Session workflow". Nothing else gets written without being asked for, and this exception does not generalise.
+- Do not fix things outside the issue you were opened for. Park them in `PARKING.md` (see [AGENTS.md](../AGENTS.md)).
 - Do not skip branch creation unless explicitly allowed.
 - Do not assume credentials are available.
 - Do not run destructive git commands without asking.

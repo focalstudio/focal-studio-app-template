@@ -20,6 +20,32 @@ Skipping any of these is the most common cause of broken PRs in this repo.
 
 ---
 
+## One issue per session — the parking lot
+
+A session fixes **the one issue it was opened for**. One issue → one branch → one PR. Sessions that
+fix "one more small thing" on the way produce PRs nobody can review and regressions nobody can
+bisect, and the extra fix skips the issue, the labels and the plan that would have caught it.
+
+1. **Anything else you find goes to [`PARKING.md`](PARKING.md), not into the diff.** That holds even if
+   it is a one-liner, even if the user did not ask, and even if you were about to suggest it.
+   Append one line under `## Parked`:
+   `- [ ] YYYY-MM-DD · found while on #N · path:line · what is wrong · suggested priority`
+   Then tell the user in one line: `Parked: <finding>`.
+2. **Commit the parking entry on its own** (`chore: park <finding>`), separate from the fix, on the
+   current branch. Append at the bottom of the section; a conflict with another branch's entry is
+   resolved by keeping both lines.
+3. **If the finding blocks the current fix, stop and ask.** Do not widen scope silently, and do not
+   park something the fix cannot ship without.
+4. **Nothing parked is fixed in the session that parked it.** Triage happens at release cut
+   (release workflow step 4b) or when the user asks. Each entry is either filed as an issue,
+   labelled per [.claude/reference/issue-labels.md](.claude/reference/issue-labels.md) **plus
+   `parked`**, or dropped with a reason. Either way it moves to `## Triaged`.
+
+This is a rule for agents, and it applies when a human says "while you're there…" too. Suggest
+parking it; do it in the same session only if they insist.
+
+---
+
 ## Map of the repo
 
 ```
@@ -27,6 +53,7 @@ focal-studio-app-template/
 ├── AGENTS.md              ← you are here
 ├── README.md              ← human-facing setup + run instructions
 ├── CHANGELOG.md           ← user-visible changes; update under [Unreleased] for any change
+├── PARKING.md             ← out-of-scope findings, parked mid-session (see the rule above)
 ├── package.json           ← scripts: start, ios, android, test, lint, type-check, bump-version
 ├── app.json               ← Expo config; native fields here invalidate EAS build cache
 ├── tsconfig.json
