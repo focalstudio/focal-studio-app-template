@@ -25,8 +25,8 @@ unbuilt (#182).
 **#160 shipped (PR #183).** `eas-preview.yml` now ignores pushes that cannot change the bundle.
 Checked against history, 19 of the last 30 pushes to `dev` would have been skipped. It was also
 checked live: CI ran on the merge commit and EAS Preview did not. The three pushes before it,
-including the docs-only #182, each started a build. The `workflow_dispatch` trigger has not been
-clicked yet. It should stop at the `[APP_SLUG]` check within seconds.
+including the docs-only #182, each started a build. The `workflow_dispatch` trigger was tried on
+2026-09-24: both jobs stopped at the `[APP_SLUG]` check and used no EAS minutes.
 
 **One note in this file was backwards.** For two sessions Next said "MealCart is missing
 `clearByPrefix`". MealCart has it and the template does not: the template's `deleteAccount` only
