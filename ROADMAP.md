@@ -145,6 +145,11 @@
       instead of cloning anonymously. PR #166 merged. It covers the half a local script
       structurally cannot: a repo nobody is editing, in a week nobody thought to look. Skips
       cleanly where the org App is not configured — which is still everywhere (#145, #163)
+- [ ] One issue per session, enforced by a `PARKING.md` parking lot. Out-of-scope findings are
+      parked rather than fixed, then triaged into `parked` issues at release cut. The rule lives in
+      `AGENTS.md`, so it travels to every app. Four planning labels came with it (PR #186)
+- [ ] Close out the 0.16.0 QA review: #175 (report can never fail), #176 (token persisted to
+      `.git/config`), #177 (unreachable org guard), and the batched nits in #187
 - [x] `scripts/drift-report.sh` and `scripts/fleet-report.sh` added to `limitedScope`, so
       WildFocus and vestia stop being told to adopt `/fleet` the command without the script it
       calls. PR #166 merged
