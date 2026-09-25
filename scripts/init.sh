@@ -201,9 +201,9 @@ EOF
 echo "  ✅  Version reset to 0.1.0 (TEMPLATE_VERSION stays at $(cat TEMPLATE_VERSION 2>/dev/null || echo '?'))"
 
 # ── Tracking-file reset (STATUS.md / ROADMAP.md / PARKING.md track the TEMPLATE's own work) ─
-# Both files are ordinary *.md, so the replace() pass above only swaps the app-name
+# All three are ordinary *.md, so the replace() pass above only swaps the app-name
 # placeholder inside them — a new app would otherwise start life owning the
-# template's own status and roadmap. Overwrite them with genuine starters instead.
+# template's own status, roadmap and parked findings. Overwrite them with starters instead.
 #
 # The bodies use a QUOTED heredoc (<< 'EOF') deliberately, for two reasons:
 #   1. They contain backticks; an unquoted heredoc would run those as command
