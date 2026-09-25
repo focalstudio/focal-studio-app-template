@@ -3,6 +3,10 @@ import type { User } from "../types";
 import { authProvider, AuthError } from "../services/auth";
 import type { AuthSession } from "../services/auth";
 import { clearQueryCache } from "../lib/queryClient";
+import { STORAGE_PREFIX } from "../constants";
+import { clearByPrefix } from "../utils/storage";
+import { cancelAllNotifications } from "../services/notifications";
+import { ANALYTICS_KEY } from "./useAppStore";
 
 type AuthState = {
   session: AuthSession | null;
@@ -208,9 +212,11 @@ export const useAuthStore = create<AuthState>((set) => ({
    * `app/(tabs)/settings.tsx` already depends on this: it catches, alerts
    * "Couldn't Delete Account", and does not navigate away.
    *
-   * Implementers: also purge app data cached under STORAGE_PREFIX and cancel
-   * scheduled notifications. Deleting the account server-side does not clear
-   * the device, and an orphaned reminder will fire for a deleted account.
+   * On success it also purges everything under STORAGE_PREFIX and cancels
+   * scheduled reminders: deleting the account server-side does not clear the
+   * device, and an orphaned reminder would fire for a deleted account. The
+   * analytics opt-out is kept — it is a device choice, not account data, and
+   * losing it would re-opt the user in on the next cold start.
    */
   deleteAccount: async () => {
     set({ isSubmitting: true });
@@ -220,6 +226,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       // signed in and still looking at their data.
       await authProvider.deleteAccount();
       clearQueryCache();
+      await clearByPrefix(STORAGE_PREFIX, [ANALYTICS_KEY]);
+      await cancelAllNotifications();
       set(signedOut);
     } finally {
       set({ isSubmitting: false });

@@ -1,6 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
-import { loadJson, saveJson, loadNumber, saveNumber, loadString, saveString } from "../utils/storage";
+import {
+  clearByPrefix,
+  loadJson,
+  saveJson,
+  loadNumber,
+  saveNumber,
+  loadString,
+  saveString,
+} from "../utils/storage";
 
 beforeEach(() => AsyncStorage.clear());
 
@@ -69,5 +77,30 @@ describe("loadString / saveString", () => {
   });
   it("returns fallback when key is missing", async () => {
     expect(await loadString("missing", "default")).toBe("default");
+  });
+});
+
+describe("clearByPrefix", () => {
+  beforeEach(async () => {
+    await AsyncStorage.multiSet([
+      ["app_a", "1"],
+      ["app_b", "2"],
+      ["other_c", "3"],
+    ]);
+  });
+
+  it("removes only keys with the prefix", async () => {
+    await clearByPrefix("app_");
+    expect(await AsyncStorage.getAllKeys()).toEqual(["other_c"]);
+  });
+
+  it("leaves keys listed in keep", async () => {
+    await clearByPrefix("app_", ["app_b"]);
+    expect([...(await AsyncStorage.getAllKeys())].sort()).toEqual(["app_b", "other_c"]);
+  });
+
+  it("swallows storage failures", async () => {
+    jest.spyOn(AsyncStorage, "getAllKeys").mockRejectedValueOnce(new Error("disk"));
+    await expect(clearByPrefix("app_")).resolves.toBeUndefined();
   });
 });

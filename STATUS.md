@@ -1,6 +1,6 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-09-24_
+_Updated: 2026-09-25_
 
 > Narrative only. Version, release age, CI, unreleased commits, roadmap percentage and
 > template currency are **derived** — they live on the dashboard
@@ -11,24 +11,23 @@ _Updated: 2026-09-24_
 > and what is in the way.
 
 ## Now
-**A roadmap for clearing the backlog is set.** Every open issue and PR has a slot in a fix order.
-A private status board tracks live state (https://claude.ai/artifact/7oxwzagJ1hhMpM47DozqQT), and
-the plan is in `~/.claude/plans/make-a-plan-on-crispy-peacock.md`. Done on 2026-09-24:
+**Wave 1 of the backlog plan is under way.** The fix order and live state are on the board
+(https://claude.ai/artifact/7oxwzagJ1hhMpM47DozqQT), and the plan is in
+`~/.claude/plans/make-a-plan-on-crispy-peacock.md`.
 
-- PR #185 merged, and #160 closed by hand (shipped in #183).
-- The 0.16.0 QA review's unfiled nits are now #187, grouped into batches A/B/C by file. The
-  leftover smoke-test box is #188.
-- Four planning labels synced and applied: `next-release`, `qa-review`, `parked`, `tracking`.
-- **PR #186 (open)**: one issue per session. Anything else a session finds goes to `PARKING.md`,
-  and gets triaged at release step 4b. The rule is in `AGENTS.md`, so it travels to every app.
+- PR #186 merged: one issue per session, with `PARKING.md` for everything else. Nothing is parked yet.
+- **PR #189 (open) fixes #184.** `deleteAccount` now purges `STORAGE_PREFIX` storage through a new
+  `clearByPrefix` in `storage.ts`, upstreamed from MealCart, and cancels reminders. Both happen only
+  after the remote delete succeeds. The analytics opt-out is kept: wiping it would re-opt the user in
+  on the next cold start, and MealCart has that bug today.
 
 ## Next
-- **Merge #186**, then work Wave 1, one fresh session per issue: **#184** (can run in parallel with
-  **#176** in a worktree), then **#175**, then **#177**. Batches A and B of #187 follow if there is
+- **Review and merge #189**, then continue Wave 1 with one fresh session per issue: **#176** (it can run
+  in parallel in a worktree), then **#175**, then **#177**. Batches A and B of #187 follow if there is
   time. **0.17.0 target: Wed 2026-09-30.**
-- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It runs
-  0.16.0 code, so it stays green even if it crashes; read the log by hand. The #175 fix is first
-  proven on the 2026-10-05 run.
+- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It stays green
+  even if it crashes, so read the log by hand. Once #189 is on `dev`, MealCart's `storage.ts` should
+  differ only by the zod overload, and it should pick up `keep`.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers

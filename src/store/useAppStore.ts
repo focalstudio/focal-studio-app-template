@@ -8,6 +8,8 @@ import { Analytics, setAnalyticsEnabled as applyAnalyticsEnabled } from "../serv
 
 const THEME_KEY = `${STORAGE_PREFIX}theme`;
 const NOTIF_KEY = `${STORAGE_PREFIX}notification_prefs`;
+// Exported so account deletion can keep the opt-out while purging the rest.
+export const ANALYTICS_KEY = `${STORAGE_PREFIX}analytics`;
 // DEV_MODE_KEY is imported from constants — it includes the app version so dev
 // mode resets automatically on every version upgrade (as designed).
 const DEV_MODE_KEY_STORE = DEV_MODE_KEY;
@@ -55,7 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   setAnalyticsEnabled: (analyticsEnabled) => {
     set({ analyticsEnabled });
-    saveString(`${STORAGE_PREFIX}analytics`, String(analyticsEnabled));
+    saveString(ANALYTICS_KEY, String(analyticsEnabled));
     applyAnalyticsEnabled(analyticsEnabled);
   },
 
@@ -68,7 +70,7 @@ export const useAppStore = create<AppState>((set) => ({
     const theme = themeSchema.catch("device").parse(await loadString(THEME_KEY, "device"));
     const notificationPrefs = await loadJson(NOTIF_KEY, DEFAULT_NOTIF_PREFS, STORED_PREFS_SCHEMA);
 
-    const analyticsStr = await loadString(`${STORAGE_PREFIX}analytics`, "true");
+    const analyticsStr = await loadString(ANALYTICS_KEY, "true");
     const devModeStr = await loadString(DEV_MODE_KEY_STORE, "false");
     const analyticsEnabled = analyticsStr !== "false";
 

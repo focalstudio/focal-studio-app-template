@@ -1,4 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import { STORAGE_PREFIX } from "../../constants";
+import { ANALYTICS_KEY } from "../useAppStore";
 import { queryClient } from "../../lib/queryClient";
 import { AuthError } from "../../services/auth/types";
 import type { AuthProvider, AuthSession } from "../../services/auth/types";
@@ -343,6 +346,48 @@ describe("useAuthStore — deleteAccount contract", () => {
       code: "network",
     });
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
+  });
+});
+
+describe("useAuthStore — deleteAccount clears the device", () => {
+  const OWN_KEY = `${STORAGE_PREFIX}onboarding_complete`;
+  const FOREIGN_KEY = "not_ours";
+  const cancelAll = Notifications.cancelAllScheduledNotificationsAsync as jest.Mock;
+
+  beforeEach(async () => {
+    await AsyncStorage.multiSet([
+      [OWN_KEY, "true"],
+      [ANALYTICS_KEY, "false"],
+      [FOREIGN_KEY, "x"],
+    ]);
+    cancelAll.mockClear();
+  });
+
+  it("purges prefixed storage and cancels reminders on success", async () => {
+    await useAuthStore.getState().deleteAccount();
+
+    expect(await AsyncStorage.getItem(OWN_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(FOREIGN_KEY)).toBe("x");
+    expect(cancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  // Wiping it would make the next cold start default to opted-in.
+  it("keeps the analytics opt-out", async () => {
+    await useAuthStore.getState().deleteAccount();
+
+    expect(await AsyncStorage.getItem(ANALYTICS_KEY)).toBe("false");
+  });
+
+  it("touches neither storage nor reminders when the remote delete fails", async () => {
+    mockProvider.deleteAccount = jest
+      .fn()
+      .mockRejectedValue(new AuthError("network", "backend unreachable"));
+
+    await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow();
+
+    expect(await AsyncStorage.getItem(OWN_KEY)).toBe("true");
+    expect(await AsyncStorage.getItem(ANALYTICS_KEY)).toBe("false");
+    expect(cancelAll).not.toHaveBeenCalled();
   });
 });
 

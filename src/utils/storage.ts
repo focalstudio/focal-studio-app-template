@@ -74,3 +74,20 @@ export async function removeItem(key: string): Promise<void> {
     await AsyncStorage.removeItem(key);
   } catch {}
 }
+
+/**
+ * Removes every key that starts with `prefix`, except those listed in `keep`.
+ * Used to purge the app's own AsyncStorage on account deletion.
+ *
+ * `keep` exists for device-level choices that must outlive the account — the
+ * analytics opt-out above all. Wiping it would make the next cold start fall
+ * back to the opted-in default, silently re-enabling analytics for a user who
+ * had turned it off. Best-effort like the rest of this module.
+ */
+export async function clearByPrefix(prefix: string, keep: readonly string[] = []): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const own = keys.filter((k) => k.startsWith(prefix) && !keep.includes(k));
+    if (own.length > 0) await AsyncStorage.multiRemove(own);
+  } catch {}
+}
