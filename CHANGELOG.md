@@ -40,6 +40,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   edited but not committed there. The hook is `identical`-shared, so every app gets this.
 
 ### Fixed
+- **The weekly cross-repo report stayed green when a script died (#175).** Both report steps swallowed
+  a non-zero exit, so an expired token or a crash looked the same as a clean week, and it stayed that
+  way indefinitely. This was already happening: the first two runs reported "exited 1" and passed. A
+  script that dies now fails the job. Finding drift or flagging repos still does not, because the
+  reports are not gates. `drift-report.sh` and `fleet-report.sh` now print one final line on failure,
+  `failed at stage: <stage>`, which names a fixed stage plus the repo for per-repo stages and never
+  includes the error text. The workflow publishes that stage. Each step's outcome also goes out as an
+  annotation, so `gh run view` shows the result without opening a browser. A dead drift report no
+  longer skips the fleet report.
 - **`drift-report.sh` wrote `GH_TOKEN` in plaintext into its cached clones (#176).** The token went
   into the remote URL, which git saves in `.claude/scratch/drift/<app>/.git/config`. That was harmless
   on an ephemeral CI runner. Locally, `GH_TOKEN` is often a real PAT, and it stayed in the project tree

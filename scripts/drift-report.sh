@@ -30,6 +30,20 @@
 
 set -euo pipefail
 
+# ── Failure stage ────────────────────────────────────────────────────────────
+# Under `set -e` a failure anywhere ends the run with no word as to where. The
+# workflow publishes nothing of this script's output (cross-repo-report.yml), so on a
+# non-zero exit this one line is all it gets. It holds a fixed stage name and at most a
+# repo name, never an error message. Keep it that way, because the workflow copies the
+# line to a public page after checking it against this exact format.
+STAGE="setup"
+_report_stage() {
+  local rc="$1"
+  [[ "$rc" -ne 0 ]] && echo "drift-report.sh: failed at stage: $STAGE (exit $rc)" >&2
+  return "$rc"
+}
+trap '_report_stage $?' EXIT
+
 APP_FILTER=""
 PATH_FILTER=""
 SHOW_DIFF=false
@@ -69,6 +83,7 @@ if [[ "$DO_CLEAN" == "true" ]]; then
   exit 0
 fi
 
+STAGE="preflight"
 for dep in jq git; do
   command -v "$dep" >/dev/null 2>&1 || { echo "Error: $dep is required." >&2; exit 1; }
 done
@@ -260,6 +275,7 @@ sync_clone() {
 # Loaded once into bash arrays rather than looked up with jq per file: it keeps the
 # glob dialect the same as matches_any() above (a jq regex translation would be a
 # second, subtly different one) and avoids forking jq several hundred times per app.
+STAGE="rules"
 RULE_GLOB=(); RULE_MODE=(); RULE_EXCL=()
 while IFS=$'\t' read -r g m e; do
   RULE_GLOB+=("$g"); RULE_MODE+=("$m"); RULE_EXCL+=("$e")
@@ -475,12 +491,14 @@ if [[ "$DIRECTION" == "template" ]]; then
     skip=$(jq -c '.skip // []' <<< "$app")
     dir="$CACHE/${repo##*/}"
 
+    STAGE="clone:$repo"
     if ! sync_clone "$repo" "$branch" "$dir"; then
       echo
       echo "══ $repo"
       echo "  ⚠️  Could not fetch $repo@$branch — check gh auth / repo access, or pass --no-fetch."
       continue
     fi
+    STAGE="compare:$repo"
     compare "$dir" "$repo" "$scope" "$skip"
   done <<< "$(jq -c '.apps[]' "$MANIFEST")"
 
@@ -492,13 +510,16 @@ else
   echo "Drift report — this app vs the template ($UPSTREAM)"
   echo "Manifest: .github/shared-paths.json"
   dir="$CACHE/template"
+  STAGE="clone:$UPSTREAM"
   if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir" true; then
     echo "  ⚠️  Could not fetch $UPSTREAM@$UPSTREAM_BRANCH."
     exit 0
   fi
+  STAGE="compare:$UPSTREAM"
   compare "$dir" "$UPSTREAM" "full" "[]"
 fi
 
+STAGE="summary"
 if [[ "$SHOW_DIFF" == "true" && -n "$DIFF_DETAIL" ]]; then
   echo
   echo "══ Diffs$DIFF_DETAIL"

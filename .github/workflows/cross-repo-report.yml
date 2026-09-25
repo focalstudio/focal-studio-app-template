@@ -76,58 +76,77 @@ jobs:
       # enough for the job this workflow exists to do — telling you, in a week nobody
       # thought to look, that there is something to look at. The detail is one local
       # command away and is where it was always meant to be read.
+      #
+      # One exception, on failure only: the stage the script died in (#175). Each
+      # script's EXIT trap prints a fixed stage name, plus a repo name for per-repo
+      # stages. The steps pull it out with a regex that only matches that exact format,
+      # so no stderr text gets through. Repo names are fine to publish: the app names
+      # are already public on the org's GitHub Pages site. Everything else stays
+      # counts-only.
+      #
+      # Each outcome also goes out as an annotation (::notice / ::error). A job summary
+      # can't be read back through the API, but annotations can, so `gh run view`
+      # shows the result without opening a browser.
       - name: Drift report (#145)
         id: drift
         if: steps.creds.outputs.has_creds == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          # `|| rc=$?` rather than a bare call: Actions runs this block under `bash -e`,
-          # and a failing report must not fail the job. That is deliberate but wrong —
-          # a dead report stays green forever. Tracked in #175, not fixed here.
+          # `|| rc=$?` so the summary and annotation are written before the step fails.
           rc=0
           bash scripts/drift-report.sh > "$RUNNER_TEMP/drift.txt" 2>&1 || rc=$?
-          {
-            echo "## Drift — template ↔ apps"
-            echo
-            if [ "$rc" -ne 0 ]; then
-              echo "Report exited \`$rc\`. No detail is published here — run it locally."
-            elif grep -q '^Clean — ' "$RUNNER_TEMP/drift.txt"; then
-              echo "**Clean** — nothing in the shared surface has drifted."
-            else
-              n="$(sed -n 's/^\([0-9][0-9]*\) drifted path(s).*/\1/p' "$RUNNER_TEMP/drift.txt" | tail -1 || true)"
-              echo "**${n:-An unknown number of} drifted path(s).** Run the report locally for the list."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -ne 0 ]; then
+            stage="$(sed -nE 's#^drift-report\.sh: failed at stage: ([a-z]+(:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?) \(exit [0-9]+\)$#\1#p' "$RUNNER_TEMP/drift.txt" | tail -1)"
+            stage="${stage:-unknown}"
+            line="Report **exited \`$rc\`** during stage \`$stage\`. No other detail is published here — run it locally."
+            annotation="::error title=Drift report::Report exited ${rc} during stage ${stage}"
+          elif grep -q '^Clean — ' "$RUNNER_TEMP/drift.txt"; then
+            line="**Clean** — nothing in the shared surface has drifted."
+            annotation="::notice title=Drift report::Clean"
+          else
+            n="$(sed -n 's/^\([0-9][0-9]*\) drifted path(s).*/\1/p' "$RUNNER_TEMP/drift.txt" | tail -1 || true)"
+            line="**${n:-An unknown number of} drifted path(s).** Run the report locally for the list."
+            annotation="::notice title=Drift report::${n:-Unknown number of} drifted path(s)"
+          fi
+          printf '## Drift — template ↔ apps\n\n%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"
+          echo "$annotation"
+          exit "$rc"
 
+      # `!cancelled()` rather than the implicit `success()`: a dead drift report must not
+      # also cost you the fleet report.
       - name: Fleet report (#163)
         id: fleet
-        if: steps.creds.outputs.has_creds == 'true'
+        if: ${{ !cancelled() && steps.creds.outputs.has_creds == 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           rc=0
           bash scripts/fleet-report.sh > "$RUNNER_TEMP/fleet.txt" 2>&1 || rc=$?
-          {
-            echo "## Fleet"
-            echo
-            if [ "$rc" -ne 0 ]; then
-              echo "Report exited \`$rc\`. No detail is published here — run it locally."
-            else
-              # `grep -c` exits 1 on no match while still printing 0, hence `|| true`.
-              repos="$(grep -c '^── ' "$RUNNER_TEMP/fleet.txt" || true)"
-              flags="$(grep -c '^  • ' "$RUNNER_TEMP/fleet.txt" || true)"
-              echo "**${repos:-0} repo(s) probed, ${flags:-0} flagged as needing a look.**"
-              if [ "${flags:-0}" -gt 0 ] 2>/dev/null; then
-                echo
-                echo "Reasons name private repos, so they are not published here."
-              fi
+          if [ "$rc" -ne 0 ]; then
+            stage="$(sed -nE 's#^fleet-report\.sh: failed at stage: ([a-z]+) \(exit [0-9]+\)$#\1#p' "$RUNNER_TEMP/fleet.txt" | tail -1)"
+            stage="${stage:-unknown}"
+            line="Report **exited \`$rc\`** during stage \`$stage\`. No other detail is published here — run it locally."
+            annotation="::error title=Fleet report::Report exited ${rc} during stage ${stage}"
+          else
+            # `grep -c` exits 1 on no match while still printing 0, hence `|| true`.
+            repos="$(grep -c '^── ' "$RUNNER_TEMP/fleet.txt" || true)"
+            flags="$(grep -c '^  • ' "$RUNNER_TEMP/fleet.txt" || true)"
+            line="**${repos:-0} repo(s) probed, ${flags:-0} flagged as needing a look.**"
+            if [ "${flags:-0}" -gt 0 ] 2>/dev/null; then
+              line="$line"$'\n\n'"Reasons name private repos, so they are not published here."
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+            annotation="::notice title=Fleet report::${repos:-0} repo(s) probed, ${flags:-0} flagged"
+          fi
+          printf '## Fleet\n\n%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"
+          echo "$annotation"
+          exit "$rc"
 
-      # Neither script gates — both exit 0 whether or not they find something, because a
-      # gate on a boundary this soft gets switched off within a week. The summary is the
-      # deliverable; this step only says where to look.
+      # Neither script gates on what it finds — drift or flagged repos are exit 0 and the
+      # job stays green, because a gate on a boundary this soft gets switched off within a
+      # week. Only a script that DIES fails the job (#175): before that, a dead report and
+      # a clean one looked identical, and stayed green forever. This step only says where
+      # to look, and runs either way.
       - name: Where to read it
         if: always()
         run: |

@@ -31,6 +31,21 @@
 
 set -euo pipefail
 
+# ── Failure stage ────────────────────────────────────────────────────────────
+# Same seam as scripts/drift-report.sh: on a non-zero exit, one line with a fixed stage
+# name and never an error message. cross-repo-report.yml copies it to a public page
+# after checking it against this exact format. Probes run in background subshells, so
+# a single probe dying never reaches here. It shows up as an omitted repo instead.
+STAGE="setup"
+TMP=""
+_on_exit() {
+  local rc="$1"
+  [[ -n "$TMP" ]] && rm -rf "$TMP"
+  [[ "$rc" -ne 0 ]] && echo "fleet-report.sh: failed at stage: $STAGE (exit $rc)" >&2
+  return "$rc"
+}
+trap '_on_exit $?' EXIT
+
 REPO_FILTER=""
 RELEASES=1
 AS_JSON=false
@@ -57,10 +72,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$ROOT/.github/shared-paths.json"
 
+STAGE="preflight"
 for dep in gh jq; do
   command -v "$dep" >/dev/null 2>&1 || { echo "Error: $dep is required." >&2; exit 1; }
 done
 
+STAGE="auth"
 if ! gh auth status >/dev/null 2>&1; then
   echo "Error: gh is not authenticated. Run 'gh auth login' — private repos in the" >&2
   echo "       fleet are unreadable without it." >&2
@@ -81,7 +98,6 @@ if [[ -z "$ORG" ]]; then
 fi
 
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 # Every probe is allowed to fail. A 404 is information (no releases yet, no
@@ -350,6 +366,7 @@ probe_repo() {
 }
 
 # ── Discover ─────────────────────────────────────────────────────────────────
+STAGE="discover"
 REPOS=$(gh repo list "$ORG" --limit 100 \
   --json name,isPrivate,isArchived,defaultBranchRef 2>/dev/null || true)
 
@@ -389,6 +406,7 @@ if [[ -z "$SELECTED" ]]; then
   exit 0
 fi
 
+STAGE="probe"
 while IFS=$'\t' read -r name private default_branch; do
   [[ -z "$name" ]] && continue
   probe_repo "$name" "$private" "$default_branch" &
@@ -413,6 +431,7 @@ if [[ -z "$VALID" ]]; then
   exit 1
 fi
 
+STAGE="render"
 FLEET=$(jq -s 'sort_by(.name)' $VALID)
 
 FLEET_JSON=$(jq -n --arg org "$ORG" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson repos "$FLEET" \
