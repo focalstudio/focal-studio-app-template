@@ -74,7 +74,7 @@ The hook used to tell the *user* to run `/wrap`. That moved the forgetting one s
 Its scope is deliberately narrow, because it is the one place work happens without being asked for:
 
 - **Only `STATUS.md` and `ROADMAP.md`.** Nothing else is touched or staged.
-- **It commits on a feature branch, with `chore: refresh status`, and never pushes.** On `main` or `dev` it updates the files and leaves them in the working tree — those branches take changes through a PR, and a hook is not a PR.
+- **It commits on a feature branch, with `chore: refresh status`, and pushes that branch.** A refresh left local helps nobody. The next session branches off `dev` and never sees it, and the branch is deleted after merge. Pushed, it rides the branch's open PR like any other commit. On `main` or `dev` it updates the files and leaves them in the working tree, uncommitted. Those branches take changes through a PR, and a hook is not a PR.
 - **It is announced.** The session says in one line what it changed, so the write is visible rather than silent. This is what keeps it compatible with "do not make secretive changes" rather than an exception to it.
 
 `STATUS.md` (Now / Next / Blockers) and `ROADMAP.md` (phased `- [ ]` checkboxes) at the repo root are the tracking source of truth for these commands — keep them current. They are the fast, git-local glance; the Obsidian vault docs (see below) remain the richer narrative. The two are complementary, not duplicative.

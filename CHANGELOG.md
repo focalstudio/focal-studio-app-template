@@ -32,6 +32,13 @@ Versioning: [Semantic Versioning](https://semver.org/)
   spent and the key is in a temp file about to be cleaned up. **Its creation path is unproven** —
   the App already exists, so only the idempotency guard is reachable.
 
+### Changed
+- **The `Stop` hook's status refresh is now pushed.** On a feature branch,
+  `.claude/hooks/wrap-reminder.sh` used to commit `chore: refresh status` and never push. The commit
+  stayed local: the next session branched off `dev` without it, and it was lost when the branch was
+  deleted. It is now pushed and rides the branch's PR. `main` and `dev` are unchanged: the files are
+  edited but not committed there. The hook is `identical`-shared, so every app gets this.
+
 ### Fixed
 - **Deleting an account left the app's own data and reminders on the device (#184).**
   `deleteAccount` removed the account server-side and cleared the query cache. It left the rest to an

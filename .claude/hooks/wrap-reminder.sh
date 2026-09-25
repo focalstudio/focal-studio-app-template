@@ -10,9 +10,14 @@
 #
 # Deliberately bounded, because this is the one place the agent writes without being
 # asked (see .claude/CLAUDE.md, "Do not make secretive changes" and its one named
-# exception): only STATUS.md and ROADMAP.md, only a commit on a feature branch, and
-# announced in the session's final message. On main or dev the files are updated but
-# NOT committed — those branches take changes through a PR, and a hook is not a PR.
+# exception): only STATUS.md and ROADMAP.md, only a commit on a feature branch (then
+# pushed), and announced in the session's final message. On main or dev the files are
+# updated but NOT committed — those branches take changes through a PR, and a hook is
+# not a PR.
+#
+# The feature-branch commit is pushed because a local-only refresh helps nobody: the
+# next session branches off dev, which never sees it, and the branch is deleted after
+# merge. Pushed, it rides the branch's PR to dev like any other commit.
 
 input=$(cat)
 session_id=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
@@ -52,7 +57,7 @@ if [ "$new_commits" -gt 0 ] 2>/dev/null; then
       commit_rule='Do NOT commit — this branch takes changes through a PR, and a hook is not a PR. Leave the edits in the working tree and say so.'
       ;;
     *)
-      commit_rule='Then commit ONLY those two files, with the message `chore: refresh status`. Do not stage anything else, and do not push.'
+      commit_rule='Then commit ONLY those two files, with the message `chore: refresh status`. Do not stage anything else. Then push the branch (`git push`, or `git push -u origin '"${branch}"'` if it has no upstream yet), so the refresh travels with its PR rather than staying local.'
       ;;
   esac
 
