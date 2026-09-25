@@ -15,26 +15,31 @@ _Updated: 2026-09-25_
 (https://claude.ai/artifact/7oxwzagJ1hhMpM47DozqQT), and the plan is in
 `~/.claude/plans/make-a-plan-on-crispy-peacock.md`.
 
-- PR #189 merged (#184): `deleteAccount` purges `STORAGE_PREFIX` storage through `clearByPrefix` and
-  cancels reminders, both only after the remote delete succeeds. PR #190 merged: the `Stop` hook now
-  pushes its status refresh on feature branches.
-- **PR #191 (open) fixes #176.** `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
-  `.git/config`. The token goes to git as an `http.extraheader` through `GIT_CONFIG_*` env vars,
-  and every run resets existing clones to the anonymous URL. Verified locally against all four apps.
-  The CI path, which has no credential helper to fall back on, is unproven until the workflow runs.
+- PR #191 merged (#176): `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
+  `.git/config`. The CI-only drift exit 1 it could not explain is parked in `PARKING.md`.
+- **#175 is committed on `fix/cross-repo-report-fails-on-death` but not pushed.** A script that
+  dies now fails `cross-repo-report.yml`. Found drift or flags still pass. Both scripts print
+  `failed at stage: <stage>[:<owner/repo>]` on a non-zero exit. The workflow publishes only a line
+  that matches that exact format, and it sends every outcome as an annotation, so `gh run view`
+  can read it. Verified locally: success, the `setup`/`preflight`/`auth` failures, the regex and
+  actionlint all pass.
 
 ## Next
-- **Review and merge #191**, then trigger `cross-repo-report.yml` by hand and confirm its counts match
-  the previous run. Then continue Wave 1 with one fresh session per issue: **#175**, then **#177**.
-  Batches A and B of #187 follow if there is time. **0.17.0 target: Wed 2026-09-30.**
-- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It stays green
-  even if it crashes, so read the log by hand. MealCart's `storage.ts` should now differ only by the
-  zod overload, and it should pick up `keep`.
+- **Push #175 and open its PR to `dev`**, then dispatch `cross-repo-report.yml` on the branch. **Expect
+  red**: the drift step should name its failing stage. Record that stage in the `PARKING.md` entry,
+  then fix it in its own session. Then **#177**, and #187 batches A and B if there is time.
+  **0.17.0 target: Wed 2026-09-30.**
+- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** Once #175 is
+  on `dev`/`main`, a crash shows red rather than green.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers
-None. The GitHub App is provisioned and no longer gates anything — that entry stood here long
-after it stopped being true, which is the failure worth remembering from the 0.16.0 session.
+- **Pushing workflow changes needs the `workflow` scope.** The `gh` token has `repo`, `admin:org`,
+  `admin:public_key` and `gist`, and there is no SSH key, so GitHub rejects any push that touches
+  `.github/workflows/`. Fix: `gh auth refresh -h github.com -s workflow` (interactive).
+
+The GitHub App is provisioned and no longer gates anything. That entry stayed here long after it
+stopped being true, which is the failure worth remembering from the 0.16.0 session.
 
 **Carrying forward** (live context, not blocking):
 - **`provision-supabase.sh` has never run against a live Supabase account**, and CI can only ever
