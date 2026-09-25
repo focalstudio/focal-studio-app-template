@@ -33,6 +33,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
   the App already exists, so only the idempotency guard is reachable.
 
 ### Fixed
+- **Deleting an account left the app's own data and reminders on the device (#184).**
+  `deleteAccount` removed the account server-side and cleared the query cache. It left the rest to an
+  "Implementers:" comment, so every `STORAGE_PREFIX` key stayed on the phone and scheduled reminders
+  kept firing for an account that no longer existed. Once the remote delete succeeds, the store now
+  purges prefixed storage with a new `clearByPrefix` helper in `src/utils/storage.ts` and cancels
+  every scheduled notification. A failed delete still leaves everything untouched. One key is kept:
+  the analytics opt-out. Wiping it would make the next cold start fall back to opted-in. The helper
+  was upstreamed from MealCart (app → template), and `storage.ts` is `identical`-shared, so it
+  reaches every app.
 - **`eas-preview.yml` built the app on pushes that cannot change it.** The workflow triggered on
   every push to `dev` with no path filter, so a docs-only, CI-only or store-listing-only push ran
   the full `[ios, android]` matrix — ~2h30m of EAS build time for a binary byte-identical to the

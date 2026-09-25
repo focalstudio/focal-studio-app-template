@@ -45,6 +45,16 @@ function parseTime(timeStr: string): { hour: number; minute: number } {
   return { hour: h, minute: m };
 }
 
+/**
+ * Cancels every scheduled reminder. Best-effort: it runs after account deletion
+ * has already succeeded, so a failure here must not surface as a failed delete.
+ */
+export async function cancelAllNotifications(): Promise<void> {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {}
+}
+
 export async function rescheduleNotifications(prefs: NotificationPrefs): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await createAndroidChannel();
