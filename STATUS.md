@@ -15,19 +15,21 @@ _Updated: 2026-09-25_
 (https://claude.ai/artifact/7oxwzagJ1hhMpM47DozqQT), and the plan is in
 `~/.claude/plans/make-a-plan-on-crispy-peacock.md`.
 
-- PR #186 merged: one issue per session, with `PARKING.md` for everything else. Nothing is parked yet.
-- **PR #189 (open) fixes #184.** `deleteAccount` now purges `STORAGE_PREFIX` storage through a new
-  `clearByPrefix` in `storage.ts`, upstreamed from MealCart, and cancels reminders. Both happen only
-  after the remote delete succeeds. The analytics opt-out is kept: wiping it would re-opt the user in
-  on the next cold start, and MealCart has that bug today.
+- PR #189 merged (#184): `deleteAccount` purges `STORAGE_PREFIX` storage through `clearByPrefix` and
+  cancels reminders, both only after the remote delete succeeds. PR #190 merged: the `Stop` hook now
+  pushes its status refresh on feature branches.
+- **PR #191 (open) fixes #176.** `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
+  `.git/config`. The token goes to git as an `http.extraheader` through `GIT_CONFIG_*` env vars,
+  and every run resets existing clones to the anonymous URL. Verified locally against all four apps.
+  The CI path, which has no credential helper to fall back on, is unproven until the workflow runs.
 
 ## Next
-- **Review and merge #189**, then continue Wave 1 with one fresh session per issue: **#176** (it can run
-  in parallel in a worktree), then **#175**, then **#177**. Batches A and B of #187 follow if there is
-  time. **0.17.0 target: Wed 2026-09-30.**
+- **Review and merge #191**, then trigger `cross-repo-report.yml` by hand and confirm its counts match
+  the previous run. Then continue Wave 1 with one fresh session per issue: **#175**, then **#177**.
+  Batches A and B of #187 follow if there is time. **0.17.0 target: Wed 2026-09-30.**
 - **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It stays green
-  even if it crashes, so read the log by hand. Once #189 is on `dev`, MealCart's `storage.ts` should
-  differ only by the zod overload, and it should pick up `keep`.
+  even if it crashes, so read the log by hand. MealCart's `storage.ts` should now differ only by the
+  zod overload, and it should pick up `keep`.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers

@@ -40,6 +40,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
   edited but not committed there. The hook is `identical`-shared, so every app gets this.
 
 ### Fixed
+- **`drift-report.sh` wrote `GH_TOKEN` in plaintext into its cached clones (#176).** The token went
+  into the remote URL, which git saves in `.claude/scratch/drift/<app>/.git/config`. That was harmless
+  on an ephemeral CI runner. Locally, `GH_TOKEN` is often a real PAT, and it stayed in the project tree
+  until `--clean`. The token is now sent as an HTTP header through git's env-based config, so it is
+  never written to disk. Existing clones get their remote reset to the anonymous URL on the next run,
+  which scrubs tokens left by earlier versions. The script is shared, so every app gets the fix.
 - **Deleting an account left the app's own data and reminders on the device (#184).**
   `deleteAccount` removed the account server-side and cleared the query cache. It left the rest to an
   "Implementers:" comment, so every `STORAGE_PREFIX` key stayed on the phone and scheduled reminders

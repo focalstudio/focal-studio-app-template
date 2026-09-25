@@ -208,18 +208,23 @@ norm_right() { if [[ "$DIRECTION" == "template" ]]; then normalise_app "$1";    
 # ── Clone cache ──────────────────────────────────────────────────────────────
 # .claude/scratch/ is already gitignored. Clones are reused rather than recreated,
 # which keeps repeat runs quick and means this script never has to delete anything.
-# Locally this clones anonymously and lets the ambient git credential helper (gh's,
-# on a dev machine) handle private repos. In CI there is no helper, so GH_TOKEN —
-# an installation token from the org App — is embedded in the URL instead. The
-# token is masked by Actions, but keep it out of `set -x` range regardless.
-_clone_url() {
-  local repo="$1"
-  if [[ -n "${GH_TOKEN:-}" ]]; then
-    echo "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git"
-  else
-    echo "https://github.com/${repo}.git"
-  fi
-}
+# Clones always use the anonymous URL, and the ambient git credential helper (gh's,
+# on a dev machine) handles private repos. In CI there is no helper, so GH_TOKEN —
+# an installation token from the org App — is sent as an HTTP header through git's
+# env-based config. It must never go in the remote URL: git writes that to the
+# clone's .git/config, and locally GH_TOKEN is often a real PAT sitting in plaintext
+# inside the project tree until --clean (#176). Env config also reaches the lazy
+# blob fetches a --filter=blob:none clone makes later, which a per-command `-c` would
+# miss. Keep it out of `set -x` range regardless.
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  _cfg_n=${GIT_CONFIG_COUNT:-0}
+  export "GIT_CONFIG_KEY_${_cfg_n}=http.https://github.com/.extraheader"
+  # tr: GNU base64 wraps at 76 columns, which a fine-grained PAT exceeds.
+  export "GIT_CONFIG_VALUE_${_cfg_n}=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+  export GIT_CONFIG_COUNT=$((_cfg_n + 1))
+fi
+
+_clone_url() { echo "https://github.com/${1}.git"; }
 
 # want_tags: only the UPSTREAM clone needs them. TEMPLATE_VERSION resolves against
 # the template's release tags, and those tags point at commits on `main` — which a
@@ -230,8 +235,9 @@ _clone_url() {
 sync_clone() {
   local repo="$1" branch="$2" dir="$3" want_tags="${4:-false}"
   if [[ -d "$dir/.git" ]]; then
+    # Unconditional: scrubs a token that versions before #176 wrote into the URL.
+    git -C "$dir" remote set-url origin "$(_clone_url "$repo")" 2>/dev/null || true
     if [[ "$FETCH" == "true" ]]; then
-      [[ -n "${GH_TOKEN:-}" ]] && git -C "$dir" remote set-url origin "$(_clone_url "$repo")" 2>/dev/null
       git -C "$dir" fetch --quiet --depth 500 origin "$branch" 2>/dev/null || return 1
       git -C "$dir" reset --quiet --hard "origin/$branch" 2>/dev/null || return 1
       # `reset --hard` leaves untracked files behind, and a stray file in the cache
