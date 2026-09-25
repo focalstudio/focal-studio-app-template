@@ -39,3 +39,10 @@ post-release	bfdadc	Follow-up work after a release ships
 # ── Workflow ──────────────────────────────────────────────────────────────────
 # Opts a PR to dev into the Maestro E2E suite — see .github/workflows/maestro-e2e.yml.
 e2e	ededed	Run the Maestro E2E suite on this PR
+
+# ── Planning (optional, combine with the three above) ─────────────────────────
+# See .claude/reference/issue-labels.md and the parking-lot rule in AGENTS.md.
+next-release	0e8a16	Scheduled for the next tagged release (rolling; moved at each cut)
+qa-review	c5def5	Found by a pre-release QA review
+parked	d4c5f9	Filed from a PARKING.md triage — found mid-session, deliberately not fixed there
+tracking	ededed	Watch-only; no fix planned until its trigger fires

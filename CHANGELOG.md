@@ -10,6 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ## [Unreleased]
 
 ### Added
+- **One issue per session, with a parking lot for everything else.** A session now fixes only the
+  issue it was opened for. Any other finding, including ones Claude volunteers, is appended to a
+  new root `PARKING.md` and committed on its own instead of being folded into the diff. The rule
+  is in `AGENTS.md`, which is `identical`-shared, so every generated app gets it. `/standup`
+  prints the untriaged count. The release workflow gains a step 4b that files each entry as an
+  issue or drops it with a reason. `init.sh` hands a new app an empty `PARKING.md`, the same way
+  it resets `STATUS.md` and `ROADMAP.md`.
+- **Four planning labels** in `.github/labels.tsv`: `next-release` (a rolling release scope, moved
+  at each cut), `qa-review`, `parked` and `tracking`. Apply them to an existing app with
+  `bash scripts/sync-labels.sh`.
 - **`scripts/provision-cross-repo-app.sh` creates the org GitHub App.** It was written down as a
   browser-only chore — note the App ID, download the `.pem`, set two secrets by hand — and then
   sat undone long enough to block four workflows, which is the usual fate of a documented manual
