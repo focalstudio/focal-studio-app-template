@@ -26,9 +26,25 @@
 #
 # Exit status is 0 whether or not drift was found. This is a report, not a gate. A
 # gate on a boundary this soft gets switched off within a week, and the whole point
-# is that someone still reads it.
+# is that someone still reads it. It is non-zero when the report could not be
+# completed: a crash, or a repo it could not fetch. A report that skipped a repo and
+# then said "Clean" would be worse than no report at all (#175).
 
 set -euo pipefail
+
+# ── Failure stage ────────────────────────────────────────────────────────────
+# Under `set -e` a failure anywhere ends the run with no word as to where. The
+# workflow publishes nothing of this script's output (cross-repo-report.yml), so on a
+# non-zero exit this one line is all it gets. It holds a fixed stage name and at most a
+# repo name, never an error message. Keep it that way, because the workflow copies the
+# line to a public page after checking it against this exact format.
+STAGE="setup"
+_report_stage() {
+  local rc="$1"
+  [[ "$rc" -ne 0 ]] && echo "drift-report.sh: failed at stage: $STAGE (exit $rc)" >&2
+  return "$rc"
+}
+trap '_report_stage $?' EXIT
 
 APP_FILTER=""
 PATH_FILTER=""
@@ -43,7 +59,7 @@ while [[ $# -gt 0 ]]; do
     --diff)      SHOW_DIFF=true;   shift ;;
     --no-fetch)  FETCH=false;      shift ;;
     --clean)     DO_CLEAN=true;    shift ;;
-    -h|--help)   sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)   sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -69,6 +85,7 @@ if [[ "$DO_CLEAN" == "true" ]]; then
   exit 0
 fi
 
+STAGE="preflight"
 for dep in jq git; do
   command -v "$dep" >/dev/null 2>&1 || { echo "Error: $dep is required." >&2; exit 1; }
 done
@@ -260,6 +277,7 @@ sync_clone() {
 # Loaded once into bash arrays rather than looked up with jq per file: it keeps the
 # glob dialect the same as matches_any() above (a jq regex translation would be a
 # second, subtly different one) and avoids forking jq several hundred times per app.
+STAGE="rules"
 RULE_GLOB=(); RULE_MODE=(); RULE_EXCL=()
 while IFS=$'\t' read -r g m e; do
   RULE_GLOB+=("$g"); RULE_MODE+=("$m"); RULE_EXCL+=("$e")
@@ -460,6 +478,8 @@ _section() {
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 TOTAL=0
+FETCH_FAILED=0
+FIRST_FAILED=""
 HISTORY_DETAIL=""
 DIFF_DETAIL=""
 
@@ -475,12 +495,16 @@ if [[ "$DIRECTION" == "template" ]]; then
     skip=$(jq -c '.skip // []' <<< "$app")
     dir="$CACHE/${repo##*/}"
 
+    STAGE="clone:$repo"
     if ! sync_clone "$repo" "$branch" "$dir"; then
       echo
       echo "══ $repo"
       echo "  ⚠️  Could not fetch $repo@$branch — check gh auth / repo access, or pass --no-fetch."
+      FETCH_FAILED=$((FETCH_FAILED + 1))
+      [[ -z "$FIRST_FAILED" ]] && FIRST_FAILED="$repo"
       continue
     fi
+    STAGE="compare:$repo"
     compare "$dir" "$repo" "$scope" "$skip"
   done <<< "$(jq -c '.apps[]' "$MANIFEST")"
 
@@ -492,19 +516,31 @@ else
   echo "Drift report — this app vs the template ($UPSTREAM)"
   echo "Manifest: .github/shared-paths.json"
   dir="$CACHE/template"
+  STAGE="clone:$UPSTREAM"
   if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir" true; then
     echo "  ⚠️  Could not fetch $UPSTREAM@$UPSTREAM_BRANCH."
-    exit 0
+    exit 1
   fi
+  STAGE="compare:$UPSTREAM"
   compare "$dir" "$UPSTREAM" "full" "[]"
 fi
 
+STAGE="summary"
 if [[ "$SHOW_DIFF" == "true" && -n "$DIFF_DETAIL" ]]; then
   echo
   echo "══ Diffs$DIFF_DETAIL"
 fi
 
 echo
+# Keep going past a failed fetch so the other apps still get reported, but never
+# call the result clean. The exit names the first repo that failed. The line above
+# names each one, for whoever runs this locally.
+if [[ $FETCH_FAILED -gt 0 ]]; then
+  echo "Incomplete — $FETCH_FAILED repo(s) could not be fetched, so this is not a clean bill."
+  [[ $TOTAL -gt 0 ]] && echo "$TOTAL drifted path(s) among the repos that were fetched."
+  STAGE="clone:$FIRST_FAILED"
+  exit 1
+fi
 if [[ $TOTAL -eq 0 ]]; then
   echo "Clean — nothing in the shared surface has drifted."
 else

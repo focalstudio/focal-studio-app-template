@@ -15,26 +15,31 @@ _Updated: 2026-09-25_
 (https://claude.ai/artifact/7oxwzagJ1hhMpM47DozqQT), and the plan is in
 `~/.claude/plans/make-a-plan-on-crispy-peacock.md`.
 
-- PR #189 merged (#184): `deleteAccount` purges `STORAGE_PREFIX` storage through `clearByPrefix` and
-  cancels reminders, both only after the remote delete succeeds. PR #190 merged: the `Stop` hook now
-  pushes its status refresh on feature branches.
-- **PR #191 (open) fixes #176.** `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
-  `.git/config`. The token goes to git as an `http.extraheader` through `GIT_CONFIG_*` env vars,
-  and every run resets existing clones to the anonymous URL. Verified locally against all four apps.
-  The CI path, which has no credential helper to fall back on, is unproven until the workflow runs.
+- PR #191 merged (#176): `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
+  `.git/config`. The CI-only drift exit 1 it could not explain is parked in `PARKING.md`.
+- **PR #192 (open) fixes #175.** A script that dies now fails `cross-repo-report.yml`. So does
+  `drift-report.sh` when it can't fetch a repo, which used to print "Clean" regardless. Found drift
+  or flags still pass. Both scripts print `failed at stage: <stage>[:<owner/repo>]` on a non-zero
+  exit, and the workflow publishes only a line that matches that exact format. Every outcome goes
+  out as an annotation. The dispatched run 36244777904 went red as expected, with
+  **`compare:focalstudio/tick`**, and that stage is now in the `PARKING.md` entry. Copilot's three
+  threads and a self-review have been addressed.
 
 ## Next
-- **Review and merge #191**, then trigger `cross-repo-report.yml` by hand and confirm its counts match
-  the previous run. Then continue Wave 1 with one fresh session per issue: **#175**, then **#177**.
-  Batches A and B of #187 follow if there is time. **0.17.0 target: Wed 2026-09-30.**
-- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It stays green
-  even if it crashes, so read the log by hand. MealCart's `storage.ts` should now differ only by the
-  zod overload, and it should pick up `keep`.
+- **Merge #192**, then take the parked `compare:focalstudio/tick` runner failure as its own issue.
+  It exits 1 only on ubuntu, and it stops the report before mealcart, WildFocus and vestia. Then
+  **#177**, and #187 batches A and B if there is time. **0.17.0 target: Wed 2026-09-30.**
+- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It still runs
+  from `main`, without #192, so it will be green whatever happens. Read its log by hand.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers
-None. The GitHub App is provisioned and no longer gates anything — that entry stood here long
-after it stopped being true, which is the failure worth remembering from the 0.16.0 session.
+None new. `gh` now has the `workflow` scope, but git's keychain token predates it. Plain
+`git push` of a workflow change is rejected until `gh auth setup-git` is run. Until then, push
+with `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push`.
+
+The GitHub App is provisioned and no longer gates anything. That entry stayed here long after it
+stopped being true, which is the failure worth remembering from the 0.16.0 session.
 
 **Carrying forward** (live context, not blocking):
 - **`provision-supabase.sh` has never run against a live Supabase account**, and CI can only ever
