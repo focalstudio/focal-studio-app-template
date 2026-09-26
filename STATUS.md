@@ -1,6 +1,6 @@
 # [APP_NAME] — Status
 
-_Updated: 2026-09-25_
+_Updated: 2026-09-26_
 
 > Narrative only. Version, release age, CI, unreleased commits, roadmap percentage and
 > template currency are **derived** — they live on the dashboard
@@ -22,11 +22,15 @@ _Updated: 2026-09-25_
   Found drift or flags still pass. Both scripts print `failed at stage: <stage>[:<owner/repo>]` on
   a non-zero exit, and every outcome goes out as an annotation that `gh run view` can read. Branch
   runs went red as expected at **`compare:focalstudio/tick`**, which is recorded in `PARKING.md`.
+- **PR #194 open (#177).** `install-fleet-agent.sh` now looks up the org before it writes an agent
+  or runtime copy. With no `origin`, every mode prints the error, exits 1 and leaves no agent loaded;
+  before, it exited silently with a broken agent loaded. Verified against a clone with no `origin`.
+  Parked: the direct-mode probe treats any non-zero exit as a macOS denial.
 
 ## Next
-- **#177** next: `install-fleet-agent.sh`'s org guard can never run, so a broken agent loads
-  silently. Branch `fix/fleet-agent-org-guard`. Then #187 batch A, which touches the same file.
-  **0.17.0 target: Wed 2026-09-30.**
+- **Merge #194**, then do #187 batch A (plist temp file + `mv`, `bootstrap` failure,
+  `--interval` validation). It touches the same file, so it waits for the merge. #187 batch B
+  (`fleet-report.sh`) can run in parallel. **0.17.0 target: Wed 2026-09-30.**
 - **The parked `compare:focalstudio/tick` runner failure** needs an issue and a session of its own.
   On `dev` the weekly report is now red until that's fixed. That's intended, but it means the
   report covers no app past tick.
