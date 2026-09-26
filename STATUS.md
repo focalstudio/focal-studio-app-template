@@ -17,26 +17,26 @@ _Updated: 2026-09-25_
 
 - PR #191 merged (#176): `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
   `.git/config`. The CI-only drift exit 1 it could not explain is parked in `PARKING.md`.
-- **#175 is committed on `fix/cross-repo-report-fails-on-death` but not pushed.** A script that
-  dies now fails `cross-repo-report.yml`. Found drift or flags still pass. Both scripts print
-  `failed at stage: <stage>[:<owner/repo>]` on a non-zero exit. The workflow publishes only a line
-  that matches that exact format, and it sends every outcome as an annotation, so `gh run view`
-  can read it. Verified locally: success, the `setup`/`preflight`/`auth` failures, the regex and
-  actionlint all pass.
+- **PR #192 (open) fixes #175.** A script that dies now fails `cross-repo-report.yml`. So does
+  `drift-report.sh` when it can't fetch a repo, which used to print "Clean" regardless. Found drift
+  or flags still pass. Both scripts print `failed at stage: <stage>[:<owner/repo>]` on a non-zero
+  exit, and the workflow publishes only a line that matches that exact format. Every outcome goes
+  out as an annotation. The dispatched run 36244777904 went red as expected, with
+  **`compare:focalstudio/tick`**, and that stage is now in the `PARKING.md` entry. Copilot's three
+  threads and a self-review have been addressed.
 
 ## Next
-- **Push #175 and open its PR to `dev`**, then dispatch `cross-repo-report.yml` on the branch. **Expect
-  red**: the drift step should name its failing stage. Record that stage in the `PARKING.md` entry,
-  then fix it in its own session. Then **#177**, and #187 batches A and B if there is time.
-  **0.17.0 target: Wed 2026-09-30.**
-- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** Once #175 is
-  on `dev`/`main`, a crash shows red rather than green.
+- **Merge #192**, then take the parked `compare:focalstudio/tick` runner failure as its own issue.
+  It exits 1 only on ubuntu, and it stops the report before mealcart, WildFocus and vestia. Then
+  **#177**, and #187 batches A and B if there is time. **0.17.0 target: Wed 2026-09-30.**
+- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It still runs
+  from `main`, without #192, so it will be green whatever happens. Read its log by hand.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers
-- **Pushing workflow changes needs the `workflow` scope.** The `gh` token has `repo`, `admin:org`,
-  `admin:public_key` and `gist`, and there is no SSH key, so GitHub rejects any push that touches
-  `.github/workflows/`. Fix: `gh auth refresh -h github.com -s workflow` (interactive).
+None new. `gh` now has the `workflow` scope, but git's keychain token predates it. Plain
+`git push` of a workflow change is rejected until `gh auth setup-git` is run. Until then, push
+with `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push`.
 
 The GitHub App is provisioned and no longer gates anything. That entry stayed here long after it
 stopped being true, which is the failure worth remembering from the 0.16.0 session.
