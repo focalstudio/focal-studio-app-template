@@ -156,6 +156,20 @@ gh auth status >/dev/null 2>&1 || {
   exit 1
 }
 
+# Every mode needs the org: copy mode bakes it into the agent's env, direct mode has
+# fleet-report.sh derive it from the same origin on every run. Resolved before any
+# agent is written, so a repo with no origin stops here rather than after the
+# direct-mode attempt has already loaded an agent that can never produce a page.
+# `|| true`: under pipefail a missing origin would trip errexit silently, before the
+# guard below could say why.
+origin="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
+AGENT_ORG="$(sed -E 's#\.git$##; s#.*[:/]([^/]+)/[^/]+$#\1#' <<< "$origin")"
+[[ -n "$AGENT_ORG" ]] || {
+  echo "Error: could not resolve the GitHub org from 'git remote get-url origin'." >&2
+  echo "       The agent reads the fleet from that org; add the remote and re-run." >&2
+  exit 1
+}
+
 # Bake the resolved directories of the tools the agent needs into its PATH. launchd
 # hands an agent a minimal PATH, so deriving this from where the tools ACTUALLY are
 # beats hardcoding a Homebrew prefix that differs between Intel and Apple Silicon.
@@ -239,12 +253,8 @@ install_copy() {
     cp "$ROOT/$rel" "$RUNTIME/$rel"
   done
   # git is not in the copy, so fleet-report.sh cannot derive the org from a remote.
-  # Resolve it here, where the repo IS readable, and bake it into the agent's env.
-  local org
-  org="$(git -C "$ROOT" remote get-url origin 2>/dev/null \
-    | sed -E 's#\.git$##; s#.*[:/]([^/]+)/[^/]+$#\1#')"
-  [[ -n "$org" ]] || { echo "Error: could not resolve the org from origin." >&2; exit 1; }
-  write_and_load "$RUNTIME" "$org"
+  # The preflight resolved it where the repo IS readable; bake it into the agent's env.
+  write_and_load "$RUNTIME" "$AGENT_ORG"
   AGENT_ROOT="$RUNTIME"
   AGENT_MODE="copy"
 }

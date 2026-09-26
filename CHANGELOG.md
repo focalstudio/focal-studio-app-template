@@ -40,6 +40,13 @@ Versioning: [Semantic Versioning](https://semver.org/)
   edited but not committed there. The hook is `identical`-shared, so every app gets this.
 
 ### Fixed
+- **The fleet-agent installer failed silently in a repo with no `origin` (#177).** It exited with
+  no output and left a launchd agent loaded against a repo it could not read, so the page never
+  appeared and nothing said why. The org check that should have caught this sat behind a pipeline
+  that `set -o pipefail` aborted first, and it only ran after the direct-mode attempt had already
+  loaded the agent. `install-fleet-agent.sh` now resolves the org before it writes anything. With
+  no `origin` it prints the error and exits 1 in every mode, with no agent loaded and no runtime
+  copy touched.
 - **The weekly cross-repo report stayed green when a script died (#175).** Both report steps swallowed
   a non-zero exit, so an expired token or a crash looked the same as a clean week, and it stayed that
   way indefinitely. This was already happening: the first two runs reported "exited 1" and passed. A
