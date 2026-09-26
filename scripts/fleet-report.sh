@@ -413,17 +413,22 @@ while IFS=$'\t' read -r name private default_branch; do
 done <<< "$SELECTED"
 wait
 
-# A probe that failed (rate limit, a repo pulled mid-run) leaves an empty or
-# partial file. Drop those rather than letting one bad repo kill the whole report.
+# A probe that failed (rate limit, a repo pulled mid-run) leaves an empty or partial
+# file, or no file at all if it died before the final write. `wait` doesn't report that
+# either. Drop those rather than letting one bad repo kill the whole report, but check
+# against the repos that were SELECTED, not the files that turned up. Walking the files
+# can't see a missing one, and cross-repo-report.yml counts these warnings to say how
+# many repos are absent from its totals.
 VALID=""
-for f in "$TMP"/*.json; do
-  [[ -e "$f" ]] || continue
-  if jq -e . >/dev/null 2>&1 < "$f"; then
+while IFS=$'\t' read -r name _; do
+  [[ -z "$name" ]] && continue
+  f="$TMP/$name.json"
+  if [[ -s "$f" ]] && jq -e . >/dev/null 2>&1 < "$f"; then
     VALID="$VALID $f"
   else
-    echo "Warning: probe failed for $(basename "$f" .json) — omitted from the report." >&2
+    echo "Warning: probe failed for $name — omitted from the report." >&2
   fi
-done
+done <<< "$SELECTED"
 
 if [[ -z "$VALID" ]]; then
   echo "Error: every repo probe failed. Check 'gh auth status' and your rate limit" >&2
