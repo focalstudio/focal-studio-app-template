@@ -113,11 +113,13 @@ jobs:
           echo "$annotation"
           exit "$rc"
 
-      # `!cancelled()` rather than the implicit `success()`: a dead drift report must not
-      # also cost you the fleet report.
+      # `!cancelled()` rather than the implicit `success()`, so a dead drift report
+      # doesn't also cost you the fleet report. The token step's outcome is checked
+      # explicitly because `!cancelled()` drops the implicit success check with it:
+      # without that check, a failed mint would run the fleet report with an empty token.
       - name: Fleet report (#163)
         id: fleet
-        if: ${{ !cancelled() && steps.creds.outputs.has_creds == 'true' }}
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -134,9 +136,18 @@ jobs:
             flags="$(grep -c '^  • ' "$RUNNER_TEMP/fleet.txt" || true)"
             line="**${repos:-0} repo(s) probed, ${flags:-0} flagged as needing a look.**"
             if [ "${flags:-0}" -gt 0 ] 2>/dev/null; then
-              line="$line"$'\n\n'"Reasons name private repos, so they are not published here."
+              line="$line"$'\n\n'"Reasons carry private-repo detail, so they are not published here."
             fi
             annotation="::notice title=Fleet report::${repos:-0} repo(s) probed, ${flags:-0} flagged"
+            # A probe that dies is dropped from the report rather than failing it, so the
+            # count above can quietly shrink. Publish how many went missing. It's a
+            # warning, not a failure: a rate-limited probe is transient, and the local
+            # dashboard agent shares this script.
+            omitted="$(grep -c '^Warning: probe failed for ' "$RUNNER_TEMP/fleet.txt" || true)"
+            if [ "${omitted:-0}" -gt 0 ] 2>/dev/null; then
+              line="$line"$'\n\n'"**${omitted} repo probe(s) failed and are missing from the counts above.**"
+              echo "::warning title=Fleet report::${omitted} repo probe(s) failed and were omitted"
+            fi
           fi
           printf '## Fleet\n\n%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"
           echo "$annotation"
@@ -154,6 +165,6 @@ jobs:
             echo "Skipped — no cross-repo credentials configured." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "_Counts only — this repo is public, and the reports describe private ones._" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Counts and failure stages only — this repo is public, and the reports describe private ones._" >> "$GITHUB_STEP_SUMMARY"
             echo "_Read the detail with \`bash scripts/drift-report.sh\` and \`bash scripts/fleet-report.sh\`._" >> "$GITHUB_STEP_SUMMARY"
           fi

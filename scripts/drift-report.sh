@@ -26,7 +26,9 @@
 #
 # Exit status is 0 whether or not drift was found. This is a report, not a gate. A
 # gate on a boundary this soft gets switched off within a week, and the whole point
-# is that someone still reads it.
+# is that someone still reads it. It is non-zero when the report could not be
+# completed: a crash, or a repo it could not fetch. A report that skipped a repo and
+# then said "Clean" would be worse than no report at all (#175).
 
 set -euo pipefail
 
@@ -57,7 +59,7 @@ while [[ $# -gt 0 ]]; do
     --diff)      SHOW_DIFF=true;   shift ;;
     --no-fetch)  FETCH=false;      shift ;;
     --clean)     DO_CLEAN=true;    shift ;;
-    -h|--help)   sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)   sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -476,6 +478,8 @@ _section() {
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 TOTAL=0
+FETCH_FAILED=0
+FIRST_FAILED=""
 HISTORY_DETAIL=""
 DIFF_DETAIL=""
 
@@ -496,6 +500,8 @@ if [[ "$DIRECTION" == "template" ]]; then
       echo
       echo "══ $repo"
       echo "  ⚠️  Could not fetch $repo@$branch — check gh auth / repo access, or pass --no-fetch."
+      FETCH_FAILED=$((FETCH_FAILED + 1))
+      [[ -z "$FIRST_FAILED" ]] && FIRST_FAILED="$repo"
       continue
     fi
     STAGE="compare:$repo"
@@ -513,7 +519,7 @@ else
   STAGE="clone:$UPSTREAM"
   if ! sync_clone "$UPSTREAM" "$UPSTREAM_BRANCH" "$dir" true; then
     echo "  ⚠️  Could not fetch $UPSTREAM@$UPSTREAM_BRANCH."
-    exit 0
+    exit 1
   fi
   STAGE="compare:$UPSTREAM"
   compare "$dir" "$UPSTREAM" "full" "[]"
@@ -526,6 +532,15 @@ if [[ "$SHOW_DIFF" == "true" && -n "$DIFF_DETAIL" ]]; then
 fi
 
 echo
+# Keep going past a failed fetch so the other apps still get reported, but never
+# call the result clean. The exit names the first repo that failed. The line above
+# names each one, for whoever runs this locally.
+if [[ $FETCH_FAILED -gt 0 ]]; then
+  echo "Incomplete — $FETCH_FAILED repo(s) could not be fetched, so this is not a clean bill."
+  [[ $TOTAL -gt 0 ]] && echo "$TOTAL drifted path(s) among the repos that were fetched."
+  STAGE="clone:$FIRST_FAILED"
+  exit 1
+fi
 if [[ $TOTAL -eq 0 ]]; then
   echo "Clean — nothing in the shared surface has drifted."
 else

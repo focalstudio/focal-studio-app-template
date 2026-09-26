@@ -48,7 +48,9 @@ Versioning: [Semantic Versioning](https://semver.org/)
   `failed at stage: <stage>`, which names a fixed stage plus the repo for per-repo stages and never
   includes the error text. The workflow publishes that stage. Each step's outcome also goes out as an
   annotation, so `gh run view` shows the result without opening a browser. A dead drift report no
-  longer skips the fleet report.
+  longer skips the fleet report. `drift-report.sh` also exits non-zero when it cannot fetch a repo,
+  in either direction. It still reports the repos it did fetch, but it no longer calls the result
+  "Clean". The fleet step publishes how many repo probes failed and were left out of its counts.
 - **`drift-report.sh` wrote `GH_TOKEN` in plaintext into its cached clones (#176).** The token went
   into the remote URL, which git saves in `.claude/scratch/drift/<app>/.git/config`. That was harmless
   on an ephemeral CI runner. Locally, `GH_TOKEN` is often a real PAT, and it stayed in the project tree

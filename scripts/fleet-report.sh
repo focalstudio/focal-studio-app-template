@@ -85,6 +85,7 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 
 # ── Org discovery ────────────────────────────────────────────────────────────
+STAGE="discover"
 # Derived from the remote, so this works unchanged from inside any generated app.
 ORG="${ORG:-}"
 if [[ -z "$ORG" ]]; then
@@ -366,7 +367,6 @@ probe_repo() {
 }
 
 # ── Discover ─────────────────────────────────────────────────────────────────
-STAGE="discover"
 REPOS=$(gh repo list "$ORG" --limit 100 \
   --json name,isPrivate,isArchived,defaultBranchRef 2>/dev/null || true)
 
