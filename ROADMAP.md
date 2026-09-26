@@ -148,8 +148,9 @@
 - [x] One issue per session, enforced by a `PARKING.md` parking lot. Out-of-scope findings are
       parked rather than fixed, then triaged into `parked` issues at release cut. The rule lives in
       `AGENTS.md`, so it travels to every app. Four planning labels came with it (PR #186)
-- [ ] Close out the 0.16.0 QA review: #175 (report can never fail), #176 (token persisted to
-      `.git/config`, PR #191 open), #177 (unreachable org guard), and the batched nits in #187
+- [ ] Close out the 0.16.0 QA review: #175 (report can never fail, PR #192 merged), #176 (token
+      persisted to `.git/config`, PR #191 merged), #177 (unreachable org guard), and the batched
+      nits in #187
 - [x] Upstream MealCart's `clearByPrefix`: `deleteAccount` purges `STORAGE_PREFIX` storage (keeping
       the analytics opt-out) and cancels reminders on success (#184, PR #189)
 - [x] `scripts/drift-report.sh` and `scripts/fleet-report.sh` added to `limitedScope`, so

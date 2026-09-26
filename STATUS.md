@@ -17,20 +17,21 @@ _Updated: 2026-09-25_
 
 - PR #191 merged (#176): `drift-report.sh` no longer writes `GH_TOKEN` into cached clones'
   `.git/config`. The CI-only drift exit 1 it could not explain is parked in `PARKING.md`.
-- **PR #192 (open) fixes #175.** A script that dies now fails `cross-repo-report.yml`. So does
-  `drift-report.sh` when it can't fetch a repo, which used to print "Clean" regardless. Found drift
-  or flags still pass. Both scripts print `failed at stage: <stage>[:<owner/repo>]` on a non-zero
-  exit, and the workflow publishes only a line that matches that exact format. Every outcome goes
-  out as an annotation. The dispatched run 36244777904 went red as expected, with
-  **`compare:focalstudio/tick`**, and that stage is now in the `PARKING.md` entry. Copilot's three
-  threads and a self-review have been addressed.
+- **PR #192 merged (#175).** A script that dies now fails `cross-repo-report.yml`. So does
+  `drift-report.sh` when it can't fetch a repo, and a fleet probe that dies is counted as omitted.
+  Found drift or flags still pass. Both scripts print `failed at stage: <stage>[:<owner/repo>]` on
+  a non-zero exit, and every outcome goes out as an annotation that `gh run view` can read. Branch
+  runs went red as expected at **`compare:focalstudio/tick`**, which is recorded in `PARKING.md`.
 
 ## Next
-- **Merge #192**, then take the parked `compare:focalstudio/tick` runner failure as its own issue.
-  It exits 1 only on ubuntu, and it stops the report before mealcart, WildFocus and vestia. Then
-  **#177**, and #187 batches A and B if there is time. **0.17.0 target: Wed 2026-09-30.**
-- **The first scheduled `cross-repo-report.yml` run is Mon 2026-09-28 at 08:00 UTC.** It still runs
-  from `main`, without #192, so it will be green whatever happens. Read its log by hand.
+- **#177** next: `install-fleet-agent.sh`'s org guard can never run, so a broken agent loads
+  silently. Branch `fix/fleet-agent-org-guard`. Then #187 batch A, which touches the same file.
+  **0.17.0 target: Wed 2026-09-30.**
+- **The parked `compare:focalstudio/tick` runner failure** needs an issue and a session of its own.
+  On `dev` the weekly report is now red until that's fixed. That's intended, but it means the
+  report covers no app past tick.
+- **Scheduled run: Mon 2026-09-28 at 08:00 UTC.** It runs from `main`, which doesn't have #192 yet,
+  so it will be green whatever happens. Read its log by hand.
 - 0.18.0 (target 2026-10-14): #187 batch C, #159, #153, #188, #54.
 
 ## Blockers
